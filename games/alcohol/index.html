@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- 启动页遮罩 -->
+  <div id="splashScreen" class="splash-screen">
+    <img src="assets/cover.png" alt="加载中" class="splash-img" draggable="false">
+    <div class="splash-loading">加载中…</div>
+  </div>
+
   <a href="../../index.html" class="top-btn back-btn">← 返回</a>
 
   <div class="game-wrapper">
@@ -102,5 +108,43 @@
   </div>
   <div id="glassTooltip" class="glass-tooltip" style="display:none"></div>
   <script src="main.js"></script>
+  <script>
+    (function() {
+      var splash = document.getElementById('splashScreen');
+      var imgs = document.querySelectorAll('img:not(.splash-img)');
+      var total = imgs.length;
+      var loaded = 0;
+
+      function checkDone() {
+        loaded++;
+        if (loaded >= total) fadeOut();
+      }
+
+      function fadeOut() {
+        splash.classList.add('splash-fade');
+        splash.addEventListener('transitionend', function() {
+          splash.remove();
+        });
+      }
+
+      if (total === 0) {
+        fadeOut();
+      } else {
+        imgs.forEach(function(img) {
+          if (img.complete) {
+            checkDone();
+          } else {
+            img.addEventListener('load', checkDone);
+            img.addEventListener('error', checkDone);
+          }
+        });
+      }
+
+      // 安全兜底：最多5秒后强制消除
+      setTimeout(function() {
+        if (splash.parentNode) fadeOut();
+      }, 5000);
+    })();
+  </script>
 </body>
 </html>
