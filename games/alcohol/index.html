@@ -10,7 +10,10 @@
   <!-- 启动页遮罩 -->
   <div id="splashScreen" class="splash-screen">
     <img src="assets/cover.png" alt="加载中" class="splash-img" draggable="false">
-    <div class="splash-loading">加载中…</div>
+    <div class="splash-bottom">
+      <div class="splash-progress-bar"><div id="splashProgress" class="splash-progress-fill"></div></div>
+      <div class="splash-loading" id="splashText">加载中… 0%</div>
+    </div>
   </div>
 
   <a href="../../index.html" class="top-btn back-btn">← 返回</a>
@@ -107,43 +110,81 @@
     </div>
   </div>
   <div id="glassTooltip" class="glass-tooltip" style="display:none"></div>
-  <script src="main.js"></script>
   <script>
+    // 预加载所有游戏图片，完成后再加载主逻辑
     (function() {
       var splash = document.getElementById('splashScreen');
-      var imgs = document.querySelectorAll('img:not(.splash-img)');
-      var total = imgs.length;
-      var loaded = 0;
+      var splashText = document.getElementById('splashText');
+      var progressFill = document.getElementById('splashProgress');
 
-      function checkDone() {
-        loaded++;
-        if (loaded >= total) fadeOut();
+      // 收集所有游戏中用到的图片路径
+      var allImages = [
+        'assets/bg.png', 'assets/desk.png', 'assets/sink.png', 'assets/ice.png',
+        'assets/order.png', 'assets/recipe.png', 'assets/handbook.png',
+        'assets/clamp.png', 'assets/spoon.png', 'assets/shake.png',
+        'assets/collins-glass.png', 'assets/whiskey-glass.png',
+        'assets/martini-glass.png', 'assets/margaret-glass.png',
+        'assets/champagne-glass.png', 'assets/wine-cabinet.png',
+        'assets/wine/gin.png', 'assets/wine/vodka.png', 'assets/wine/Tequila.png',
+        'assets/wine/rum.png', 'assets/wine/champagne.png',
+        'assets/wine/coffee.png', 'assets/wine/vermouth.png',
+        'assets/wine/red-vermouth.png', 'assets/wine/lemon.png',
+        'assets/wine/juice.png', 'assets/wine/milk.png',
+        'assets/wine/tonic.png', 'assets/wine/soda.png',
+        'assets/wine/Grenadine-Syrup.png', 'assets/wine/brandy.png',
+        'assets/people/people1.png', 'assets/people/people2.png',
+        'assets/people/people3.png', 'assets/people/people4.png',
+        'assets/people/people5.png', 'assets/people/people6.png',
+        'assets/people/people7.png', 'assets/people/people8.png'
+      ];
+
+      var total = allImages.length;
+      var loaded = 0;
+      var done = false;
+
+      function updateProgress() {
+        var pct = Math.round((loaded / total) * 100);
+        progressFill.style.width = pct + '%';
+        splashText.textContent = '加载中… ' + pct + '%';
       }
 
       function fadeOut() {
-        splash.classList.add('splash-fade');
-        splash.addEventListener('transitionend', function() {
-          splash.remove();
+        if (done) return;
+        done = true;
+        // 加载并执行 main.js
+        var s = document.createElement('script');
+        s.src = 'main.js';
+        document.body.appendChild(s);
+        // 等一帧让游戏渲染完成后再淡出
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            splash.classList.add('splash-fade');
+            splash.addEventListener('transitionend', function() {
+              splash.remove();
+            });
+          });
         });
       }
 
-      if (total === 0) {
-        fadeOut();
-      } else {
-        imgs.forEach(function(img) {
-          if (img.complete) {
-            checkDone();
-          } else {
-            img.addEventListener('load', checkDone);
-            img.addEventListener('error', checkDone);
-          }
-        });
+      function onLoad() {
+        loaded++;
+        updateProgress();
+        if (loaded >= total) fadeOut();
       }
 
-      // 安全兜底：最多5秒后强制消除
+      allImages.forEach(function(src) {
+        var img = new Image();
+        img.onload = onLoad;
+        img.onerror = onLoad;
+        img.src = src;
+      });
+
+      updateProgress();
+
+      // 兜底：最多8秒后强制启动
       setTimeout(function() {
-        if (splash.parentNode) fadeOut();
-      }, 5000);
+        if (!done) fadeOut();
+      }, 8000);
     })();
   </script>
 </body>
