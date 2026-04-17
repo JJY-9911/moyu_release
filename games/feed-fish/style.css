@@ -1,0 +1,204 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow-x: hidden; background: #111; }
+body {
+  font-family: 'Courier New', 'SimHei', monospace;
+  color: #e0e0e0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* === Top buttons === */
+.top-btn {
+  position: fixed; top: 8px; z-index: 200;
+  padding: 5px 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; color: #ccc;
+  cursor: pointer; font-size: 12px;
+  font-family: inherit; text-decoration: none;
+  backdrop-filter: blur(4px);
+  transition: all 0.15s;
+}
+.back-btn { left: 8px; }
+.reset-btn { right: 8px; }
+.debug-btn { right: 80px; }
+.top-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.debug-btn.active { background: rgba(0,200,0,0.4); color: #0f0; border-color: rgba(0,200,0,0.5); }
+
+/* === HUD === */
+.hud {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 200;
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(0,0,0,0.65);
+  padding: 6px 18px; border-radius: 8px;
+  border: 1px solid rgba(255,215,0,0.25);
+  backdrop-filter: blur(4px);
+}
+.hud-gold { font-size: 20px; color: #ffd700; font-weight: bold; }
+.hud-rate { font-size: 12px; color: #aaa; }
+
+/* === Desktop layout === */
+.game-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 8px 8px;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.canvas-wrap {
+  flex-shrink: 0;
+}
+
+#gameCanvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.sidebar-right {
+  width: 200px;
+}
+
+/* === Panel === */
+.panel {
+  background: rgba(10,20,10,0.82);
+  border: 1px solid rgba(100,160,80,0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+}
+
+.panel-title {
+  padding: 6px 10px;
+  font-size: 12px; font-weight: bold;
+  border-bottom: 1px solid rgba(100,160,80,0.2);
+  color: #cda;
+}
+
+.panel-body {
+  padding: 5px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* === Shop buttons === */
+.shop-btn {
+  width: 100%; padding: 5px 7px; margin-bottom: 3px;
+  background: rgba(30,50,20,0.6);
+  border: 1px solid rgba(100,160,80,0.2);
+  border-radius: 5px; color: #ccc;
+  cursor: pointer; font-size: 11px;
+  font-family: inherit; text-align: left;
+  transition: all 0.12s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.shop-btn:hover:not(:disabled) {
+  border-color: rgba(150,220,100,0.5);
+  background: rgba(40,70,30,0.7);
+}
+.shop-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.shop-btn .cost { color: #ffd700; font-weight: bold; white-space: nowrap; margin-left: 5px; font-size: 10px; }
+.shop-btn .owned { color: #8a8; font-size: 10px; }
+.shop-btn .desc { display: block; font-size: 9px; color: #888; }
+
+/* === Inventory === */
+.inv-item {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 8px; margin: 2px;
+  background: rgba(30,50,20,0.6);
+  border: 1px solid rgba(100,160,80,0.2);
+  border-radius: 5px; font-size: 11px;
+  cursor: pointer; transition: all 0.12s;
+}
+.inv-item:hover { border-color: rgba(150,220,100,0.5); }
+.inv-item.selected { border-color: #ffd700; background: rgba(60,80,20,0.7); }
+.inv-item .count { color: #ffd700; font-weight: bold; }
+
+/* === Fish info === */
+.fish-row {
+  display: flex; justify-content: space-between;
+  padding: 2px 0; font-size: 11px;
+  border-bottom: 1px solid rgba(100,160,80,0.1);
+}
+.fish-row .evo { color: #8cf; }
+.fish-row .lvl { color: #fa7; }
+
+.fish-desc {
+  font-size: 9px; color: #8a8;
+  padding: 1px 0 3px; font-style: italic;
+}
+
+.rule-hint {
+  color: #aa8; font-size: 9px;
+  border-bottom: none !important; padding: 2px 0;
+}
+
+/* === Evolve button === */
+.evo-btn {
+  width: 100%; padding: 3px 5px; margin: 2px 0 5px;
+  background: rgba(40,40,60,0.6);
+  border: 1px solid rgba(80,80,120,0.3);
+  border-radius: 4px; color: #777;
+  font-size: 9px; font-family: inherit;
+  cursor: not-allowed; transition: all 0.15s;
+}
+.evo-btn.ready {
+  background: rgba(60,120,60,0.5);
+  border-color: rgba(100,220,100,0.5);
+  color: #afd; cursor: pointer;
+  animation: evoPulse 1.5s ease-in-out infinite;
+}
+.evo-btn.ready:hover { background: rgba(80,160,80,0.6); color: #fff; }
+@keyframes evoPulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(100,220,100,0.2); }
+  50% { box-shadow: 0 0 10px rgba(100,220,100,0.5); }
+}
+
+/* === Scrollbar === */
+.panel-body::-webkit-scrollbar { width: 3px; }
+.panel-body::-webkit-scrollbar-thumb { background: rgba(100,160,80,0.3); border-radius: 2px; }
+
+/* === Mobile === */
+@media (max-width: 768px) {
+  .game-layout {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 36px 4px 4px;
+    gap: 4px;
+  }
+
+  .canvas-wrap {
+    width: 100%;
+  }
+
+  #gameCanvas {
+    width: 100%;
+    height: auto;
+  }
+
+  .sidebar, .sidebar-right {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .sidebar .panel, .sidebar-right .panel {
+    flex: 1 1 48%;
+    min-width: 150px;
+  }
+
+  .panel-body { max-height: 160px; }
+
+  .hud { padding: 4px 12px; }
+  .hud-gold { font-size: 16px; }
+}

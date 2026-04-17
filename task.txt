@@ -1,0 +1,39 @@
+背景：
+这是一个前端游戏项目。该项目包含一个总站和上百个游戏，即一个静态站点 + 大量子目录
+
+结构设计：
+root/
+  index.html          （总站）
+  /games/
+    /game1/
+    /game2/
+  /shared/
+    ads.js
+    analytics.js
+    common.css
+
+总站职责
+	•	展示游戏列表
+	•	分类（挂机 / 经营 / 放置）
+	•	推荐热门游戏
+	•	导流
+
+游戏页面职责
+	•	独立运行
+	•	引入 shared 资源
+
+ 
+其他要求：
+1、每个游戏独立打包
+games/
+  game1/
+    index.html
+    main.js
+  game2/
+  game3/
+
+2、 按需加载
+用户访问：/games/game37/，只加载： game37 的资源
+
+3. 无全局依赖污染
+避免：window.globalState = ...，每个游戏应是“沙盒”

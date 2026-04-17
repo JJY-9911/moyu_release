@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GameHub - 网页游戏门户</title>
+  <link rel="stylesheet" href="shared/common.css">
+</head>
+<body>
+  <header class="portal-header">
+    <h1>🎮 GameHub</h1>
+    <span style="color:#666;font-size:14px;">轻松玩，随时玩</span>
+  </header>
+
+  <nav class="category-tabs" role="tablist" aria-label="游戏分类">
+    <button class="category-tab active" role="tab" data-category="all">全部</button>
+    <button class="category-tab" role="tab" data-category="idle">挂机</button>
+    <button class="category-tab" role="tab" data-category="management">经营</button>
+    <button class="category-tab" role="tab" data-category="incremental">放置</button>
+    <button class="category-tab" role="tab" data-category="casual">休闲</button>
+  </nav>
+
+  <main class="game-grid" id="gameGrid" role="list" aria-label="游戏列表"></main>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const games = [
+        {
+          id: 'feed-fish',
+          name: '摸大鲲',
+          icon: '🐟',
+          category: 'management',
+          categoryLabel: '经营',
+          hot: true,
+          desc: '收集金币喂鱼，养出传说中的鲲'
+        }
+        ,{
+          id: 'alcohol',
+          name: '酒吧模拟器',
+          icon: '🍸',
+          category: 'casual',
+          categoryLabel: '休闲',
+          hot: false,
+          desc: '扮演调酒师，记住配方，为顾客调制鸡尾酒'
+        },
+        {
+          id: 'jump',
+          name: '撅地求生',
+          icon: '🚀',
+          category: 'casual',
+          categoryLabel: '休闲',
+          hot: true,
+          desc: '踩着弹簧飞向太空，躲避障碍物'
+        }
+        // 后续游戏在此追加
+      ];
+
+      const grid = document.getElementById('gameGrid');
+      const tabs = document.querySelectorAll('.category-tab');
+
+      function renderGames(category) {
+        const filtered = category === 'all' ? games : games.filter(g => g.category === category);
+        grid.innerHTML = filtered.map(g => `
+          <a href="games/${g.id}/index.html" class="game-card" role="listitem" aria-label="${g.name}">
+            <div class="game-card-thumb">
+              <img src="games/${g.id}/assets/cover.png" alt="${g.name}" loading="lazy">
+            </div>
+            <div class="game-card-info">
+              <h3>${g.name}${g.hot ? '<span class="hot">🔥 热门</span>' : ''}</h3>
+              <span class="tag">${g.categoryLabel}</span>
+            </div>
+          </a>
+        `).join('');
+      }
+
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          renderGames(tab.dataset.category);
+        });
+      });
+
+      renderGames('all');
+    })();
+  </script>
+</body>
+</html>

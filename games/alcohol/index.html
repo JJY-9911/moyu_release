@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>酒吧模拟器 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="../../index.html" class="top-btn back-btn">← 返回</a>
+
+  <div class="game-wrapper">
+    <!-- 上部行：预留空间 | 消息区 -->
+    <div class="upper-row">
+      <div class="upper-space" id="upperSection"></div>
+      <div class="message-panel" id="messagePanel">
+        <div class="message-panel-title">📢 消息
+    <button id="skipTutorialBtn" class="skip-btn" style="display:none">跳过引导</button>
+  </div>
+        <div class="message-list" id="messageList"></div>
+      </div>
+    </div>
+
+    <!-- 下部行：[水池/冰柜] | 吧台 | 酒柜 -->
+    <div class="lower-row">
+      <!-- 左列：水池(上) + 冰柜(下) -->
+      <div class="left-stack">
+        <div class="sink-area" id="sinkSlot">
+          <img src="assets/sink.png" alt="水池" draggable="false">
+          <div class="sink-badges" id="sinkBadges"></div>
+        </div>
+        <div class="freezer-area" id="iceSlot">
+          <img src="assets/ice.png" alt="冰柜" draggable="false">
+        </div>
+      </div>
+
+      <!-- 吧台 -->
+      <div class="bar-counter" id="barCounter">
+        <div class="bar-bg"><img src="assets/desk.png" alt="吧台" draggable="false"></div>
+        <div class="bar-tool" id="orderSlot" style="left:12px;top:12px;">
+          <img src="assets/order.png" alt="订单机" draggable="false">
+          <span>订单机</span>
+          <div class="order-badge" id="orderBadge" style="display:none">0</div>
+        </div>
+        <div class="bar-tool" id="recipeSlot" style="left:148px;top:12px;">
+          <img src="assets/recipe.png" alt="配方本" draggable="false">
+          <span>配方本</span>
+        </div>
+        <div class="bar-tool" id="handbookSlot" style="left:284px;top:12px;">
+          <img src="assets/handbook.png" alt="酒图签" draggable="false">
+          <span>酒图签</span>
+        </div>
+        <div class="bar-tool" id="clampSlot" style="left:148px;bottom:12px;">
+          <img src="assets/clamp.png" alt="冰夹" draggable="false">
+          <span>冰夹</span>
+        </div>
+        <div class="bar-tool" id="spoonSlot" style="left:12px;bottom:12px;">
+          <img src="assets/spoon.png" alt="吧勺" draggable="false">
+          <span>吧勺</span>
+        </div>
+        <div class="bar-tool" id="shakerSlot" style="right:12px;top:12px;">
+          <img src="assets/shake.png" alt="雪克壶" draggable="false">
+          <span>雪克壶</span>
+        </div>
+      </div>
+
+      <!-- 酒柜 -->
+      <div class="cabinet-area" id="cabinetArea">
+        <div class="cabinet-header">
+          <span>酒柜</span>
+          <button id="editModeBtn" class="edit-mode-btn">📐 编辑模式</button>
+        </div>
+        <div class="cabinet-grid" id="cabinetGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="floatingItem" class="floating-item" style="display:none">
+    <img id="floatingImg" src="" alt="" draggable="false">
+  </div>
+  <div id="shakerIndicator" class="shaker-indicator" style="display:none">
+    <div class="shaker-title">雪克壶内容物</div>
+    <div id="shakerContents" class="shaker-contents"></div>
+  </div>
+  <div id="orderModal" class="modal" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header"><h3>📋 订单列表</h3><button class="modal-close" data-close="orderModal">✕</button></div>
+      <div class="modal-body" id="orderList"></div>
+    </div>
+  </div>
+  <div id="handbookModal" class="modal" style="display:none">
+    <div class="modal-content modal-wide">
+      <div class="modal-header"><h3>🏷️ 酒图签</h3><button class="modal-close" data-close="handbookModal">✕</button></div>
+      <div class="modal-body" id="handbookList"></div>
+    </div>
+  </div>
+  <div id="recipeModal" class="modal" style="display:none">
+    <div class="modal-content modal-wide">
+      <div class="modal-header"><h3>📖 配方本</h3><button class="modal-close" data-close="recipeModal">✕</button></div>
+      <div class="modal-body" id="recipeList"></div>
+    </div>
+  </div>
+  <div id="glassTooltip" class="glass-tooltip" style="display:none"></div>
+  <script src="main.js"></script>
+</body>
+</html>

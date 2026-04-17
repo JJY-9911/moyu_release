@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>摸大鲲 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="../../index.html" class="top-btn back-btn">← 返回</a>
+  <button class="top-btn reset-btn" id="resetBtn">🔄 重置</button>
+  <button class="top-btn debug-btn" id="debugBtn">🧪 无限金币</button>
+
+  <!-- HUD -->
+  <div class="hud">
+    <span class="hud-gold">🪙 <span id="goldNum">0</span></span>
+    <span class="hud-rate" id="perSec">+0/3s</span>
+  </div>
+
+  <div class="game-layout">
+    <!-- Left sidebar: shops + inventory (desktop) -->
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-title">💰 赚钱设施</div>
+        <div class="panel-body" id="earningList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🐟 鱼粮商店</div>
+        <div class="panel-body" id="foodList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🎒 背包</div>
+        <div class="panel-body" id="inventory"></div>
+      </div>
+    </div>
+
+    <!-- Canvas area -->
+    <div class="canvas-wrap">
+      <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- Right sidebar: fish info (desktop) -->
+    <div class="sidebar sidebar-right">
+      <div class="panel">
+        <div class="panel-title">📊 鱼塘</div>
+        <div class="panel-body" id="fishInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
