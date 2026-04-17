@@ -1014,6 +1014,7 @@
     if (matchedCocktail && matchedOrder) {
       showMessage('🎉 完美！' + matchedCocktail.name + '调制成功！', true);
       matchedOrder.completed = true;
+      removeCustomer(matchedOrder.id);
       completeDrink(glassItem, matchedCocktail, matchedOrder);
       updateOrderBadge();
       checkTutorial('order-completed');
@@ -1053,18 +1054,121 @@
     renderSinkBadges();
   }
 
+  // ========== 顾客系统 ==========
+  const PEOPLE_IMGS = [];
+  for (let i = 1; i <= 8; i++) PEOPLE_IMGS.push('assets/people/people' + i + '.webp');
+  const MAX_VISIBLE_CUSTOMERS = 4;
+  const customerArea = $('#customerArea');
+
+  // 8个人物随机排列为一组，用完再洗牌，保证同屏不重复
+  let peopleQueue = [];
+  function nextPeopleImg() {
+    if (peopleQueue.length === 0) {
+      peopleQueue = PEOPLE_IMGS.slice();
+      shuffle(peopleQueue);
+    }
+    return peopleQueue.pop();
+  }
+
+  // state.customers: [{id, orderId, cocktailName, peopleImg, el, slotIndex, leaving}]
+  state.customers = [];
+  let customerIdCounter = 0;
+
+  function getCustomerSlotX(index) {
+    // 每个槽位宽度 = 容器宽度 / MAX_VISIBLE_CUSTOMERS
+    const areaW = customerArea.offsetWidth;
+    const slotW = areaW / MAX_VISIBLE_CUSTOMERS;
+    return index * slotW;
+  }
+
+  function spawnCustomer(orderId, cocktailName) {
+    const id = ++customerIdCounter;
+    const imgSrc = nextPeopleImg();
+    const pending = state.customers.filter(c => !c.leaving);
+    const slotIndex = pending.length; // 新顾客排在最后
+
+    // 创建 DOM
+    const el = document.createElement('div');
+    el.className = 'customer-slot';
+    const areaW = customerArea.offsetWidth;
+    const slotW = areaW / MAX_VISIBLE_CUSTOMERS;
+    el.style.width = slotW + 'px';
+    // 初始位置：从右侧画外进入
+    el.style.left = areaW + 'px';
+    el.style.opacity = slotIndex < MAX_VISIBLE_CUSTOMERS ? '1' : '0';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'customer-bubble';
+    bubble.textContent = '🍸 ' + cocktailName;
+    el.appendChild(bubble);
+
+    const img = document.createElement('img');
+    img.src = cachedSrc(imgSrc);
+    img.alt = '顾客';
+    img.draggable = false;
+    el.appendChild(img);
+
+    customerArea.appendChild(el);
+
+    const customer = { id, orderId, cocktailName, peopleImg: imgSrc, el, bubble, slotIndex, leaving: false };
+    state.customers.push(customer);
+
+    // 动画：走到目标位置
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.left = getCustomerSlotX(slotIndex) + 'px';
+        // 气泡在走到位后显示
+        setTimeout(() => { bubble.classList.add('show'); }, 1600);
+      });
+    });
+
+    return customer;
+  }
+
+  function removeCustomer(orderId) {
+    const idx = state.customers.findIndex(c => c.orderId === orderId && !c.leaving);
+    if (idx === -1) return;
+    const customer = state.customers[idx];
+    customer.leaving = true;
+    // 淡出
+    customer.el.style.opacity = '0';
+    setTimeout(() => {
+      customer.el.remove();
+      state.customers = state.customers.filter(c => c.id !== customer.id);
+      // 重新排列剩余顾客
+      repositionCustomers();
+    }, 800);
+  }
+
+  function repositionCustomers() {
+    const active = state.customers.filter(c => !c.leaving);
+    active.forEach((c, i) => {
+      c.slotIndex = i;
+      const areaW = customerArea.offsetWidth;
+      const slotW = areaW / MAX_VISIBLE_CUSTOMERS;
+      c.el.style.width = slotW + 'px';
+      c.el.style.left = getCustomerSlotX(i) + 'px';
+      c.el.style.opacity = i < MAX_VISIBLE_CUSTOMERS ? '1' : '0';
+    });
+  }
+
   // ========== 订单系统 ==========
   function generateOrders(count) {
     const available = COCKTAILS.filter(c => c.id !== 'tequilaSunrise' || state.tutorialDrinkMade);
     for (let i = 0; i < count; i++) {
       const cocktail = available[Math.floor(Math.random() * available.length)];
-      state.orders.push({
+      const order = {
         id: ++state.orderIdCounter,
         cocktailId: cocktail.id,
         name: cocktail.name,
         timestamp: Date.now(),
         completed: false
-      });
+      };
+      state.orders.push(order);
+      // 延迟生成顾客，让多个顾客依次走入
+      setTimeout(() => {
+        spawnCustomer(order.id, cocktail.name);
+      }, i * 600);
     }
     updateOrderBadge();
   }
@@ -1076,11 +1180,22 @@
   }
 
   function startOrderTimer() {
-    state.orderTimer = setInterval(() => {
-      const count = 1 + Math.floor(Math.random() * 3);
-      generateOrders(count);
-      showMessage('📋 新订单来了！共' + count + '个', true);
-    }, 180000);
+    // 动态间隔：根据已完成订单数逐渐缩短
+    // 新手 ~150s，熟练后 ~55s，始终每次只来1单
+    function scheduleNext() {
+      const completed = state.orders.filter(o => o.completed).length;
+      // 从150秒逐渐降到55秒，约完成10单后趋于稳定
+      const base = 55 + 95 * Math.exp(-completed * 0.15);
+      // ±20% 随机波动
+      const jitter = base * (0.8 + Math.random() * 0.4);
+      const delay = Math.round(jitter) * 1000;
+      state.orderTimer = setTimeout(() => {
+        generateOrders(1);
+        showMessage('📋 新订单来了！', true);
+        scheduleNext();
+      }, delay);
+    }
+    scheduleNext();
   }
 
   // ========== 模态框 ==========
@@ -1337,13 +1452,15 @@
     // 龙舌兰日出教程完成 → 生成皮纳科拉达订单
     if (step.id === 'tutorial-done1') {
       setTimeout(() => {
+        const orderId = ++state.orderIdCounter;
         state.orders.push({
-          id: ++state.orderIdCounter,
+          id: orderId,
           cocktailId: 'pinaColada',
           name: '皮纳科拉达',
           timestamp: Date.now(),
           completed: false
         });
+        spawnCustomer(orderId, '皮纳科拉达');
         updateOrderBadge();
         advanceTutorial();
       }, 3000);
@@ -1439,6 +1556,7 @@
         });
       }
       renderCabinet();
+      repositionCustomers();
     });
   }
 
