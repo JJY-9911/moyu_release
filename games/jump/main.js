@@ -16,14 +16,59 @@ function resize(){
 window.addEventListener('resize',resize); resize();
 
 // ============================================================
+// ASSET PRELOADER — fetch full blob then decode
+// ============================================================
+// Collect all image paths first, load them via fetch+blob to guarantee
+// complete binary data before handing to Image elements.
+var assetPaths = {
+  player: 'assets/jump.webp',
+  bg: [],
+  cat: [],
+  skin: {}
+};
+for(var i=1;i<=11;i++) assetPaths.bg.push('assets/'+i+'.webp');
+for(var ci=1;ci<=11;ci++) assetPaths.cat.push('assets/cat/cat'+ci+'.webp');
+for(var si=1;si<=7;si++) assetPaths.skin[si]='assets/skin'+si+'.webp';
+
+// Flatten all paths for preloading
+var allPaths = [assetPaths.player]
+  .concat(assetPaths.bg)
+  .concat(assetPaths.cat);
+for(var sk2=1;sk2<=7;sk2++) allPaths.push(assetPaths.skin[sk2]);
+
+var totalImages = allPaths.length;
+var loadedCount = 0;
+var gameStarted = false;
+
+// Reliable image loader: fetch blob → objectURL → Image → decode
+function loadImage(src) {
+  return fetch(src)
+    .then(function(r) { if(!r.ok) throw 0; return r.blob(); })
+    .then(function(b) {
+      var img = new Image();
+      img.src = URL.createObjectURL(b);
+      return img.decode ? img.decode().then(function(){ return img; }) : Promise.resolve(img);
+    })
+    .catch(function() {
+      // Fallback: try direct load
+      var img = new Image();
+      img.src = src;
+      return new Promise(function(resolve) {
+        img.onload = function(){ resolve(img); };
+        img.onerror = function(){ resolve(img); };
+      });
+    })
+    .then(function(img) {
+      loadedCount++;
+      drawLoadingScreen();
+      return img;
+    });
+}
+
+// ============================================================
 // BACKGROUND IMAGES (11 layers by altitude)
 // ============================================================
 var bgImgs=[];
-for(var i=1;i<=11;i++){
-  var img=new Image();
-  img.src='assets/'+i+'.png';
-  bgImgs.push(img);
-}
 
 // ============================================================
 // GAME STATE
@@ -31,29 +76,13 @@ for(var i=1;i<=11;i++){
 var GRAVITY_BASE=0.12;
 var BOUNCE_SPEED=10.8;
 var SWING_SPEED=0.04;
-// Hamster sprite dimensions (drawn size)
 var SPRITE_W=60;
 var SPRITE_H=72;
-// The pivot is at the top-center of the sprite (head)
-// Bottom half is the "butt" bounce zone
-var BUTT_RATIO=0.5; // bottom 50% of sprite is butt
+var BUTT_RATIO=0.5;
 
-// Load hamster skins
-var playerImg=new Image();
-playerImg.src='assets/jump.png';
-// Load obstacle images (per level)
+var playerImg=null;
 var catImgs=[];
-for(var ci=1;ci<=11;ci++){
-  var cimg=new Image();
-  cimg.src='assets/cat/cat'+ci+'.png';
-  catImgs.push(cimg);
-}
 var skinImgs={};
-for(var si=1;si<=7;si++){
-  skinImgs[si]=new Image();
-  skinImgs[si].src='assets/skin'+si+'.png';
-}
-// Level→skin mapping (0-indexed level): null = default jump.png
 var LEVEL_SKINS=[null,null,'skin3','skin1','skin1','skin2','skin2','skin4','skin5','skin6','skin7'];
 
 function getPlayerImg(){
@@ -601,7 +630,6 @@ function startGame(){
 // GAME LOOP & LOADING
 // ============================================================
 var lastTime=Date.now();
-var gameStarted=false;
 
 function loop(){
   var now=Date.now();
@@ -610,23 +638,6 @@ function loop(){
   update(dt*60);
   draw();
   requestAnimationFrame(loop);
-}
-
-// Collect all images to preload
-var allImages=[playerImg].concat(bgImgs).concat(catImgs);
-for(var sk=1;sk<=7;sk++) allImages.push(skinImgs[sk]);
-var totalImages=allImages.length;
-var loadedCount=0;
-
-function onImageReady(){
-  loadedCount++;
-  drawLoadingScreen();
-  if(loadedCount>=totalImages && !gameStarted){
-    gameStarted=true;
-    state.phase='title';
-    lastTime=Date.now();
-    loop();
-  }
 }
 
 function drawLoadingScreen(){
@@ -642,7 +653,6 @@ function drawLoadingScreen(){
   ctx.textAlign='center';
   ctx.fillText('撅地求生',W/2,H/2-50);
 
-  // Progress bar
   var barW=240, barH=16;
   var barX=(W-barW)/2, barY=H/2-10;
   var pct=totalImages>0?(loadedCount/totalImages):0;
@@ -657,22 +667,30 @@ function drawLoadingScreen(){
   ctx.fillText('加载资源中... '+loadedCount+'/'+totalImages,W/2,barY+barH+20);
 }
 
-// Start preloading — use decode() for full readiness
+// Start preloading via fetch+blob+decode
 drawLoadingScreen();
-allImages.forEach(function(img){
-  function tryDecode(){
-    if(typeof img.decode==='function'){
-      img.decode().then(onImageReady).catch(onImageReady);
-    } else {
-      onImageReady();
-    }
-  }
-  if(img.complete && img.naturalWidth>0){
-    tryDecode();
-  } else {
-    img.onload=tryDecode;
-    img.onerror=onImageReady;
-  }
+
+// Load all images in parallel, then assign to game variables
+var bgPromises = assetPaths.bg.map(function(p){ return loadImage(p); });
+var catPromises = assetPaths.cat.map(function(p){ return loadImage(p); });
+var skinPromises = [];
+for(var sk3=1;sk3<=7;sk3++){
+  skinPromises.push((function(n){
+    return loadImage(assetPaths.skin[n]).then(function(img){ skinImgs[n]=img; });
+  })(sk3));
+}
+var playerPromise = loadImage(assetPaths.player).then(function(img){ playerImg=img; });
+
+Promise.all([
+  playerPromise,
+  Promise.all(bgPromises).then(function(imgs){ bgImgs=imgs; }),
+  Promise.all(catPromises).then(function(imgs){ catImgs=imgs; }),
+  Promise.all(skinPromises)
+]).then(function(){
+  gameStarted=true;
+  state.phase='title';
+  lastTime=Date.now();
+  loop();
 });
 
 })();

@@ -65,7 +65,7 @@
         grid.innerHTML = filtered.map(g => `
           <a href="games/${g.id}/index.html" class="game-card" role="listitem" aria-label="${g.name}">
             <div class="game-card-thumb">
-              <img src="games/${g.id}/assets/cover.png" alt="${g.name}" loading="lazy">
+              <img src="games/${g.id}/assets/cover.webp" alt="${g.name}" loading="lazy">
             </div>
             <div class="game-card-info">
               <h3>${g.name}${g.hot ? '<span class="hot">🔥 热门</span>' : ''}</h3>

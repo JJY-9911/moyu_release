@@ -84,7 +84,7 @@ body {
   max-width: 1200px;
   max-height: 850px;
   overflow: hidden;
-  background: url('assets/bg.png') center/cover no-repeat;
+  background: url('assets/bg.webp') center/cover no-repeat;
 }
 
 /* ===== 上部行 ===== */

@@ -9,7 +9,7 @@
 <body>
   <!-- 启动页遮罩 -->
   <div id="splashScreen" class="splash-screen">
-    <img src="assets/cover.png" alt="加载中" class="splash-img" draggable="false">
+    <img src="assets/cover.webp" alt="加载中" class="splash-img" draggable="false">
     <div class="splash-bottom">
       <div class="splash-progress-bar"><div id="splashProgress" class="splash-progress-fill"></div></div>
       <div class="splash-loading" id="splashText">加载中… 0%</div>
@@ -35,40 +35,40 @@
       <!-- 左列：水池(上) + 冰柜(下) -->
       <div class="left-stack">
         <div class="sink-area" id="sinkSlot">
-          <img data-src="assets/sink.png" alt="水池" draggable="false">
+          <img data-src="assets/sink.webp" alt="水池" draggable="false">
           <div class="sink-badges" id="sinkBadges"></div>
         </div>
         <div class="freezer-area" id="iceSlot">
-          <img data-src="assets/ice.png" alt="冰柜" draggable="false">
+          <img data-src="assets/ice.webp" alt="冰柜" draggable="false">
         </div>
       </div>
 
       <!-- 吧台 -->
       <div class="bar-counter" id="barCounter">
-        <div class="bar-bg"><img data-src="assets/desk.png" alt="吧台" draggable="false"></div>
+        <div class="bar-bg"><img data-src="assets/desk.webp" alt="吧台" draggable="false"></div>
         <div class="bar-tool" id="orderSlot" style="left:12px;top:12px;">
-          <img data-src="assets/order.png" alt="订单机" draggable="false">
+          <img data-src="assets/order.webp" alt="订单机" draggable="false">
           <span>订单机</span>
           <div class="order-badge" id="orderBadge" style="display:none">0</div>
         </div>
         <div class="bar-tool" id="recipeSlot" style="left:148px;top:12px;">
-          <img data-src="assets/recipe.png" alt="配方本" draggable="false">
+          <img data-src="assets/recipe.webp" alt="配方本" draggable="false">
           <span>配方本</span>
         </div>
         <div class="bar-tool" id="handbookSlot" style="left:284px;top:12px;">
-          <img data-src="assets/handbook.png" alt="酒图签" draggable="false">
+          <img data-src="assets/handbook.webp" alt="酒图签" draggable="false">
           <span>酒图签</span>
         </div>
         <div class="bar-tool" id="clampSlot" style="left:148px;bottom:12px;">
-          <img data-src="assets/clamp.png" alt="冰夹" draggable="false">
+          <img data-src="assets/clamp.webp" alt="冰夹" draggable="false">
           <span>冰夹</span>
         </div>
         <div class="bar-tool" id="spoonSlot" style="left:12px;bottom:12px;">
-          <img data-src="assets/spoon.png" alt="吧勺" draggable="false">
+          <img data-src="assets/spoon.webp" alt="吧勺" draggable="false">
           <span>吧勺</span>
         </div>
         <div class="bar-tool" id="shakerSlot" style="right:12px;top:12px;">
-          <img data-src="assets/shake.png" alt="雪克壶" draggable="false">
+          <img data-src="assets/shake.webp" alt="雪克壶" draggable="false">
           <span>雪克壶</span>
         </div>
       </div>
@@ -118,24 +118,24 @@
       var gameWrapper = document.querySelector('.game-wrapper');
 
       var allImages = [
-        'assets/cover.png',
-        'assets/bg.png', 'assets/desk.png', 'assets/sink.png', 'assets/ice.png',
-        'assets/order.png', 'assets/recipe.png', 'assets/handbook.png',
-        'assets/clamp.png', 'assets/spoon.png', 'assets/shake.png',
-        'assets/collins-glass.png', 'assets/whiskey-glass.png',
-        'assets/martini-glass.png', 'assets/margaret-glass.png',
-        'assets/champagne-glass.png', 'assets/wine-cabinet.png',
-        'assets/wine/gin.png', 'assets/wine/vodka.png', 'assets/wine/Tequila.png',
-        'assets/wine/rum.png', 'assets/wine/champagne.png',
-        'assets/wine/coffee.png', 'assets/wine/vermouth.png',
-        'assets/wine/red-vermouth.png', 'assets/wine/lemon.png',
-        'assets/wine/juice.png', 'assets/wine/milk.png',
-        'assets/wine/tonic.png', 'assets/wine/soda.png',
-        'assets/wine/Grenadine-Syrup.png', 'assets/wine/brandy.png',
-        'assets/people/people1.png', 'assets/people/people2.png',
-        'assets/people/people3.png', 'assets/people/people4.png',
-        'assets/people/people5.png', 'assets/people/people6.png',
-        'assets/people/people7.png', 'assets/people/people8.png'
+        'assets/cover.webp',
+        'assets/bg.webp', 'assets/desk.webp', 'assets/sink.webp', 'assets/ice.webp',
+        'assets/order.webp', 'assets/recipe.webp', 'assets/handbook.webp',
+        'assets/clamp.webp', 'assets/spoon.webp', 'assets/shake.webp',
+        'assets/collins-glass.webp', 'assets/whiskey-glass.webp',
+        'assets/martini-glass.webp', 'assets/margaret-glass.webp',
+        'assets/champagne-glass.webp', 'assets/wine-cabinet.webp',
+        'assets/wine/gin.webp', 'assets/wine/vodka.webp', 'assets/wine/Tequila.webp',
+        'assets/wine/rum.webp', 'assets/wine/champagne.webp',
+        'assets/wine/coffee.webp', 'assets/wine/vermouth.webp',
+        'assets/wine/red-vermouth.webp', 'assets/wine/lemon.webp',
+        'assets/wine/juice.webp', 'assets/wine/milk.webp',
+        'assets/wine/tonic.webp', 'assets/wine/soda.webp',
+        'assets/wine/Grenadine-Syrup.webp', 'assets/wine/brandy.webp',
+        'assets/people/people1.webp', 'assets/people/people2.webp',
+        'assets/people/people3.webp', 'assets/people/people4.webp',
+        'assets/people/people5.webp', 'assets/people/people6.webp',
+        'assets/people/people7.webp', 'assets/people/people8.webp'
       ];
 
       var total = allImages.length;
@@ -182,8 +182,8 @@
         .then(function() {
           updateProgress(85);
           // 替换 CSS 背景图
-          if (cache['assets/bg.png']) {
-            gameWrapper.style.backgroundImage = 'url(' + cache['assets/bg.png'] + ')';
+          if (cache['assets/bg.webp']) {
+            gameWrapper.style.backgroundImage = 'url(' + cache['assets/bg.webp'] + ')';
           }
           // 阶段3: 加载 main.js 并等待 init() 完成 (85% ~ 92%)
           return loadMainScript();

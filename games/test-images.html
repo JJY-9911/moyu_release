@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片完整性测试 v2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:monospace;background:#1a1a2e;color:#eee;padding:20px;}
+h1{text-align:center;margin-bottom:10px;color:#fd8;}
+.controls{text-align:center;margin-bottom:20px;}
+.controls button{padding:8px 16px;margin:4px;background:#333;color:#fd8;border:1px solid #555;border-radius:4px;cursor:pointer;font-family:monospace;font-size:13px;}
+.controls button:hover{background:#555;}
+#summary{text-align:center;margin-bottom:20px;font-size:14px;padding:10px;background:#222;border-radius:6px;line-height:1.8;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.card{background:#222;border-radius:8px;padding:10px;border:2px solid #333;font-size:11px;}
+.card.ok{border-color:#4caf50;}
+.card.fail{border-color:#f44336;}
+.card.warn{border-color:#ff9800;}
+.card.loading{border-color:#555;}
+.card .path{font-size:11px;color:#888;word-break:break-all;margin-bottom:6px;}
+.card .badge{font-size:11px;margin-bottom:6px;padding:3px 8px;border-radius:3px;display:inline-block;}
+.card .badge.ok{background:#1b5e20;color:#a5d6a7;}
+.card .badge.fail{background:#b71c1c;color:#ef9a9a;}
+.card .badge.warn{background:#e65100;color:#ffcc80;}
+.card .badge.loading{background:#333;color:#888;}
+.card .info{color:#aaa;white-space:pre-wrap;word-break:break-all;margin:6px 0;line-height:1.6;}
+.card .preview{width:100%;max-height:100px;object-fit:contain;background:#111;border-radius:4px;margin-top:6px;}
+</style>
+</head>
+<body>
+<h1>🔍 图片完整性测试 v2</h1>
+<div class="controls">
+  <button onclick="runTest('alcohol')">测试 Alcohol</button>
+  <button onclick="runTest('jump')">测试 Jump</button>
+  <button onclick="runTest('all')">测试全部</button>
+</div>
+<div id="summary">点击按钮开始测试</div>
+<div class="grid" id="grid"></div>
+<script>
+var alcoholImages = [
+  'alcohol/assets/bg.webp','alcohol/assets/desk.webp','alcohol/assets/sink.webp',
+  'alcohol/assets/ice.webp','alcohol/assets/order.webp','alcohol/assets/recipe.webp',
+  'alcohol/assets/handbook.webp','alcohol/assets/clamp.webp','alcohol/assets/spoon.webp',
+  'alcohol/assets/shake.webp','alcohol/assets/cover.webp','alcohol/assets/wine-cabinet.webp',
+  'alcohol/assets/collins-glass.webp','alcohol/assets/whiskey-glass.webp',
+  'alcohol/assets/martini-glass.webp','alcohol/assets/margaret-glass.webp',
+  'alcohol/assets/champagne-glass.webp',
+  'alcohol/assets/wine/gin.webp','alcohol/assets/wine/vodka.webp',
+  'alcohol/assets/wine/Tequila.webp','alcohol/assets/wine/rum.webp',
+  'alcohol/assets/wine/champagne.webp','alcohol/assets/wine/coffee.webp',
+  'alcohol/assets/wine/vermouth.webp','alcohol/assets/wine/red-vermouth.webp',
+  'alcohol/assets/wine/lemon.webp','alcohol/assets/wine/juice.webp',
+  'alcohol/assets/wine/milk.webp','alcohol/assets/wine/tonic.webp',
+  'alcohol/assets/wine/soda.webp','alcohol/assets/wine/Grenadine-Syrup.webp',
+  'alcohol/assets/wine/brandy.webp',
+  'alcohol/assets/people/people1.webp','alcohol/assets/people/people2.webp',
+  'alcohol/assets/people/people3.webp','alcohol/assets/people/people4.webp',
+  'alcohol/assets/people/people5.webp','alcohol/assets/people/people6.webp',
+  'alcohol/assets/people/people7.webp','alcohol/assets/people/people8.webp'
+];
+var jumpImages = ['jump/assets/jump.webp','jump/assets/cover.webp'];
+for(var i=1;i<=11;i++) jumpImages.push('jump/assets/'+i+'.webp');
+for(var c=1;c<=11;c++) jumpImages.push('jump/assets/cat/cat'+c+'.webp');
+for(var s=1;s<=7;s++) jumpImages.push('jump/assets/skin'+s+'.webp');
+
+var grid=document.getElementById('grid'), summary=document.getElementById('summary');
+
+function runTest(which){
+  var images=[];
+  if(which==='alcohol') images=alcoholImages;
+  else if(which==='jump') images=jumpImages;
+  else images=alcoholImages.concat(jumpImages);
+  grid.innerHTML='';
+  var results=[], done=0, total=images.length;
+  summary.textContent='测试中... 0/'+total;
+  images.forEach(function(src,idx){
+    var card=document.createElement('div');
+    card.className='card loading'; card.id='c'+idx;
+    card.innerHTML='<div class="path">'+src+'</div><div class="badge loading" id="b'+idx+'">⏳</div><div class="info" id="i'+idx+'"></div>';
+    grid.appendChild(card);
+    testOne(src,idx,function(r){ results.push(r); done++; summary.textContent='测试中... '+done+'/'+total; if(done>=total) showSummary(results); });
+  });
+}
+
+function testOne(src,idx,cb){
+  var card=document.getElementById('c'+idx);
+  var badge=document.getElementById('b'+idx);
+  var info=document.getElementById('i'+idx);
+  var r={src:src,ok:false,reason:'',truncated:false};
+  var t0=performance.now();
+
+  fetch(src,{cache:'no-store'}).then(function(res){
+    var ms=Math.round(performance.now()-t0);
+    var cl=res.headers.get('content-length');
+    var ct=res.headers.get('content-type');
+    var ce=res.headers.get('content-encoding');
+    var allHeaders='';
+    res.headers.forEach(function(v,k){ allHeaders+=k+': '+v+'\n'; });
+
+    if(!res.ok){ r.reason='HTTP '+res.status; fail(); return; }
+
+    return res.arrayBuffer().then(function(buf){
+      var u8=new Uint8Array(buf);
+      var sz=u8.length;
+
+      // 文件类型检测
+      var isJPEG=sz>=2 && u8[0]===0xFF && u8[1]===0xD8;
+      var isPNG=sz>=8 && u8[0]===0x89 && u8[1]===0x50 && u8[2]===0x4E && u8[3]===0x47;
+      var fileType=isPNG?'PNG':isJPEG?'JPEG':'未知('+hex(u8[0])+' '+hex(u8[1])+')';
+
+      // PNG: 搜索 IEND
+      var hasIEND=false, iendAt=-1;
+      if(isPNG){
+        for(var j=sz-4;j>=8;j--){
+          if(u8[j]===0x49&&u8[j+1]===0x45&&u8[j+2]===0x4E&&u8[j+3]===0x44){ hasIEND=true; iendAt=j; break; }
+        }
+      }
+      // JPEG: 搜索 FFD9 结束标记
+      var hasJPEGEnd=false;
+      if(isJPEG){
+        for(var k=sz-2;k>=0;k--){
+          if(u8[k]===0xFF&&u8[k+1]===0xD9){ hasJPEGEnd=true; break; }
+        }
+      }
+
+      var structOk=isPNG?hasIEND:(isJPEG?hasJPEGEnd:true);
+
+      // 末尾 hex
+      var tail=''; for(var t=Math.max(0,sz-16);t<sz;t++) tail+=hex(u8[t])+' ';
+
+      // Image decode 测试
+      var blob=new Blob([buf],{type:isPNG?'image/png':'image/jpeg'});
+      var url=URL.createObjectURL(blob);
+      var img=new Image(); img.src=url;
+      return (img.decode?img.decode().catch(function(){return null;}):new Promise(function(ok){img.onload=img.onerror=ok;})).then(function(){
+        var dOk=img.naturalWidth>0&&img.naturalHeight>0;
+        var iw=img.naturalWidth, ih=img.naturalHeight;
+
+        // Canvas 底部像素检查
+        var bottomInfo='';
+        if(dOk){
+          try{
+            var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
+            var cx=cv.getContext('2d'); cx.drawImage(img,0,0);
+            // 检查底部10%的像素
+            var checkH=Math.max(1,Math.floor(ih*0.1));
+            var pd=cx.getImageData(0,ih-checkH,iw,checkH).data;
+            var total=pd.length/4, nonTrans=0;
+            for(var p=3;p<pd.length;p+=4) if(pd[p]>0) nonTrans++;
+            var pct=Math.round(nonTrans/total*100);
+            bottomInfo='底部'+checkH+'行: '+pct+'%有内容';
+            if(pct===0) bottomInfo+=' ⚠️可能残缺';
+          }catch(e){ bottomInfo='canvas检查失败'; }
+        }
+
+        // 汇总
+        var txt='';
+        txt+='类型: '+fileType+' | 大小: '+fmtSize(sz)+' | 耗时: '+ms+'ms\n';
+        if(cl) txt+='Content-Length: '+cl+(parseInt(cl)===sz?' ✓':' ✗实际'+sz)+'\n';
+        if(ce) txt+='Content-Encoding: '+ce+'\n';
+        txt+='结构: '+(structOk?'✓ 完整':'✗ '+(isPNG?'缺少IEND':'缺少FFD9'));
+        if(isPNG&&hasIEND) txt+=' (IEND@'+iendAt+', 距末尾'+(sz-iendAt)+'字节)';
+        txt+='\ndecode: '+(dOk?'✓ '+iw+'×'+ih:'✗ 失败');
+        txt+='\n'+bottomInfo;
+        txt+='\n末尾: '+tail;
+
+        info.textContent=txt;
+
+        // 预览
+        var prev=document.createElement('img'); prev.className='preview'; prev.src=url;
+        card.appendChild(prev);
+
+        r.ok=structOk&&dOk;
+        r.truncated=!structOk;
+        r.reason=structOk?'':(isPNG?'PNG缺少IEND':'JPEG缺少FFD9');
+        r.fileType=fileType;
+        r.headers=allHeaders;
+
+        card.className='card '+(r.ok?'ok':'fail');
+        badge.className='badge '+(r.ok?'ok':'fail');
+        badge.textContent=r.ok?'✅ 完整':'❌ '+r.reason;
+        cb(r);
+      });
+    });
+  }).catch(function(e){
+    r.reason='fetch: '+e.message;
+    badge.className='badge fail'; badge.textContent='❌ fetch失败';
+    info.textContent=e.message;
+    card.className='card fail';
+    cb(r);
+  });
+}
+
+function hex(b){ return ('0'+b.toString(16)).slice(-2); }
+function fmtSize(b){ return b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB'; }
+
+function showSummary(results){
+  var ok=0,fail=0,trunc=0;
+  results.forEach(function(r){ if(r.ok)ok++; else fail++; if(r.truncated)trunc++; });
+  var h='✅ 完整: <b style="color:#4caf50">'+ok+'</b> | ❌ 异常: <b style="color:#f44336">'+fail+'</b> | 截断: <b style="color:#f44336">'+trunc+'</b> | 共 '+results.length;
+  if(trunc>0){
+    h+='<br><br>有 <b>'+trunc+'</b> 张图片文件结构不完整（缺少结束标记）';
+    if(trunc===results.length) h+='<br>⚠️ 全部失败 — 可能是测试本身的问题或CDN全局问题';
+    // 显示第一个失败的完整 headers
+    var first=results.find(function(r){return r.truncated;});
+    if(first) h+='<br><br>示例响应头 ('+first.src+'):<br><pre style="text-align:left;background:#111;padding:8px;border-radius:4px;font-size:11px;overflow-x:auto">'+first.headers+'</pre>';
+  }
+  if(fail===0) h+='<br><br>🎉 所有图片完整，问题可能在渲染层面而非文件层面';
+  summary.innerHTML=h;
+}
+</script>
+</body>
+</html>

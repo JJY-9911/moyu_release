@@ -9,32 +9,32 @@
 
   // ========== 数据定义 ==========
   const GLASS_TYPES = {
-    collins:      { name: '柯林杯',   img: 'assets/collins-glass.png',   size: '1x2', count: 3 },
-    oldFashioned: { name: '古典杯',   img: 'assets/whiskey-glass.png',   size: '1x1', count: 4 },
-    martini:      { name: '马天尼杯', img: 'assets/martini-glass.png',   size: '1x2', count: 2 },
-    margarita:    { name: '玛格丽特杯', img: 'assets/margaret-glass.png', size: '1x2', count: 2 },
-    champagne:    { name: '香槟杯',   img: 'assets/champagne-glass.png', size: '1x2', count: 1 }
+    collins:      { name: '柯林杯',   img: 'assets/collins-glass.webp',   size: '1x2', count: 3 },
+    oldFashioned: { name: '古典杯',   img: 'assets/whiskey-glass.webp',   size: '1x1', count: 4 },
+    martini:      { name: '马天尼杯', img: 'assets/martini-glass.webp',   size: '1x2', count: 2 },
+    margarita:    { name: '玛格丽特杯', img: 'assets/margaret-glass.webp', size: '1x2', count: 2 },
+    champagne:    { name: '香槟杯',   img: 'assets/champagne-glass.webp', size: '1x2', count: 1 }
   };
 
   const SPIRITS = {
-    gin:            { name: '金酒',   img: 'assets/wine/gin.png',       size: '1x2' },
-    vodka:          { name: '伏特加', img: 'assets/wine/vodka.png',     size: '1x2' },
-    tequila:        { name: '龙舌兰', img: 'assets/wine/Tequila.png',   size: '1x2' },
-    rum:            { name: '白朗姆', img: 'assets/wine/rum.png',       size: '1x2' },
-    champagneWine:  { name: '香槟',   img: 'assets/wine/champagne.png', size: '1x2' }
+    gin:            { name: '金酒',   img: 'assets/wine/gin.webp',       size: '1x2' },
+    vodka:          { name: '伏特加', img: 'assets/wine/vodka.webp',     size: '1x2' },
+    tequila:        { name: '龙舌兰', img: 'assets/wine/Tequila.webp',   size: '1x2' },
+    rum:            { name: '白朗姆', img: 'assets/wine/rum.webp',       size: '1x2' },
+    champagneWine:  { name: '香槟',   img: 'assets/wine/champagne.webp', size: '1x2' }
   };
 
   const MIXERS = {
-    coffeeLiqueur: { name: '咖啡利口酒', img: 'assets/wine/coffee.png',          size: '1x2' },
-    dryVermouth:   { name: '干味美思',   img: 'assets/wine/vermouth.png',        size: '1x2' },
-    sweetVermouth: { name: '甜红味美思', img: 'assets/wine/red-vermouth.png',    size: '1x2' },
-    lemonJuice:    { name: '柠檬汁',     img: 'assets/wine/lemon.png',           size: '1x1' },
-    orangeJuice:   { name: '橙汁',       img: 'assets/wine/juice.png',           size: '1x1' },
-    coconutMilk:   { name: '椰奶',       img: 'assets/wine/milk.png',            size: '1x1' },
-    tonicWater:    { name: '汤力水',     img: 'assets/wine/tonic.png',           size: '1x1' },
-    sodaWater:     { name: '苏打水',     img: 'assets/wine/soda.png',            size: '1x1' },
-    grenadine:     { name: '石榴糖浆',   img: 'assets/wine/Grenadine-Syrup.png', size: '1x1' },
-    cherryBrandy:  { name: '樱桃白兰地', img: 'assets/wine/brandy.png',          size: '2x2' }
+    coffeeLiqueur: { name: '咖啡利口酒', img: 'assets/wine/coffee.webp',          size: '1x2' },
+    dryVermouth:   { name: '干味美思',   img: 'assets/wine/vermouth.webp',        size: '1x2' },
+    sweetVermouth: { name: '甜红味美思', img: 'assets/wine/red-vermouth.webp',    size: '1x2' },
+    lemonJuice:    { name: '柠檬汁',     img: 'assets/wine/lemon.webp',           size: '1x1' },
+    orangeJuice:   { name: '橙汁',       img: 'assets/wine/juice.webp',           size: '1x1' },
+    coconutMilk:   { name: '椰奶',       img: 'assets/wine/milk.webp',            size: '1x1' },
+    tonicWater:    { name: '汤力水',     img: 'assets/wine/tonic.webp',           size: '1x1' },
+    sodaWater:     { name: '苏打水',     img: 'assets/wine/soda.webp',            size: '1x1' },
+    grenadine:     { name: '石榴糖浆',   img: 'assets/wine/Grenadine-Syrup.webp', size: '1x1' },
+    cherryBrandy:  { name: '樱桃白兰地', img: 'assets/wine/brandy.webp',          size: '2x2' }
   };
 
   class Cocktail {
@@ -863,7 +863,7 @@
     if (state.dragging && state.dragging.key === 'clamp') {
       state.clampHasIce = true;
       // 浮动图标换成带冰的样式
-      floatingImg.src = cachedSrc('assets/clamp.png');
+      floatingImg.src = cachedSrc('assets/clamp.webp');
       floatingItem.style.position = 'fixed';
       // 在浮动层上叠加冰块图标
       let iceOverlay = document.getElementById('clampIceOverlay');
@@ -925,9 +925,9 @@
     if (!state.dragging) {
       state.dragging = {
         itemId: -1, key: 'shaker', type: 'tool', name: '雪克壶',
-        img: 'assets/shake.png', source: 'shaker-active'
+        img: 'assets/shake.webp', source: 'shaker-active'
       };
-      floatingImg.src = cachedSrc('assets/shake.png');
+      floatingImg.src = cachedSrc('assets/shake.webp');
       floatingItem.style.display = 'block';
       state.shakerShakeCount = 0;
       state.shakerLastX = lastMouseX;
@@ -946,9 +946,9 @@
       // 虚拟拿起冰夹
       state.dragging = {
         itemId: -1, key: 'clamp', type: 'tool', name: '冰夹',
-        img: 'assets/clamp.png', source: 'clamp-active'
+        img: 'assets/clamp.webp', source: 'clamp-active'
       };
-      floatingImg.src = cachedSrc('assets/clamp.png');
+      floatingImg.src = cachedSrc('assets/clamp.webp');
       floatingItem.style.display = 'block';
       state.clampHasIce = false;
       showMessage('点击冰柜取冰');
@@ -961,9 +961,9 @@
     if (!state.dragging) {
       state.dragging = {
         itemId: -1, key: 'spoon', type: 'tool', name: '吧勺',
-        img: 'assets/spoon.png', source: 'spoon-active'
+        img: 'assets/spoon.webp', source: 'spoon-active'
       };
-      floatingImg.src = cachedSrc('assets/spoon.png');
+      floatingImg.src = cachedSrc('assets/spoon.webp');
       floatingItem.style.display = 'block';
       showMessage('将吧勺移到杯子上搅拌');
     }

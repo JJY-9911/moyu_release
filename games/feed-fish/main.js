@@ -52,16 +52,16 @@
   var hexPx = [];
 
   // Images
-  var bgImg = new Image(); bgImg.src = 'assets/bg.png';
-  var pickaxImg = new Image(); pickaxImg.src = 'assets/pickax.png';
-  var factoryImg = new Image(); factoryImg.src = 'assets/factory.png';
-  var bankImg = new Image(); bankImg.src = 'assets/bank.png';
+  var bgImg = new Image(); bgImg.src = 'assets/bg.webp';
+  var pickaxImg = new Image(); pickaxImg.src = 'assets/pickax.webp';
+  var factoryImg = new Image(); factoryImg.src = 'assets/factory.webp';
+  var bankImg = new Image(); bankImg.src = 'assets/bank.webp';
 
-  // Fish sprites (fish1.png = evo 0, fish9.png = evo 8)
+  // Fish sprites (fish1.webp = evo 0, fish9.webp = evo 8)
   var fishImgs = [];
   for (var fi = 1; fi <= 9; fi++) {
     var img = new Image();
-    img.src = 'assets/fish' + fi + '.png';
+    img.src = 'assets/fish' + fi + '.webp';
     fishImgs.push(img);
   }
 
