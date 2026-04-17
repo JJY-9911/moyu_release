@@ -116,7 +116,9 @@
       var splashText = document.getElementById('splashText');
       var progressFill = document.getElementById('splashProgress');
 
+      // 所有游戏用到的图片（去重列表）
       var allImages = [
+        'assets/cover.png',
         'assets/bg.png', 'assets/desk.png', 'assets/sink.png', 'assets/ice.png',
         'assets/order.png', 'assets/recipe.png', 'assets/handbook.png',
         'assets/clamp.png', 'assets/spoon.png', 'assets/shake.png',
@@ -139,8 +141,9 @@
       var total = allImages.length;
       var loaded = 0;
       var done = false;
-      var assetsReady = false;
-      var gameReady = false;
+      // src → blob URL 映射，供 main.js 使用
+      var cache = {};
+      window.__imageCache = cache;
 
       function updateProgress(pct) {
         progressFill.style.width = pct + '%';
@@ -156,82 +159,68 @@
         });
       }
 
-      function tryFinish() {
-        if (assetsReady && gameReady) fadeOut();
+      // 用 fetch 下载图片为 blob，确保二进制数据完整
+      function fetchImage(src) {
+        return fetch(src)
+          .then(function(res) {
+            if (!res.ok) throw new Error(res.status);
+            return res.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            cache[src] = url;
+          })
+          .catch(function() {
+            // 失败时回退到原始路径
+            cache[src] = src;
+          })
+          .then(function() {
+            loaded++;
+            updateProgress(Math.round((loaded / total) * 90));
+          });
       }
-
-      // 阶段1：预加载静态图片列表（0% ~ 80%）
-      function onAssetLoad() {
-        loaded++;
-        updateProgress(Math.round((loaded / total) * 80));
-        if (loaded >= total) {
-          assetsReady = true;
-          // 阶段2：加载 main.js，等它执行完 init() 后回调
-          updateProgress(85);
-          loadMainScript();
-        }
-      }
-
-      allImages.forEach(function(src) {
-        var img = new Image();
-        img.onload = onAssetLoad;
-        img.onerror = onAssetLoad;
-        img.src = src;
-      });
 
       updateProgress(0);
 
-      function loadMainScript() {
-        // main.js 执行完 init() 后会调用 window.__onGameReady
+      // 并发下载所有图片
+      Promise.all(allImages.map(fetchImage)).then(function() {
+        updateProgress(92);
+
+        // 替换 HTML 中已有的 <img> src 为 blob URL
+        var htmlImgs = document.querySelectorAll('img[src]');
+        htmlImgs.forEach(function(img) {
+          var src = img.getAttribute('src');
+          if (cache[src]) img.src = cache[src];
+        });
+
+        // 替换 CSS 背景图（bg.png）
+        var wrapper = document.querySelector('.game-wrapper');
+        if (wrapper && cache['assets/bg.png']) {
+          wrapper.style.backgroundImage = 'url(' + cache['assets/bg.png'] + ')';
+        }
+
+        updateProgress(95);
+
+        // 加载 main.js
         window.__onGameReady = function() {
-          updateProgress(90);
-          // 等待酒柜等动态创建的 img 全部加载完
-          waitForDynamicImages();
+          updateProgress(100);
+          // 等一帧确保渲染完成
+          requestAnimationFrame(function() { fadeOut(); });
         };
+
         var s = document.createElement('script');
         s.src = 'main.js';
-        s.onerror = function() { gameReady = true; tryFinish(); };
+        s.onerror = function() { fadeOut(); };
         document.body.appendChild(s);
-      }
+      });
 
-      function waitForDynamicImages() {
-        var imgs = document.querySelectorAll('#cabinetGrid img, .bar-item img');
-        var dynTotal = imgs.length;
-        var dynLoaded = 0;
-
-        if (dynTotal === 0) {
-          updateProgress(100);
-          gameReady = true;
-          tryFinish();
-          return;
-        }
-
-        function onDyn() {
-          dynLoaded++;
-          updateProgress(90 + Math.round((dynLoaded / dynTotal) * 10));
-          if (dynLoaded >= dynTotal) {
-            gameReady = true;
-            tryFinish();
-          }
-        }
-
-        imgs.forEach(function(img) {
-          if (img.complete && img.naturalWidth > 0) {
-            onDyn();
-          } else {
-            img.addEventListener('load', onDyn);
-            img.addEventListener('error', onDyn);
-          }
-        });
-      }
-
-      // 兜底：最多10秒后强制启动
+      // 兜底：最多15秒后强制启动
       setTimeout(function() {
         if (!done) {
           updateProgress(100);
           fadeOut();
         }
-      }, 10000);
+      }, 15000);
     })();
   </script>
 </body>

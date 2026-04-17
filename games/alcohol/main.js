@@ -1,6 +1,12 @@
 (function () {
   'use strict';
 
+  // ========== 图片缓存辅助 ==========
+  // 预加载器通过 fetch+blob 下载完整图片数据，存入 window.__imageCache
+  // 这里所有 img.src 赋值都走缓存，确保使用已完整下载的 blob URL
+  const imgCache = window.__imageCache || {};
+  function cachedSrc(src) { return imgCache[src] || src; }
+
   // ========== 数据定义 ==========
   const GLASS_TYPES = {
     collins:      { name: '柯林杯',   img: 'assets/collins-glass.png',   size: '1x2', count: 3 },
@@ -299,7 +305,7 @@
         cell.classList.add('empty');
       } else {
         const img = document.createElement('img');
-        img.src = item.img;
+        img.src = cachedSrc(item.img);
         img.alt = item.name;
         cell.appendChild(img);
       }
@@ -422,7 +428,7 @@
       instanceId: item.instanceId || null,
       source: source
     };
-    floatingImg.src = item.img;
+    floatingImg.src = cachedSrc(item.img);
     floatingItem.style.display = 'block';
     updateFloatingPos(lastMouseX, lastMouseY);
   }
@@ -638,7 +644,7 @@
       div.dataset.barId = item.id;
 
       const img = document.createElement('img');
-      img.src = item.img;
+      img.src = cachedSrc(item.img);
       img.alt = item.name;
       div.appendChild(img);
 
@@ -750,7 +756,7 @@
           source: 'bar-glass-pickup',
           barItemId: item.id
         };
-        floatingImg.src = item.img;
+        floatingImg.src = cachedSrc(item.img);
         floatingItem.style.display = 'block';
         state.barItems = state.barItems.filter(i => i.id !== item.id);
         renderBarItems();
@@ -857,7 +863,7 @@
     if (state.dragging && state.dragging.key === 'clamp') {
       state.clampHasIce = true;
       // 浮动图标换成带冰的样式
-      floatingImg.src = 'assets/clamp.png';
+      floatingImg.src = cachedSrc('assets/clamp.png');
       floatingItem.style.position = 'fixed';
       // 在浮动层上叠加冰块图标
       let iceOverlay = document.getElementById('clampIceOverlay');
@@ -921,7 +927,7 @@
         itemId: -1, key: 'shaker', type: 'tool', name: '雪克壶',
         img: 'assets/shake.png', source: 'shaker-active'
       };
-      floatingImg.src = 'assets/shake.png';
+      floatingImg.src = cachedSrc('assets/shake.png');
       floatingItem.style.display = 'block';
       state.shakerShakeCount = 0;
       state.shakerLastX = lastMouseX;
@@ -942,7 +948,7 @@
         itemId: -1, key: 'clamp', type: 'tool', name: '冰夹',
         img: 'assets/clamp.png', source: 'clamp-active'
       };
-      floatingImg.src = 'assets/clamp.png';
+      floatingImg.src = cachedSrc('assets/clamp.png');
       floatingItem.style.display = 'block';
       state.clampHasIce = false;
       showMessage('点击冰柜取冰');
@@ -957,7 +963,7 @@
         itemId: -1, key: 'spoon', type: 'tool', name: '吧勺',
         img: 'assets/spoon.png', source: 'spoon-active'
       };
-      floatingImg.src = 'assets/spoon.png';
+      floatingImg.src = cachedSrc('assets/spoon.png');
       floatingItem.style.display = 'block';
       showMessage('将吧勺移到杯子上搅拌');
     }
@@ -1111,21 +1117,21 @@
     let html = '<div style="color:#7b2ff7;font-size:13px;margin-bottom:8px;font-weight:600">🍾 基酒</div>';
     html += '<div class="handbook-grid">';
     Object.entries(SPIRITS).forEach(([k, d]) => {
-      html += '<div class="handbook-card"><img src="' + d.img + '" alt="' + d.name + '">' +
+      html += '<div class="handbook-card"><img src="' + cachedSrc(d.img) + '" alt="' + d.name + '">' +
         '<div class="hb-name">' + d.name + '</div></div>';
     });
     html += '</div>';
     html += '<div style="color:#7b2ff7;font-size:13px;margin:12px 0 8px;font-weight:600">🧪 配料</div>';
     html += '<div class="handbook-grid">';
     Object.entries(MIXERS).forEach(([k, d]) => {
-      html += '<div class="handbook-card"><img src="' + d.img + '" alt="' + d.name + '">' +
+      html += '<div class="handbook-card"><img src="' + cachedSrc(d.img) + '" alt="' + d.name + '">' +
         '<div class="hb-name">' + d.name + '</div></div>';
     });
     html += '</div>';
     html += '<div style="color:#7b2ff7;font-size:13px;margin:12px 0 8px;font-weight:600">🥃 杯子</div>';
     html += '<div class="handbook-grid">';
     Object.entries(GLASS_TYPES).forEach(([k, d]) => {
-      html += '<div class="handbook-card"><img src="' + d.img + '" alt="' + d.name + '">' +
+      html += '<div class="handbook-card"><img src="' + cachedSrc(d.img) + '" alt="' + d.name + '">' +
         '<div class="hb-name">' + d.name + '</div></div>';
     });
     html += '</div>';
