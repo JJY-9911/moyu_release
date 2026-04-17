@@ -18,7 +18,7 @@
 
   <a href="../../index.html" class="top-btn back-btn">← 返回</a>
 
-  <div class="game-wrapper">
+  <div class="game-wrapper" style="visibility:hidden">
     <!-- 上部行：预留空间 | 消息区 -->
     <div class="upper-row">
       <div class="upper-space" id="upperSection"></div>
@@ -35,40 +35,40 @@
       <!-- 左列：水池(上) + 冰柜(下) -->
       <div class="left-stack">
         <div class="sink-area" id="sinkSlot">
-          <img src="assets/sink.png" alt="水池" draggable="false">
+          <img data-src="assets/sink.png" alt="水池" draggable="false">
           <div class="sink-badges" id="sinkBadges"></div>
         </div>
         <div class="freezer-area" id="iceSlot">
-          <img src="assets/ice.png" alt="冰柜" draggable="false">
+          <img data-src="assets/ice.png" alt="冰柜" draggable="false">
         </div>
       </div>
 
       <!-- 吧台 -->
       <div class="bar-counter" id="barCounter">
-        <div class="bar-bg"><img src="assets/desk.png" alt="吧台" draggable="false"></div>
+        <div class="bar-bg"><img data-src="assets/desk.png" alt="吧台" draggable="false"></div>
         <div class="bar-tool" id="orderSlot" style="left:12px;top:12px;">
-          <img src="assets/order.png" alt="订单机" draggable="false">
+          <img data-src="assets/order.png" alt="订单机" draggable="false">
           <span>订单机</span>
           <div class="order-badge" id="orderBadge" style="display:none">0</div>
         </div>
         <div class="bar-tool" id="recipeSlot" style="left:148px;top:12px;">
-          <img src="assets/recipe.png" alt="配方本" draggable="false">
+          <img data-src="assets/recipe.png" alt="配方本" draggable="false">
           <span>配方本</span>
         </div>
         <div class="bar-tool" id="handbookSlot" style="left:284px;top:12px;">
-          <img src="assets/handbook.png" alt="酒图签" draggable="false">
+          <img data-src="assets/handbook.png" alt="酒图签" draggable="false">
           <span>酒图签</span>
         </div>
         <div class="bar-tool" id="clampSlot" style="left:148px;bottom:12px;">
-          <img src="assets/clamp.png" alt="冰夹" draggable="false">
+          <img data-src="assets/clamp.png" alt="冰夹" draggable="false">
           <span>冰夹</span>
         </div>
         <div class="bar-tool" id="spoonSlot" style="left:12px;bottom:12px;">
-          <img src="assets/spoon.png" alt="吧勺" draggable="false">
+          <img data-src="assets/spoon.png" alt="吧勺" draggable="false">
           <span>吧勺</span>
         </div>
         <div class="bar-tool" id="shakerSlot" style="right:12px;top:12px;">
-          <img src="assets/shake.png" alt="雪克壶" draggable="false">
+          <img data-src="assets/shake.png" alt="雪克壶" draggable="false">
           <span>雪克壶</span>
         </div>
       </div>
@@ -115,8 +115,8 @@
       var splash = document.getElementById('splashScreen');
       var splashText = document.getElementById('splashText');
       var progressFill = document.getElementById('splashProgress');
+      var gameWrapper = document.querySelector('.game-wrapper');
 
-      // 所有游戏用到的图片（去重列表）
       var allImages = [
         'assets/cover.png',
         'assets/bg.png', 'assets/desk.png', 'assets/sink.png', 'assets/ice.png',
@@ -141,7 +141,6 @@
       var total = allImages.length;
       var loaded = 0;
       var done = false;
-      // src → blob URL 映射，供 main.js 使用
       var cache = {};
       window.__imageCache = cache;
 
@@ -153,73 +152,94 @@
       function fadeOut() {
         if (done) return;
         done = true;
+        gameWrapper.style.visibility = 'visible';
         splash.classList.add('splash-fade');
         splash.addEventListener('transitionend', function() {
           splash.remove();
         });
       }
 
-      // 用 fetch 下载图片为 blob，确保二进制数据完整
+      // 阶段1: fetch 下载所有图片为 blob (0% ~ 70%)
       function fetchImage(src) {
         return fetch(src)
-          .then(function(res) {
-            if (!res.ok) throw new Error(res.status);
-            return res.blob();
-          })
-          .then(function(blob) {
-            var url = URL.createObjectURL(blob);
-            cache[src] = url;
-          })
-          .catch(function() {
-            // 失败时回退到原始路径
-            cache[src] = src;
-          })
+          .then(function(r) { if (!r.ok) throw 0; return r.blob(); })
+          .then(function(b) { cache[src] = URL.createObjectURL(b); })
+          .catch(function() { cache[src] = src; })
           .then(function() {
             loaded++;
-            updateProgress(Math.round((loaded / total) * 90));
+            updateProgress(Math.round((loaded / total) * 70));
           });
       }
 
       updateProgress(0);
 
-      // 并发下载所有图片
-      Promise.all(allImages.map(fetchImage)).then(function() {
-        updateProgress(92);
-
-        // 替换 HTML 中已有的 <img> src 为 blob URL
-        var htmlImgs = document.querySelectorAll('img[src]');
-        htmlImgs.forEach(function(img) {
-          var src = img.getAttribute('src');
-          if (cache[src]) img.src = cache[src];
+      Promise.all(allImages.map(fetchImage))
+        .then(function() {
+          updateProgress(72);
+          // 阶段2: 将 blob URL 赋给 HTML 中的 data-src 图片，并用 decode() 确保解码完成 (70% ~ 85%)
+          return applyAndDecodeHtmlImages();
+        })
+        .then(function() {
+          updateProgress(85);
+          // 替换 CSS 背景图
+          if (cache['assets/bg.png']) {
+            gameWrapper.style.backgroundImage = 'url(' + cache['assets/bg.png'] + ')';
+          }
+          // 阶段3: 加载 main.js 并等待 init() 完成 (85% ~ 92%)
+          return loadMainScript();
+        })
+        .then(function() {
+          updateProgress(92);
+          // 阶段4: 等待 main.js 动态创建的所有图片解码完成 (92% ~ 100%)
+          return decodeAllDynamicImages();
+        })
+        .then(function() {
+          updateProgress(100);
+          fadeOut();
         });
 
-        // 替换 CSS 背景图（bg.png）
-        var wrapper = document.querySelector('.game-wrapper');
-        if (wrapper && cache['assets/bg.png']) {
-          wrapper.style.backgroundImage = 'url(' + cache['assets/bg.png'] + ')';
-        }
+      // 将 data-src 转为 src（使用 blob URL），并 decode
+      function applyAndDecodeHtmlImages() {
+        var imgs = document.querySelectorAll('img[data-src]');
+        var promises = [];
+        imgs.forEach(function(img) {
+          var origSrc = img.getAttribute('data-src');
+          var blobUrl = cache[origSrc] || origSrc;
+          img.src = blobUrl;
+          // decode() 确保浏览器完成像素级解码，不会出现半截图
+          if (img.decode) {
+            promises.push(img.decode().catch(function() {}));
+          }
+        });
+        return Promise.all(promises);
+      }
 
-        updateProgress(95);
+      // 加载 main.js，返回 promise 在 init() 执行完后 resolve
+      function loadMainScript() {
+        return new Promise(function(resolve) {
+          window.__onGameReady = resolve;
+          var s = document.createElement('script');
+          s.src = 'main.js';
+          s.onerror = resolve;
+          document.body.appendChild(s);
+        });
+      }
 
-        // 加载 main.js
-        window.__onGameReady = function() {
-          updateProgress(100);
-          // 等一帧确保渲染完成
-          requestAnimationFrame(function() { fadeOut(); });
-        };
-
-        var s = document.createElement('script');
-        s.src = 'main.js';
-        s.onerror = function() { fadeOut(); };
-        document.body.appendChild(s);
-      });
+      // 对页面中所有可见 img 执行 decode()，确保完全解码
+      function decodeAllDynamicImages() {
+        var imgs = document.querySelectorAll('#cabinetGrid img, .bar-item img, .bar-tool img, .bar-bg img, .sink-area img, .freezer-area img');
+        var promises = [];
+        imgs.forEach(function(img) {
+          if (img.decode) {
+            promises.push(img.decode().catch(function() {}));
+          }
+        });
+        return Promise.all(promises);
+      }
 
       // 兜底：最多15秒后强制启动
       setTimeout(function() {
-        if (!done) {
-          updateProgress(100);
-          fadeOut();
-        }
+        if (!done) { updateProgress(100); fadeOut(); }
       }, 15000);
     })();
   </script>
