@@ -111,13 +111,11 @@
   </div>
   <div id="glassTooltip" class="glass-tooltip" style="display:none"></div>
   <script>
-    // 预加载所有游戏图片，完成后再加载主逻辑
     (function() {
       var splash = document.getElementById('splashScreen');
       var splashText = document.getElementById('splashText');
       var progressFill = document.getElementById('splashProgress');
 
-      // 收集所有游戏中用到的图片路径
       var allImages = [
         'assets/bg.png', 'assets/desk.png', 'assets/sink.png', 'assets/ice.png',
         'assets/order.png', 'assets/recipe.png', 'assets/handbook.png',
@@ -141,9 +139,10 @@
       var total = allImages.length;
       var loaded = 0;
       var done = false;
+      var assetsReady = false;
+      var gameReady = false;
 
-      function updateProgress() {
-        var pct = Math.round((loaded / total) * 100);
+      function updateProgress(pct) {
         progressFill.style.width = pct + '%';
         splashText.textContent = '加载中… ' + pct + '%';
       }
@@ -151,40 +150,88 @@
       function fadeOut() {
         if (done) return;
         done = true;
-        // 加载并执行 main.js
-        var s = document.createElement('script');
-        s.src = 'main.js';
-        document.body.appendChild(s);
-        // 等一帧让游戏渲染完成后再淡出
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() {
-            splash.classList.add('splash-fade');
-            splash.addEventListener('transitionend', function() {
-              splash.remove();
-            });
-          });
+        splash.classList.add('splash-fade');
+        splash.addEventListener('transitionend', function() {
+          splash.remove();
         });
       }
 
-      function onLoad() {
+      function tryFinish() {
+        if (assetsReady && gameReady) fadeOut();
+      }
+
+      // 阶段1：预加载静态图片列表（0% ~ 80%）
+      function onAssetLoad() {
         loaded++;
-        updateProgress();
-        if (loaded >= total) fadeOut();
+        updateProgress(Math.round((loaded / total) * 80));
+        if (loaded >= total) {
+          assetsReady = true;
+          // 阶段2：加载 main.js，等它执行完 init() 后回调
+          updateProgress(85);
+          loadMainScript();
+        }
       }
 
       allImages.forEach(function(src) {
         var img = new Image();
-        img.onload = onLoad;
-        img.onerror = onLoad;
+        img.onload = onAssetLoad;
+        img.onerror = onAssetLoad;
         img.src = src;
       });
 
-      updateProgress();
+      updateProgress(0);
 
-      // 兜底：最多8秒后强制启动
+      function loadMainScript() {
+        // main.js 执行完 init() 后会调用 window.__onGameReady
+        window.__onGameReady = function() {
+          updateProgress(90);
+          // 等待酒柜等动态创建的 img 全部加载完
+          waitForDynamicImages();
+        };
+        var s = document.createElement('script');
+        s.src = 'main.js';
+        s.onerror = function() { gameReady = true; tryFinish(); };
+        document.body.appendChild(s);
+      }
+
+      function waitForDynamicImages() {
+        var imgs = document.querySelectorAll('#cabinetGrid img, .bar-item img');
+        var dynTotal = imgs.length;
+        var dynLoaded = 0;
+
+        if (dynTotal === 0) {
+          updateProgress(100);
+          gameReady = true;
+          tryFinish();
+          return;
+        }
+
+        function onDyn() {
+          dynLoaded++;
+          updateProgress(90 + Math.round((dynLoaded / dynTotal) * 10));
+          if (dynLoaded >= dynTotal) {
+            gameReady = true;
+            tryFinish();
+          }
+        }
+
+        imgs.forEach(function(img) {
+          if (img.complete && img.naturalWidth > 0) {
+            onDyn();
+          } else {
+            img.addEventListener('load', onDyn);
+            img.addEventListener('error', onDyn);
+          }
+        });
+      }
+
+      // 兜底：最多10秒后强制启动
       setTimeout(function() {
-        if (!done) fadeOut();
-      }, 8000);
+        if (!done) {
+          updateProgress(100);
+          fadeOut();
+        }
+      }, 10000);
     })();
   </script>
 </body>

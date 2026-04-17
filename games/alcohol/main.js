@@ -1437,4 +1437,7 @@
   }
 
   init();
+
+  // 通知预加载器：游戏已初始化，可以检查动态图片
+  if (window.__onGameReady) window.__onGameReady();
 })();
