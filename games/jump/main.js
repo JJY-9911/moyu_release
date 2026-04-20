@@ -456,8 +456,8 @@ function draw(){
     ctx.rotate(ob.angle||0);
     // Squish animation: shrink then spring back
     var sq=ob.squish||0;
-    var scaleX=1.0+sq*0.4;
-    var scaleY=1.0-sq*0.4;
+    var scaleX=1.0+sq*1.0;
+    var scaleY=1.0-sq*0.8;
     ctx.scale(scaleX, scaleY);
     var cimg=catImgs[ob.level||0];
     if(cimg){

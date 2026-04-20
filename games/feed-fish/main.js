@@ -18,20 +18,28 @@
 
   var EARNING_DEFS = [
     { id: 'cursor',  name: '自动光标',  perTick: 1,   baseCost: 0,    priceGrowth: 0,    maxCount: 1,  visible: false },
-    { id: 'pickaxe', name: '金矿镐',    perTick: 10,   baseCost: 50,   priceGrowth: 0.25, maxCount: 20, visible: true },
-    { id: 'factory', name: '金币工厂',  perTick: 150,  baseCost: 500,  priceGrowth: 0.3,  maxCount: 10, visible: true },
-    { id: 'bank',    name: '金币银行',  perTick: 1800, baseCost: 5000, priceGrowth: 0.4,  maxCount: 3,  visible: true }
+    { id: 'pickaxe', name: '金矿镐',    perTick: 3,    baseCost: 10,   priceGrowth: 0.25, maxCount: 20, visible: true },
+    { id: 'factory', name: '金币工厂',  perTick: 25,   baseCost: 500,  priceGrowth: 0.3,  maxCount: 10, visible: true },
+    { id: 'bank',    name: '金币银行',  perTick: 200,  baseCost: 5000, priceGrowth: 0.4,  maxCount: 3,  visible: true }
   ];
 
-  var FOOD_DEFS = [
-    { id: 'booger', name: '鼻屎', cost: 15,   type: 'target', desc: '抢到的鱼升1级',    solid: true },
-    { id: 'pee',    name: '马尿', cost: 60,    type: 'all',    desc: '所有鱼升1级',      solid: false, pondColor: 'rgba(180,150,50,0.3)' },
-    { id: 'liquor', name: '国窖', cost: 500,   type: 'all',    desc: '所有鱼升3级',      solid: false, pondColor: 'rgba(255,215,0,0.3)' },
-    { id: 'pill',   name: '魔丸', cost: 3000,  type: 'target', desc: '吃到的鱼生一只鱼', solid: true },
-    { id: 'orb',    name: '灵珠', cost: 8000,  type: 'target', desc: '吃到的鱼进化一次', solid: true },
-    { id: 'chicken',name: '🐔酱味大鸡', cost: 500, type: 'click-fish', desc: '点击指定鱼退化一阶', solid: false },
-    { id: 'gauntlet',name:'🧤无限手套', cost: 2000, type: 'instant', desc: '消灭一半的鱼(摸鱼之神免疫)', solid: false }
+  // 喂鱼设施：自动投喂，可购买多个
+  var FEED_DEFS = [
+    { id: 'booger', name: '鼻屎', baseCost: 15,  priceGrowth: 0.20, maxCount: 10, type: 'target', levelUp: 1,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼升1级' },
+    { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.30, maxCount: 10, type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每8秒投放，所有鱼升0.10级' },
+    { id: 'liquor', name: '国窖', baseCost: 500, priceGrowth: 0.40, maxCount: 10, type: 'all',    levelUp: 0.3, extraPerUnit: 0.03, desc: '每8秒投放，所有鱼升0.30级' },
+    { id: 'pill',   name: '魔丸', baseCost: 5000, priceGrowth: 1.0, maxCount: 3,  type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼生一只鱼', special: 'birth' },
+    { id: 'orb',    name: '灵珠', baseCost: 8000, priceGrowth: 1.0, maxCount: 3,  type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼进化一次', special: 'evolve' }
   ];
+
+  // 特殊道具：手动使用
+  var SPECIAL_DEFS = [
+    { id: 'chicken',name: '🐔酱味大鸡', cost: 500, type: 'click-fish', desc: '点击指定鱼退化一阶' },
+    { id: 'gauntlet',name:'🧤无限手套', cost: 2000, type: 'instant', desc: '消灭一半的鱼(摸鱼之神免疫)' }
+  ];
+
+  // FOOD_DEFS 兼容旧逻辑
+  var FOOD_DEFS = SPECIAL_DEFS;
 
   // ============================================================
   // LAYOUT — hexagonal pond boundary (as ratios of canvas)
@@ -72,6 +80,7 @@
   var state = {
     gold: 0,
     earnings: { cursor: 1 },
+    feedFacilities: {},
     inventory: {},
     selectedFood: null,
     fishes: [],
@@ -291,7 +300,7 @@
       ctx.fillStyle = '#fff';
       ctx.font = 'bold ' + fontSize + 'px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText('Lv' + fish.level, x, y - s - 2);
+      ctx.fillText('Lv' + Math.floor(fish.level), x, y - s - 2);
     } else {
       // Fallback: simple colored rect while loading
       ctx.fillStyle = evo.color;
@@ -490,6 +499,94 @@
     updateGoldDisplay();
   }
 
+  // 将鱼随机分配到不同食物上争抢
+  function assignFishToFood(foodAnims) {
+    if (foodAnims.length === 0) return;
+    var chasers = state.fishes.filter(function(f) {
+      return f.evoIndex !== 2 && f.evoIndex !== 3 && f.evoIndex !== 4 && f.evoIndex !== 7;
+    });
+    if (chasers.length === 0) return;
+
+    // 打乱鱼的顺序
+    for (var i = chasers.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = chasers[i]; chasers[i] = chasers[j]; chasers[j] = tmp;
+    }
+
+    // 轮流分配：每条鱼分配到一个食物
+    chasers.forEach(function(f, idx) {
+      var target = foodAnims[idx % foodAnims.length];
+      f.tx = target.rx; f.ty = target.ry;
+    });
+  }
+
+  // ========== 自动投喂 ==========
+  function autoFeedTick() {
+    if (state.fishes.length === 0) return;
+
+    FEED_DEFS.forEach(function(def) {
+      var count = state.feedFacilities[def.id] || 0;
+      if (count <= 0) return;
+
+      if (def.type === 'target') {
+        // 投放 count 颗到随机位置
+        var newFoodAnims = [];
+        for (var i = 0; i < count; i++) {
+          var a = Math.random() * Math.PI * 2;
+          var r = 0.1 + Math.random() * 0.25;
+          var rx = 0.5 + Math.cos(a) * r;
+          var ry = 0.5 + Math.sin(a) * r;
+          var c = clampToHex(rx, ry);
+          var px = c.x * CW, py = c.y * CH;
+          ripples.push({ px: px, py: py, r: 2, alpha: 0.7 });
+
+          var foodId = def.special === 'birth' ? 'pill' : def.special === 'evolve' ? 'orb' : def.id;
+          // 鼻屎不设 timer（不会自动消失），其他 target 类保留 timer
+          var timer = (def.id === 'booger') ? -1 : 150;
+          var anim = { px: px, py: py, rx: c.x, ry: c.y, timer: timer, foodId: foodId };
+          feedAnims.push(anim);
+          newFoodAnims.push(anim);
+        }
+
+        // 让鱼随机分配到不同的食物
+        assignFishToFood(newFoodAnims);
+      } else if (def.type === 'all') {
+        // 总效果 = count * (基础 + 额外 * (count - 1))
+        var perUnit = def.levelUp + (def.extraPerUnit || 0) * (count - 1);
+        var effect = count * perUnit;
+        state.fishes.forEach(function(f) {
+          if (f.evoIndex === 3 || f.evoIndex === 4 || f.evoIndex === 7) return;
+          if (f.evoIndex === 6 && Math.random() < 0.05) {
+            var idx = state.fishes.indexOf(f);
+            if (idx !== -1) state.fishes.splice(idx, 1);
+            return;
+          }
+          f.level += effect;
+          // 从鱼头上冒出升级数字
+          var label = '+' + effect.toFixed(2);
+          bubblePopups.push({
+            px: f.rx * CW + (Math.random()-0.5) * 6,
+            py: f.ry * CH - 10,
+            text: label, timer: 70, seed: Math.random() * 100
+          });
+          if (Math.floor(f.level) >= 10) checkBirth(f);
+        });
+        if (def.pondColor) {
+          state.pondOverlay = def.pondColor;
+          state.pondOverlayTimer = 60;
+        }
+        for (var ri = 0; ri < 2; ri++) {
+          ripples.push({
+            px: (0.3 + Math.random()*0.4) * CW,
+            py: (0.3 + Math.random()*0.4) * CH,
+            r: 0, alpha: 0.4
+          });
+        }
+      }
+    });
+    renderFishInfo();
+  }
+
   // ============================================================
   // FEEDING LOGIC
   // ============================================================
@@ -602,13 +699,12 @@
   }
 
   function checkBirth(fish) {
-    // All fish obey: level >= 10 → give birth immediately (no cooldown block)
-    if (fish.level >= 10) {
+    if (Math.floor(fish.level) >= 10) {
       var baby = createFish(fish.evoIndex);
       baby.rx = fish.rx + (Math.random()-0.5)*0.04;
       baby.ry = fish.ry + (Math.random()-0.5)*0.04;
       state.fishes.push(baby);
-      fish.level = 1;
+      fish.level = fish.level - Math.floor(fish.level) + 1; // keep fractional part + reset to 1
     }
   }
 
@@ -684,22 +780,43 @@
     document.getElementById('earningList').innerHTML = html;
   }
 
+  function getFeedCost(def) {
+    var owned = state.feedFacilities[def.id] || 0;
+    return Math.floor(def.baseCost * Math.pow(1 + def.priceGrowth, owned));
+  }
+
   function renderFoodShop() {
     var html = '';
-    FOOD_DEFS.forEach(function(f) {
-      var canBuy = state.gold >= f.cost || debugInfiniteGold;
-      html += '<button class="shop-btn" data-food="' + f.id + '"' + (canBuy ? '' : ' disabled') + '>'
-        + '<span>' + f.name + ' <span class="desc">' + f.desc + '</span></span>'
-        + '<span class="cost">' + formatNum(f.cost) + '🪙</span></button>';
-      // Batch buy x10 for booger
-      if (f.id === 'booger') {
-        var canBuy10 = state.gold >= f.cost * 10 || debugInfiniteGold;
-        html += '<button class="shop-btn" data-food="booger" data-qty="10"' + (canBuy10 ? '' : ' disabled') + '>'
-          + '<span>' + f.name + ' x10</span>'
-          + '<span class="cost">' + formatNum(f.cost * 10) + '🪙</span></button>';
+    FEED_DEFS.forEach(function(f) {
+      var owned = state.feedFacilities[f.id] || 0;
+      var cost = getFeedCost(f);
+      var atMax = owned >= f.maxCount;
+      var canBuy = !atMax && (state.gold >= cost || debugInfiniteGold);
+      var costLabel = atMax ? '已满' : formatNum(cost) + '🪙';
+      // 动态描述：马尿/国窖显示当前实际效果
+      var desc = f.desc;
+      if (f.type === 'all' && owned > 0) {
+        var perUnit = f.levelUp + (f.extraPerUnit || 0) * (owned - 1);
+        var effect = owned * perUnit;
+        desc = '每8秒投放，所有鱼升' + effect.toFixed(2) + '级';
       }
+      html += '<button class="shop-btn" data-feed="' + f.id + '"' + (canBuy ? '' : ' disabled') + '>'
+        + '<span>' + f.name + ' <span class="owned">x' + owned + '/' + f.maxCount + '</span>'
+        + '<span class="desc">' + desc + '</span></span>'
+        + '<span class="cost">' + costLabel + '</span></button>';
     });
     document.getElementById('foodList').innerHTML = html;
+  }
+
+  function renderSpecialShop() {
+    var html = '';
+    SPECIAL_DEFS.forEach(function(f) {
+      var canBuy = state.gold >= f.cost || debugInfiniteGold;
+      html += '<button class="shop-btn" data-special="' + f.id + '"' + (canBuy ? '' : ' disabled') + '>'
+        + '<span>' + f.name + ' <span class="desc">' + f.desc + '</span></span>'
+        + '<span class="cost">' + formatNum(f.cost) + '🪙</span></button>';
+    });
+    document.getElementById('specialList').innerHTML = html;
   }
 
   function renderInventory() {
@@ -729,7 +846,7 @@
 
     EVOLUTION_STAGES.forEach(function(evo, i) {
       if (!counts[i]) return;
-      var avg = Math.round(counts[i].levels.reduce(function(a,b){return a+b;},0) / counts[i].count);
+      var avg = Math.floor(counts[i].levels.reduce(function(a,b){return a+b;},0) / counts[i].count);
       html += '<div class="fish-row"><span class="evo">' + evo.name + ' x' + counts[i].count + '</span>'
         + '<span class="lvl">Lv' + avg + '</span></div>';
       html += '<div class="fish-desc">' + evo.desc + '</div>';
@@ -761,9 +878,10 @@
     drawBuildings(ctx);
 
     feedAnims = feedAnims.filter(function(anim) {
-      anim.timer--;
+      // timer=-1 表示不自动消失（鼻屎），只能被鱼吃掉
+      if (anim.timer > 0) anim.timer--;
       drawFoodItem(ctx, anim);
-      return anim.timer > 0;
+      return anim.timer !== 0;
     });
 
     state.fishes.forEach(function(fish) {
@@ -774,7 +892,16 @@
           var dx = fish.rx - a.rx, dy = fish.ry - a.ry;
           if (Math.sqrt(dx*dx + dy*dy) < 0.04) {
             applyFoodEffect(a.foodId, fish);
-            feedAnims.splice(i, 1); break;
+            feedAnims.splice(i, 1);
+            // 吃完后重新分配到剩余食物（连续争抢）
+            if (feedAnims.length > 0) {
+              var remaining = feedAnims.filter(function(fa) { return fa.timer !== 0; });
+              if (remaining.length > 0) {
+                var next = remaining[Math.floor(Math.random() * remaining.length)];
+                fish.tx = next.rx; fish.ty = next.ry;
+              }
+            }
+            break;
           }
         }
       }
@@ -800,12 +927,13 @@
   // ============================================================
   // SAVE / LOAD
   // ============================================================
-  var SAVE_KEY = 'gamehub_feed_fish_v7';
+  var SAVE_KEY = 'gamehub_feed_fish_v8';
 
   function saveGame() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
-        gold: state.gold, earnings: state.earnings, inventory: state.inventory,
+        gold: state.gold, earnings: state.earnings, feedFacilities: state.feedFacilities,
+        inventory: state.inventory,
         fishes: state.fishes.map(function(f) {
           return { evoIndex: f.evoIndex, level: f.level, rx: f.rx, ry: f.ry };
         })
@@ -819,6 +947,7 @@
       if (data) {
         state.gold = data.gold || 0;
         state.earnings = data.earnings || { cursor: 1 };
+        state.feedFacilities = data.feedFacilities || {};
         state.inventory = data.inventory || {};
         if (data.fishes && data.fishes.length > 0) {
           state.fishes = data.fishes.map(function(fd) {
@@ -851,13 +980,27 @@
   document.getElementById('foodList').addEventListener('click', function(e) {
     var btn = e.target.closest('.shop-btn');
     if (!btn || btn.disabled) return;
-    var id = btn.dataset.food;
-    var qty = parseInt(btn.dataset.qty) || 1;
-    var def = FOOD_DEFS.find(function(d) { return d.id === id; });
-    if (!def || (state.gold < def.cost * qty && !debugInfiniteGold)) return;
-    if (!debugInfiniteGold) state.gold -= def.cost * qty;
-    state.inventory[id] = (state.inventory[id]||0) + qty;
-    updateGoldDisplay(); renderFoodShop(); renderInventory(); saveGame();
+    var id = btn.dataset.feed;
+    var def = FEED_DEFS.find(function(d) { return d.id === id; });
+    if (!def) return;
+    var owned = state.feedFacilities[id] || 0;
+    if (owned >= def.maxCount) return;
+    var cost = getFeedCost(def);
+    if (cost > 0 && state.gold < cost && !debugInfiniteGold) return;
+    if (!debugInfiniteGold) state.gold -= cost;
+    state.feedFacilities[id] = owned + 1;
+    updateGoldDisplay(); renderFoodShop(); saveGame();
+  });
+
+  document.getElementById('specialList').addEventListener('click', function(e) {
+    var btn = e.target.closest('.shop-btn');
+    if (!btn || btn.disabled) return;
+    var id = btn.dataset.special;
+    var def = SPECIAL_DEFS.find(function(d) { return d.id === id; });
+    if (!def || (state.gold < def.cost && !debugInfiniteGold)) return;
+    if (!debugInfiniteGold) state.gold -= def.cost;
+    state.inventory[id] = (state.inventory[id]||0) + 1;
+    updateGoldDisplay(); renderSpecialShop(); renderInventory(); saveGame();
   });
 
   document.getElementById('inventory').addEventListener('click', function(e) {
@@ -906,7 +1049,7 @@
     debugInfiniteGold = !debugInfiniteGold;
     this.classList.toggle('active', debugInfiniteGold);
     this.textContent = debugInfiniteGold ? '🧪 无限金币 ON' : '🧪 无限金币';
-    renderEarnings(); renderFoodShop();
+    renderEarnings(); renderFoodShop(); renderSpecialShop();
   });
 
   canvas.addEventListener('click', function(e) {
@@ -956,10 +1099,11 @@
     loadGame();
     if (state.fishes.length === 0) state.fishes.push(createFish(0));
     if (!state.earnings.cursor) state.earnings.cursor = 1;
-    updateGoldDisplay(); renderEarnings(); renderFoodShop(); renderInventory(); renderFishInfo();
+    updateGoldDisplay(); renderEarnings(); renderFoodShop(); renderSpecialShop(); renderInventory(); renderFishInfo();
     setInterval(earningTick, 3000);
+    setInterval(autoFeedTick, 8000);
     setInterval(function() { checkMerge(); renderFishInfo(); }, 5000);
-    setInterval(function() { renderEarnings(); renderFoodShop(); }, 1000);
+    setInterval(function() { renderEarnings(); renderFoodShop(); renderSpecialShop(); }, 1000);
     setInterval(saveGame, 30000);
     gameLoop();
   }

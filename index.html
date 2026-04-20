@@ -63,7 +63,7 @@
       function renderGames(category) {
         const filtered = category === 'all' ? games : games.filter(g => g.category === category);
         grid.innerHTML = filtered.map(g => `
-          <a href="games/${g.id}/index.html" class="game-card" role="listitem" aria-label="${g.name}">
+          <a href="game.html?id=${g.id}" class="game-card" role="listitem" aria-label="${g.name}">
             <div class="game-card-thumb">
               <img src="games/${g.id}/assets/cover.webp" alt="${g.name}" loading="lazy">
             </div>
