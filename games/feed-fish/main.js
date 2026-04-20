@@ -25,8 +25,8 @@
 
   // 喂鱼设施：自动投喂，可购买多个
   var FEED_DEFS = [
-    { id: 'booger', name: '鼻屎', baseCost: 15,  priceGrowth: 0.20, maxCount: 10, interval: 8,  type: 'target', levelUp: 1,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼升1级' },
-    { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.30, maxCount: 5, interval: 30,  type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每30秒投放，所有鱼升0.10级' },
+    { id: 'booger', name: '鼻屎', baseCost: 15,  priceGrowth: 0.20, maxCount: 100, interval: 8,  type: 'target', levelUp: 1,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼升1级' },
+    { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.30, maxCount: 10, interval: 30,  type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每30秒投放，所有鱼升0.10级' },
     { id: 'liquor', name: '国窖', baseCost: 500, priceGrowth: 0.40, maxCount: 5, interval: 40,  type: 'all',    levelUp: 0.3, extraPerUnit: 0.03, desc: '每40秒投放，所有鱼升0.30级' },
     { id: 'pill',   name: '魔丸', baseCost: 99000, priceGrowth: 1.0, maxCount: 1,  interval: 60, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每60秒投放，吃到的鱼生一只鱼', special: 'birth' },
     { id: 'orb',    name: '灵珠', baseCost: 999000, priceGrowth: 1.0, maxCount: 1,  interval: 90, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每90秒投放，吃到的鱼进化一次', special: 'evolve' }
@@ -665,14 +665,18 @@
       }
     }
 
+    if (state.fishes.length >= MAX_FISH) return;
+
     if (foodId === 'booger') {
       fish.level += 1;
       checkBirth(fish);
     } else if (foodId === 'pill') {
-      var baby = createFish(fish.evoIndex);
-      baby.rx = fish.rx + (Math.random()-0.5)*0.04;
-      baby.ry = fish.ry + (Math.random()-0.5)*0.04;
-      state.fishes.push(baby);
+      if (state.fishes.length < MAX_FISH) {
+        var baby = createFish(fish.evoIndex);
+        baby.rx = fish.rx + (Math.random()-0.5)*0.04;
+        baby.ry = fish.ry + (Math.random()-0.5)*0.04;
+        state.fishes.push(baby);
+      }
     } else if (foodId === 'orb') {
       if (fish.evoIndex < EVOLUTION_STAGES.length - 1) { fish.evoIndex++; fish.level = 1; onFishEvolved(); }
     }
@@ -689,13 +693,19 @@
     });
   }
 
+  var MAX_FISH = 100;
+
   function checkBirth(fish) {
     if (Math.floor(fish.level) >= 10) {
+      if (state.fishes.length >= MAX_FISH) {
+        fish.level = fish.level - Math.floor(fish.level) + 1;
+        return;
+      }
       var baby = createFish(fish.evoIndex);
       baby.rx = fish.rx + (Math.random()-0.5)*0.04;
       baby.ry = fish.ry + (Math.random()-0.5)*0.04;
       state.fishes.push(baby);
-      fish.level = fish.level - Math.floor(fish.level) + 1; // keep fractional part + reset to 1
+      fish.level = fish.level - Math.floor(fish.level) + 1;
     }
   }
 
