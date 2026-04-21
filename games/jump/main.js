@@ -24,6 +24,8 @@ var assetPaths = {
   player: 'assets/jump.webp',
   fire: 'assets/fire.webp',
   shield: 'assets/shield.webp',
+  thunder: 'assets/thunder.webp',
+  tooth: 'assets/tooth.webp',
   bg: [],
   cat: [],
   skin: {}
@@ -33,7 +35,7 @@ for(var ci=1;ci<=11;ci++) assetPaths.cat.push('assets/cat/cat'+ci+'.webp');
 for(var si=1;si<=7;si++) assetPaths.skin[si]='assets/skin'+si+'.webp';
 
 // Flatten all paths for preloading
-var allPaths = [assetPaths.player, assetPaths.fire, assetPaths.shield]
+var allPaths = [assetPaths.player, assetPaths.fire, assetPaths.shield, assetPaths.thunder, assetPaths.tooth]
   .concat(assetPaths.bg)
   .concat(assetPaths.cat);
 for(var sk2=1;sk2<=7;sk2++) allPaths.push(assetPaths.skin[sk2]);
@@ -85,6 +87,8 @@ var BUTT_RATIO=0.5;
 var playerImg=null;
 var fireImg=null;
 var shieldImg=null;
+var thunderImg=null;
+var toothImg=null;
 var catImgs=[];
 var skinImgs={};
 var LEVEL_SKINS=[null,null,'skin3','skin1','skin1','skin2','skin2','skin4','skin5','skin6','skin7'];
@@ -92,7 +96,7 @@ var LEVEL_SKINS=[null,null,'skin3','skin1','skin1','skin2','skin2','skin4','skin
 // ============================================================
 // BOSS SYSTEM
 // ============================================================
-var BOSS_HP=[20,30,40,50,60,70,80,90,100,100,100];
+var BOSS_HP=[50,60,70,100,130,160,190,300,600,1200,2400];
 
 // ============================================================
 // SKILL DEFINITIONS
@@ -101,8 +105,11 @@ var ALL_SKILLS=[
   {id:'steelMouse', name:'鼠之钢', desc:'累计关卡踩踏数，返还给boss'},
   {id:'hakimiRush', name:'哈基米突袭', desc:'每次攻击boss时，连续突击四次'},
   {id:'flameStorm', name:'烈焰风暴', desc:'每2秒释放火焰之种弹跳攻击boss'},
-  {id:'soulSong',   name:'镇魂歌', desc:'有1%概率秒杀boss'},
-  {id:'sunShield',  name:'日炎圣盾', desc:'每0.2秒对附近boss造成1灼烧伤害'}
+  {id:'soulSong',   name:'镇魂歌', desc:'有5%概率秒杀boss'},
+  {id:'sunShield',  name:'日炎圣盾', desc:'每0.2秒对附近boss造成1灼烧伤害'},
+  {id:'energyBlast', name:'盈能冲击', desc:'随前进距离充能，充能完成打出20伤害'},
+  {id:'stormBlade', name:'暴风鼠刃', desc:'每秒发射鼠刃造成1伤害，6个时收回再次伤害'},
+  {id:'furyGene', name:'狂怒基因', desc:'怒气积满后体型增大，伤害提升'}
 ];
 
 function getPlayerImg(){
@@ -163,6 +170,12 @@ var state={
   fireballs:[], fireTimer:0,
   // Skill: 日炎圣盾
   shieldBurnTimer:0,
+  // Skill: 盈能冲击
+  energyCharge:0, energyLastAlt:0, energyBlastAnim:0,
+  // Skill: 暴风鼠刃
+  blades:[], bladeTimer:0, bladeCooldown:0,
+  // Skill: 狂怒基因
+  furyCharge:0, furyLastAlt:0, furyActive:false, furyTimer:0,
   // Damage popups
   dmgPopups:[]
 };
@@ -258,7 +271,6 @@ function getButtEnd(){
   };
 }
 
-// Butt top (where butt zone starts, halfway down)
 function getButtTop(){
   var buttStart=SPRITE_H*(1-BUTT_RATIO);
   return {
@@ -283,6 +295,8 @@ function bounce(){
   var dirY = -Math.sin(state.springAngle);
   var speed=Math.sqrt(state.vx*state.vx+state.vy*state.vy);
   var bounceV=Math.max(BOUNCE_SPEED, speed);
+  // 狂怒状态下弹跳力增强50%
+  if(state.furyActive) bounceV*=1.5;
   state.vx = dirX*bounceV*0.6;
   state.vy = dirY*bounceV;
   if(state.vy>-2) state.vy=-Math.abs(bounceV)*0.5;
@@ -339,7 +353,7 @@ function hasSkill(id){ return state.skills.indexOf(id)!==-1; }
 
 function hitBossWithSkills(){
   state.bossHitCooldown=15;
-  var baseDmg=1;
+  var baseDmg=state.furyActive?10:1;
   // 鼠之钢: first hit per level dumps accumulated count
   if(hasSkill('steelMouse') && state.steelCount>0 && !state.steelUsedThisLevel){
     baseDmg+=state.steelCount;
@@ -408,11 +422,13 @@ function update(dt){
 
   var buttEnd=getButtEnd();
   var didBounce=false;
+  // 狂怒状态下扩大碰撞检测范围（左右各扩展60px）
+  var furyMargin=state.furyActive?60:0;
 
   // Obstacle collision
   for(var i=0;i<state.obstacles.length;i++){
     var ob=state.obstacles[i];
-    if(buttEnd.x>=ob.x && buttEnd.x<=ob.x+ob.w && buttEnd.y>=ob.y-2 && buttEnd.y<=ob.y+ob.h+2){
+    if(buttEnd.x>=ob.x-furyMargin && buttEnd.x<=ob.x+ob.w+furyMargin && buttEnd.y>=ob.y-2 && buttEnd.y<=ob.y+ob.h+2){
       if(state.vy>0){
         state.py=ob.y-Math.sin(state.springAngle)*SPRITE_H-2;
         ob.squish=1.0;
@@ -422,7 +438,7 @@ function update(dt){
       }
     }
     var bt=getButtTop();
-    if(bt.x>=ob.x && bt.x<=ob.x+ob.w && bt.y>=ob.y-2 && bt.y<=ob.y+ob.h+2){
+    if(bt.x>=ob.x-furyMargin && bt.x<=ob.x+ob.w+furyMargin && bt.y>=ob.y-2 && bt.y<=ob.y+ob.h+2){
       if(state.vy>0){
         var buttStart2=SPRITE_H*(1-BUTT_RATIO);
         state.py=ob.y-Math.sin(state.springAngle)*buttStart2-2;
@@ -545,7 +561,7 @@ function update(dt){
   // ===== FIREBALLS (烈焰风暴) =====
   if(hasSkill('flameStorm')){
     state.fireTimer+=dt;
-    if(state.fireTimer>=120){ // every 2 seconds at 60fps
+    if(state.fireTimer>=60){ // every 1 second at 60fps
       state.fireTimer=0;
       state.fireballs.push({
         x:state.px, y:state.py,
@@ -591,6 +607,14 @@ function update(dt){
         damageBoss(1);
       }
     }
+    // Fireball-player collision: bounce off player like an obstacle
+    var fbDx=fb.x-state.px, fbDy=fb.y-state.py;
+    var fbDist=Math.sqrt(fbDx*fbDx+fbDy*fbDy);
+    if(fbDist<30 && fb.vy>0){
+      fb.vy=-Math.abs(fb.vy)*0.9;
+      fb.y=state.py-30;
+      if(state.vy>0) state.vy*=-0.3;
+    }
   }
 
   // ===== 日炎圣盾 =====
@@ -605,6 +629,109 @@ function update(dt){
       var dy=state.py-(bb2.topY+bb2.h/2);
       if(Math.sqrt(dx*dx+dy*dy)<shieldR+bb2.w/2){
         damageBoss(1);
+      }
+    }
+  }
+
+  // ===== 盈能冲击 =====
+  if(hasSkill('energyBlast')){
+    // 累计垂直方向绝对位移（上下都算）
+    var pyNow=state.py;
+    if(state.energyLastAlt!==0){
+      var dist=Math.abs(pyNow-state.energyLastAlt);
+      state.energyCharge+=dist;
+    }
+    state.energyLastAlt=pyNow;
+    if(state.energyCharge>=2000){
+      state.energyCharge-=2000;
+      state.energyBlastAnim=30; // visual effect frames
+      // Check if boss is within 100px
+      if(state.boss && !state.boss.defeated){
+        var edx=state.px-(state.boss.x+state.boss.w/2);
+        var edy=state.py-state.boss.lineY;
+        if(Math.sqrt(edx*edx+edy*edy)<100+state.boss.w/2){
+          damageBoss(20);
+        }
+      }
+    }
+    if(state.energyBlastAnim>0) state.energyBlastAnim-=dt;
+  }
+
+  // ===== 暴风鼠刃 =====
+  if(hasSkill('stormBlade')){
+    if(state.bladeCooldown>0){
+      state.bladeCooldown-=dt;
+    } else {
+      state.bladeTimer+=dt;
+      if(state.bladeTimer>=30){ // every 0.5 second
+        state.bladeTimer=0;
+        // 朝正上方发射
+        state.blades.push({
+          x:state.px, y:state.py,
+          startX:state.px, startY:state.py,
+          vx:0, vy:-8,
+          fixed:false, returning:false, hitBoss:false, dist:0
+        });
+      }
+      // Update blades
+      for(var bi=state.blades.length-1;bi>=0;bi--){
+        var bl=state.blades[bi];
+        if(bl.returning){
+          var rdx=state.px-bl.x, rdy=state.py-bl.y;
+          var rdist=Math.sqrt(rdx*rdx+rdy*rdy);
+          if(rdist<15){ state.blades.splice(bi,1); continue; }
+          bl.x+=rdx/rdist*12; bl.y+=rdy/rdist*12;
+          if(!bl.hitBoss && state.boss && !state.boss.defeated){
+            var bLine=state.boss.lineY;
+            if((bl.y>=bLine-8 && bl.y<=bLine+8)||(bl.y-rdy/rdist*12<bLine && bl.y>bLine)){
+              damageBoss(1); bl.hitBoss=true;
+            }
+          }
+        } else if(!bl.fixed){
+          bl.x+=bl.vx; bl.y+=bl.vy;
+          bl.dist=Math.sqrt((bl.x-bl.startX)*(bl.x-bl.startX)+(bl.y-bl.startY)*(bl.y-bl.startY));
+          if(!bl.hitBoss && state.boss && !state.boss.defeated){
+            var bLine2=state.boss.lineY;
+            if(bl.y<=bLine2+8 && bl.y>=bLine2-8){
+              damageBoss(1); bl.hitBoss=true;
+            }
+          }
+          // 飞行300px后固定；若是第6个则触发全部收回
+          if(bl.dist>=300){
+            bl.fixed=true; bl.vx=0; bl.vy=0;
+            var totalBlades=state.blades.filter(function(b){return b.fixed||(!b.returning&&!b.fixed);}).length;
+            if(state.blades.filter(function(b){return b.fixed;}).length>=6){
+              state.blades.forEach(function(b){
+                if(b.fixed){ b.fixed=false; b.returning=true; b.hitBoss=false; }
+              });
+              state.bladeCooldown=180; // 3 second cooldown
+              state.bladeTimer=0;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ===== 狂怒基因 =====
+  if(hasSkill('furyGene')){
+    if(state.furyActive){
+      state.furyTimer-=dt;
+      if(state.furyTimer<=0){
+        state.furyActive=false;
+        state.furyCharge=0;
+        state.furyLastAlt=state.py;
+      }
+    } else {
+      var pyNow2=state.py;
+      if(state.furyLastAlt!==0){
+        state.furyCharge+=Math.abs(pyNow2-state.furyLastAlt);
+      }
+      state.furyLastAlt=pyNow2;
+      if(state.furyCharge>=4000){
+        state.furyActive=true;
+        state.furyTimer=300;
+        state.furyCharge=0;
       }
     }
   }
@@ -780,6 +907,62 @@ function draw(){
     ctx.restore();
   }
 
+  // Draw energy blast effect
+  if(hasSkill('energyBlast') && state.energyBlastAnim>0){
+    ctx.save();
+    ctx.globalAlpha=Math.min(1, state.energyBlastAnim/10);
+    var blastR=100*(1-state.energyBlastAnim/30)*1.2+40;
+    if(thunderImg){
+      ctx.drawImage(thunderImg, state.px-blastR, state.py-blastR, blastR*2, blastR*2);
+    } else {
+      ctx.strokeStyle='rgba(100,180,255,0.8)';
+      ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(state.px, state.py, blastR, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Draw energy charge HUD
+  if(hasSkill('energyBlast')){
+    var chargePct=Math.min(1, state.energyCharge/2000);
+    // small bar under player
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fillRect(state.px-20, state.py+SPRITE_H+8, 40, 4);
+    ctx.fillStyle=chargePct>=1?'#5cf':'#48a';
+    ctx.fillRect(state.px-20, state.py+SPRITE_H+8, 40*chargePct, 4);
+  }
+
+  // Draw blades (暴风鼠刃)
+  state.blades.forEach(function(bl){
+    ctx.save();
+    ctx.translate(bl.x, bl.y);
+    if(bl.fixed) ctx.globalAlpha=0.7;
+    if(toothImg){
+      ctx.drawImage(toothImg, -16, -16, 32, 32);
+    } else {
+      ctx.fillStyle='#cde';
+      ctx.fillRect(-12,-4,24,8);
+    }
+    ctx.restore();
+  });
+
+  // Draw fury charge bar (狂怒基因)
+  if(hasSkill('furyGene')){
+    if(state.furyActive){
+      // Fury active indicator
+      ctx.fillStyle='rgba(255,50,50,0.5)';
+      ctx.font='bold 12px "Courier New",monospace';
+      ctx.textAlign='center';
+      ctx.fillText('🔥 狂怒! '+Math.ceil(state.furyTimer/60)+'s', state.px, state.py-SPRITE_H*3-10);
+    } else {
+      var furyPct=Math.min(1, state.furyCharge/4000);
+      ctx.fillStyle='rgba(0,0,0,0.4)';
+      ctx.fillRect(state.px-20, state.py+SPRITE_H+14, 40, 4);
+      ctx.fillStyle=furyPct>=1?'#f44':'#a33';
+      ctx.fillRect(state.px-20, state.py+SPRITE_H+14, 40*furyPct, 4);
+    }
+  }
+
   // Draw damage popups
   state.dmgPopups.forEach(function(dp){
     var alpha=Math.min(1, dp.timer/20);
@@ -916,19 +1099,19 @@ function draw(){
 function drawPlayer(){
   var px=state.px, py=state.py;
   var angle=state.springAngle;
+  var furyScale=state.furyActive?3:1;
 
   ctx.save();
   ctx.translate(px, py);
-  // Rotate so sprite's top (head) is at pivot, body extends along angle
-  // Default sprite: head at top, butt at bottom. We need to rotate from "down" (PI/2) to current angle
   ctx.rotate(angle - Math.PI/2);
-  // Draw sprite centered horizontally, extending downward from pivot
+  if(furyScale>1) ctx.scale(furyScale, furyScale);
   var pimg=getPlayerImg();
   if(pimg){
+    if(state.furyActive){ ctx.shadowColor='#f44'; ctx.shadowBlur=20; }
     ctx.drawImage(pimg, -SPRITE_W/2, 0, SPRITE_W, SPRITE_H);
+    ctx.shadowBlur=0;
   } else {
-    // Fallback: simple oval
-    ctx.fillStyle='#c84';
+    ctx.fillStyle=state.furyActive?'#f44':'#c84';
     ctx.beginPath();
     ctx.ellipse(0, SPRITE_H/2, SPRITE_W/2, SPRITE_H/2, 0, 0, Math.PI*2);
     ctx.fill();
@@ -1050,6 +1233,16 @@ function actuallyStartGame(){
   state.fireballs=[];
   state.fireTimer=0;
   state.shieldBurnTimer=0;
+  state.energyCharge=0;
+  state.energyLastAlt=0;
+  state.energyBlastAnim=0;
+  state.blades=[];
+  state.bladeTimer=0;
+  state.bladeCooldown=0;
+  state.furyCharge=0;
+  state.furyLastAlt=0;
+  state.furyActive=false;
+  state.furyTimer=0;
   state.dmgPopups=[];
   generateObstacles();
   generateWalls();
@@ -1111,11 +1304,15 @@ for(var sk3=1;sk3<=7;sk3++){
 var playerPromise = loadImage(assetPaths.player).then(function(img){ playerImg=img; });
 var firePromise = loadImage(assetPaths.fire).then(function(img){ fireImg=img; });
 var shieldPromise = loadImage(assetPaths.shield).then(function(img){ shieldImg=img; });
+var thunderPromise = loadImage(assetPaths.thunder).then(function(img){ thunderImg=img; });
+var toothPromise = loadImage(assetPaths.tooth).then(function(img){ toothImg=img; });
 
 Promise.all([
   playerPromise,
   firePromise,
   shieldPromise,
+  thunderPromise,
+  toothPromise,
   Promise.all(bgPromises).then(function(imgs){ bgImgs=imgs; }),
   Promise.all(catPromises).then(function(imgs){ catImgs=imgs; }),
   Promise.all(skinPromises)

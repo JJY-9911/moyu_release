@@ -18,9 +18,9 @@
 
   var EARNING_DEFS = [
     { id: 'cursor',  name: '自动光标',  perTick: 1,   baseCost: 0,    priceGrowth: 0,    maxCount: 1,  visible: false },
-    { id: 'pickaxe', name: '金矿镐',    perTick: 5,    baseCost: 10,   priceGrowth: 0.25, maxCount: 100, visible: true },
-    { id: 'factory', name: '金币工厂',  perTick: 50,   baseCost: 500,  priceGrowth: 0.3,  maxCount: 100, visible: true },
-    { id: 'bank',    name: '金币银行',  perTick: 300,  baseCost: 5000, priceGrowth: 0.4,  maxCount: 100,  visible: true }
+    { id: 'pickaxe', name: '金矿镐',    perTick: 5,    baseCost: 10,   priceGrowth: 0.1, maxCount: 100, visible: true },
+    { id: 'factory', name: '金币工厂',  perTick: 50,   baseCost: 500,  priceGrowth: 0.1,  maxCount: 100, visible: true },
+    { id: 'bank',    name: '金币银行',  perTick: 300,  baseCost: 5000, priceGrowth: 0.1,  maxCount: 100,  visible: true }
   ];
 
   // 喂鱼设施：自动投喂，可购买多个
