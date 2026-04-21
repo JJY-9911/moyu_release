@@ -104,7 +104,7 @@ var BOSS_HP=[50,60,70,100,130,160,190,300,600,1200,2400];
 var ALL_SKILLS=[
   {id:'steelMouse', name:'鼠之钢', desc:'累计关卡踩踏数，返还给boss'},
   {id:'hakimiRush', name:'哈基米突袭', desc:'每次攻击boss时，连续突击四次'},
-  {id:'flameStorm', name:'烈焰风暴', desc:'每2秒释放火焰之种弹跳攻击boss'},
+  {id:'flameStorm', name:'烈焰风暴', desc:'每秒释放火焰之种,弹跳攻击boss'},
   {id:'soulSong',   name:'镇魂歌', desc:'有5%概率秒杀boss'},
   {id:'sunShield',  name:'日炎圣盾', desc:'每0.2秒对附近boss造成1灼烧伤害'},
   {id:'energyBlast', name:'盈能冲击', desc:'随前进距离充能，充能完成打出20伤害'},
