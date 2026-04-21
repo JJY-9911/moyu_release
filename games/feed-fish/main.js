@@ -9,7 +9,7 @@
     { name: '沙丁鱼',     size: 15, color: '#5599bb', fin: '#447799', belly: '#77bbdd', desc: '成群结队，没有主见', evoNeed: 10 },
     { name: '躺平咸鱼',   size: 19, color: '#9988bb', fin: '#776699', belly: '#bbaadd', desc: '完全躺平，不会抢吃的，只会喝马尿和国窖', evoNeed: 10 },
     { name: '带薪摸鱼王', size: 24, color: '#bb7799', fin: '#995577', belly: '#dd99bb', desc: '不吃不喝不生育', evoNeed: 10 },
-    { name: '锦鲤',       size: 29, color: '#ee7755', fin: '#cc5533', belly: '#ffaa88', desc: '全靠运气吃饭，别的鱼进化时自动升0.1级', evoNeed: 10 },
+    { name: '锦鲤',       size: 29, color: '#ee7755', fin: '#cc5533', belly: '#ffaa88', desc: '全靠运气吃饭，别的鱼进化时自动升0.5级', evoNeed: 10 },
     { name: '电鳗',       size: 35, color: '#ddcc33', fin: '#bbaa11', belly: '#ffee66', desc: '攻击同事，被碰到的鱼会弹飞', evoNeed: 10 },
     { name: '量子鱼',     size: 41, color: '#9955ee', fin: '#7733cc', belly: '#bb88ff', desc: '既在摸鱼也在工作，常常消失', evoNeed: 10 },
     { name: '摸鱼之神',   size: 48, color: '#ee33ee', fin: '#cc11cc', belly: '#ff77ff', desc: '老板也无法约束，貌似既不升级也不进化，有待研究', evoNeed: -2 },
@@ -26,10 +26,10 @@
   // 喂鱼设施：自动投喂，可购买多个
   var FEED_DEFS = [
     { id: 'booger', name: '鼻屎', baseCost: 15,  priceGrowth: 0.20, maxCount: 100, interval: 8,  type: 'target', levelUp: 1,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼升1级' },
-    { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.30, maxCount: 10, interval: 30,  type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每30秒投放，所有鱼升0.10级' },
-    { id: 'liquor', name: '国窖', baseCost: 500, priceGrowth: 0.40, maxCount: 5, interval: 40,  type: 'all',    levelUp: 0.3, extraPerUnit: 0.03, desc: '每40秒投放，所有鱼升0.30级' },
-    { id: 'pill',   name: '魔丸', baseCost: 99000, priceGrowth: 1.0, maxCount: 1,  interval: 60, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每60秒投放，吃到的鱼生一只鱼', special: 'birth' },
-    { id: 'orb',    name: '灵珠', baseCost: 999000, priceGrowth: 1.0, maxCount: 1,  interval: 90, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每90秒投放，吃到的鱼进化一次', special: 'evolve' }
+    { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.30, maxCount: 100, interval: 20,  type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每30秒投放，所有鱼升0.10级' },
+    { id: 'liquor', name: '国窖', baseCost: 500, priceGrowth: 0.40, maxCount: 100, interval: 30,  type: 'all',    levelUp: 0.3, extraPerUnit: 0.03, desc: '每40秒投放，所有鱼升0.30级' },
+    { id: 'pill',   name: '魔丸', baseCost: 99000, priceGrowth: 0.5, maxCount: 100,  interval: 40, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每60秒投放，吃到的鱼生一只鱼', special: 'birth' },
+    { id: 'orb',    name: '灵珠', baseCost: 999000, priceGrowth: 0.5, maxCount: 100,  interval: 90, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每90秒投放，吃到的鱼进化一次', special: 'evolve' }
   ];
 
   // 特殊道具：手动使用
@@ -233,7 +233,7 @@
   }
 
   function resolveCollisions() {
-    var fishes = state.fishes;
+    var fishes = state.fishes.slice(0, MAX_FISH_VISIBLE);
     for (var i = 0; i < fishes.length; i++) {
       for (var j = i + 1; j < fishes.length; j++) {
         var a = fishes[i], b = fishes[j];
@@ -538,16 +538,15 @@
         ripples.push({ px: px, py: py, r: 2, alpha: 0.7 });
 
         var foodId = def.special === 'birth' ? 'pill' : def.special === 'evolve' ? 'orb' : def.id;
-        var timer = (def.id === 'booger') ? -1 : 150;
+        var timer = 600; // 10秒后消失
         var anim = { px: px, py: py, rx: c.x, ry: c.y, timer: timer, foodId: foodId };
         feedAnims.push(anim);
         newFoodAnims.push(anim);
       }
       assignFishToFood(newFoodAnims);
     } else if (def.type === 'all') {
-      var perUnit = def.levelUp + (def.extraPerUnit || 0) * (count - 1);
-      var effect = count * perUnit;
-      state.fishes.forEach(function(f) {
+      var effect = def.levelUp + (def.extraPerUnit || 0) * (count - 1);
+      state.fishes.forEach(function(f, fi) {
         if (f.evoIndex === 3 || f.evoIndex === 4 || f.evoIndex === 7) return;
         if (f.evoIndex === 6 && Math.random() < 0.05) {
           var idx = state.fishes.indexOf(f);
@@ -555,12 +554,15 @@
           return;
         }
         f.level += effect;
-        var label = '+' + effect.toFixed(2);
-        bubblePopups.push({
-          px: f.rx * CW + (Math.random()-0.5) * 6,
-          py: f.ry * CH - 10,
-          text: label, timer: 70, seed: Math.random() * 100
-        });
+        // 只对可见鱼显示气泡
+        if (fi < MAX_FISH_VISIBLE) {
+          var label = '+' + effect.toFixed(2);
+          bubblePopups.push({
+            px: f.rx * CW + (Math.random()-0.5) * 6,
+            py: f.ry * CH - 10,
+            text: label, timer: 70, seed: Math.random() * 100
+          });
+        }
         if (Math.floor(f.level) >= 10) checkBirth(f);
       });
       if (def.pondColor) {
@@ -665,18 +667,14 @@
       }
     }
 
-    if (state.fishes.length >= MAX_FISH) return;
-
     if (foodId === 'booger') {
       fish.level += 1;
       checkBirth(fish);
     } else if (foodId === 'pill') {
-      if (state.fishes.length < MAX_FISH) {
-        var baby = createFish(fish.evoIndex);
-        baby.rx = fish.rx + (Math.random()-0.5)*0.04;
-        baby.ry = fish.ry + (Math.random()-0.5)*0.04;
-        state.fishes.push(baby);
-      }
+      var baby = createFish(fish.evoIndex);
+      baby.rx = fish.rx + (Math.random()-0.5)*0.04;
+      baby.ry = fish.ry + (Math.random()-0.5)*0.04;
+      state.fishes.push(baby);
     } else if (foodId === 'orb') {
       if (fish.evoIndex < EVOLUTION_STAGES.length - 1) { fish.evoIndex++; fish.level = 1; onFishEvolved(); }
     }
@@ -687,20 +685,16 @@
   function onFishEvolved() {
     state.fishes.forEach(function(f) {
       if (f.evoIndex === 4) { // 锦鲤
-        f.level += 0.1;
+        f.level += 0.5;
         if (Math.floor(f.level) >= 10) checkBirth(f);
       }
     });
   }
 
-  var MAX_FISH = 100;
+  var MAX_FISH_VISIBLE = 100;
 
   function checkBirth(fish) {
     if (Math.floor(fish.level) >= 10) {
-      if (state.fishes.length >= MAX_FISH) {
-        fish.level = fish.level - Math.floor(fish.level) + 1;
-        return;
-      }
       var baby = createFish(fish.evoIndex);
       baby.rx = fish.rx + (Math.random()-0.5)*0.04;
       baby.ry = fish.ry + (Math.random()-0.5)*0.04;
@@ -800,8 +794,7 @@
       // 动态描述：马尿/国窖显示当前实际效果
       var desc = f.desc;
       if (f.type === 'all' && owned > 0) {
-        var perUnit = f.levelUp + (f.extraPerUnit || 0) * (owned - 1);
-        var effect = owned * perUnit;
+        var effect = f.levelUp + (f.extraPerUnit || 0) * (owned - 1);
         desc = '每' + f.interval + '秒投放，所有鱼升' + effect.toFixed(2) + '级';
       }
       html += '<button class="shop-btn" data-feed="' + f.id + '"' + (canBuy ? '' : ' disabled') + '>'
@@ -888,7 +881,10 @@
       return anim.timer !== 0;
     });
 
-    state.fishes.forEach(function(fish) {
+    // 只对前 MAX_FISH_VISIBLE 条鱼做移动、碰撞、渲染
+    var visibleFishes = state.fishes.slice(0, MAX_FISH_VISIBLE);
+
+    visibleFishes.forEach(function(fish) {
       var reached = updateFish(fish);
       if (reached) {
         for (var i = feedAnims.length - 1; i >= 0; i--) {
@@ -897,7 +893,6 @@
           if (Math.sqrt(dx*dx + dy*dy) < 0.04) {
             applyFoodEffect(a.foodId, fish);
             feedAnims.splice(i, 1);
-            // 吃完后重新分配到剩余食物（连续争抢）
             if (feedAnims.length > 0) {
               var remaining = feedAnims.filter(function(fa) { return fa.timer !== 0; });
               if (remaining.length > 0) {
@@ -912,7 +907,7 @@
     });
 
     resolveCollisions();
-    state.fishes.forEach(function(fish) { drawFish(ctx, fish); });
+    visibleFishes.forEach(function(fish) { drawFish(ctx, fish); });
     drawBubbles(ctx);
 
     if (state.selectedFood) {
