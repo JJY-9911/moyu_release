@@ -28,8 +28,8 @@
     { id: 'booger', name: '鼻屎', baseCost: 15,  priceGrowth: 0.20, maxCount: 100, interval: 8,  type: 'target', levelUp: 1,   effectGrowth: 0,   desc: '每8秒投放，吃到的鱼升1级' },
     { id: 'pee',    name: '马尿', baseCost: 60,  priceGrowth: 0.20, maxCount: 100, interval: 20,  type: 'all',    levelUp: 0.1, extraPerUnit: 0.01, desc: '每30秒投放，所有鱼升0.10级' },
     { id: 'liquor', name: '国窖', baseCost: 500, priceGrowth: 0.30, maxCount: 100, interval: 30,  type: 'all',    levelUp: 0.3, extraPerUnit: 0.03, desc: '每40秒投放，所有鱼升0.30级' },
-    { id: 'pill',   name: '魔丸', baseCost: 99000, priceGrowth: 0.5, maxCount: 100,  interval: 40, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每60秒投放，吃到的鱼生一只鱼', special: 'birth' },
-    { id: 'orb',    name: '灵珠', baseCost: 999000, priceGrowth: 0.5, maxCount: 100,  interval: 90, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每90秒投放，吃到的鱼进化一次', special: 'evolve' }
+    { id: 'pill',   name: '魔丸', baseCost: 9900, priceGrowth: 0.5, maxCount: 100,  interval: 40, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每60秒投放，吃到的鱼生一只鱼', special: 'birth' },
+    { id: 'orb',    name: '灵珠', baseCost: 99900, priceGrowth: 0.5, maxCount: 100,  interval: 90, type: 'target', levelUp: 0,   effectGrowth: 0,   desc: '每90秒投放，吃到的鱼进化一次', special: 'evolve' }
   ];
 
   // 特殊道具：手动使用
