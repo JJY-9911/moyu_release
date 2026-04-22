@@ -163,7 +163,7 @@ var state={
   skillsPicked:0,
   // Skill: 鼠之钢
   steelCount:0,
-  steelUsedThisLevel:false,
+  steelCooldown:0,
   // Skill: 哈基米突袭
   rushHitsLeft:0, rushDamage:0, rushTimer:0,
   // Skill: 烈焰风暴
@@ -354,11 +354,11 @@ function hasSkill(id){ return state.skills.indexOf(id)!==-1; }
 function hitBossWithSkills(){
   state.bossHitCooldown=15;
   var baseDmg=state.furyActive?10:1;
-  // 鼠之钢: first hit per level dumps accumulated count
-  if(hasSkill('steelMouse') && state.steelCount>0 && !state.steelUsedThisLevel){
+  // 鼠之钢: dump accumulated count, 1 second cooldown
+  if(hasSkill('steelMouse') && state.steelCount>0 && state.steelCooldown<=0){
     baseDmg+=state.steelCount;
     state.steelCount=0;
-    state.steelUsedThisLevel=true;
+    state.steelCooldown=60; // 1 second at 60fps
   }
   // 镇魂歌: 5% instakill
   if(hasSkill('soulSong') && Math.random()<0.05){
@@ -557,6 +557,7 @@ function update(dt){
     }
   }
   if(state.bossHitCooldown>0) state.bossHitCooldown-=dt;
+  if(state.steelCooldown>0) state.steelCooldown-=dt;
 
   // ===== FIREBALLS (烈焰风暴) =====
   if(hasSkill('flameStorm')){
@@ -623,10 +624,11 @@ function update(dt){
     if(state.shieldBurnTimer>=12){ // 0.2s at 60fps
       state.shieldBurnTimer=0;
       var bb2=state.boss;
-      var shieldR=50;
-      // Check if player is near boss
-      var dx=state.px-(bb2.x+bb2.w/2);
-      var dy=state.py-(bb2.topY+bb2.h/2);
+      var shieldR=75;
+      var shieldCX=state.px;
+      var shieldCY=state.py+SPRITE_H/2;
+      var dx=shieldCX-(bb2.x+bb2.w/2);
+      var dy=shieldCY-bb2.lineY;
       if(Math.sqrt(dx*dx+dy*dy)<shieldR+bb2.w/2){
         damageBoss(1);
       }
@@ -635,13 +637,15 @@ function update(dt){
 
   // ===== 盈能冲击 =====
   if(hasSkill('energyBlast')){
-    // 累计垂直方向绝对位移（上下都算）
-    var pyNow=state.py;
-    if(state.energyLastAlt!==0){
-      var dist=Math.abs(pyNow-state.energyLastAlt);
-      state.energyCharge+=dist;
+    // 只在上升时充能（vy<0 表示向上）
+    if(state.vy<0){
+      var pyNow=state.py;
+      if(state.energyLastAlt!==0){
+        var dist=Math.abs(pyNow-state.energyLastAlt);
+        state.energyCharge+=dist;
+      }
     }
-    state.energyLastAlt=pyNow;
+    state.energyLastAlt=state.py;
     if(state.energyCharge>=2000){
       state.energyCharge-=2000;
       state.energyBlastAnim=30; // visual effect frames
@@ -649,7 +653,7 @@ function update(dt){
       if(state.boss && !state.boss.defeated){
         var edx=state.px-(state.boss.x+state.boss.w/2);
         var edy=state.py-state.boss.lineY;
-        if(Math.sqrt(edx*edx+edy*edy)<100+state.boss.w/2){
+        if(Math.sqrt(edx*edx+edy*edy)<150+state.boss.w/2){
           damageBoss(20);
         }
       }
@@ -669,7 +673,7 @@ function update(dt){
         state.blades.push({
           x:state.px, y:state.py,
           startX:state.px, startY:state.py,
-          vx:0, vy:-8,
+          vx:0, vy:-16,
           fixed:false, returning:false, hitBoss:false, dist:0
         });
       }
@@ -697,7 +701,7 @@ function update(dt){
             }
           }
           // 飞行300px后固定；若是第6个则触发全部收回
-          if(bl.dist>=300){
+          if(bl.dist>=600){
             bl.fixed=true; bl.vx=0; bl.vy=0;
             var totalBlades=state.blades.filter(function(b){return b.fixed||(!b.returning&&!b.fixed);}).length;
             if(state.blades.filter(function(b){return b.fixed;}).length>=6){
@@ -723,11 +727,14 @@ function update(dt){
         state.furyLastAlt=state.py;
       }
     } else {
-      var pyNow2=state.py;
-      if(state.furyLastAlt!==0){
-        state.furyCharge+=Math.abs(pyNow2-state.furyLastAlt);
+      // 只在上升时充能（vy<0 表示向上）
+      if(state.vy<0){
+        var pyNow2=state.py;
+        if(state.furyLastAlt!==0){
+          state.furyCharge+=Math.abs(pyNow2-state.furyLastAlt);
+        }
       }
-      state.furyLastAlt=pyNow2;
+      state.furyLastAlt=state.py;
       if(state.furyCharge>=4000){
         state.furyActive=true;
         state.furyTimer=300;
@@ -754,12 +761,12 @@ function update(dt){
     state.levelBanner=180;
     state.boss=null;
     state.steelCount=0;
-    state.steelUsedThisLevel=false;
+    state.steelCooldown=0;
     state.fireballs=[];
     state.fireTimer=0;
     state.shieldBurnTimer=0;
-    // 第3关(index 2)和第7关(index 6)开始时选择额外技能
-    if(nextLevel===2 || nextLevel===6){
+    // 第3、7、10关通关后选择额外技能
+    if(nextLevel===3 || nextLevel===7 || nextLevel===10){
       state.phase='skillSelect';
       state.skillsPicked=0;
       var pool=ALL_SKILLS.filter(function(s){ return state.skills.indexOf(s.id)===-1; });
@@ -898,11 +905,12 @@ function draw(){
   if(hasSkill('sunShield')){
     ctx.save();
     ctx.globalAlpha=0.3+Math.sin(Date.now()/200)*0.15;
+    var sCX=state.px, sCY=state.py+SPRITE_H/2;
     if(shieldImg){
-      ctx.drawImage(shieldImg, state.px-40, state.py-40, 80, 80);
+      ctx.drawImage(shieldImg, sCX-60, sCY-60, 120, 120);
     } else {
       ctx.fillStyle='rgba(255,80,30,0.3)';
-      ctx.beginPath(); ctx.arc(state.px, state.py, 50, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sCX, sCY, 75, 0, Math.PI*2); ctx.fill();
     }
     ctx.restore();
   }
@@ -1125,13 +1133,13 @@ function drawPlayer(){
 var keys={};
 document.addEventListener('keydown',function(e){
   keys[e.key]=true;
-  if(e.key==='a'||e.key==='A'||e.key==='ArrowLeft') state.swingDir=-1;
-  if(e.key==='d'||e.key==='D'||e.key==='ArrowRight') state.swingDir=1;
+  if(e.key==='a'||e.key==='A'||e.key==='ArrowLeft') state.swingDir=1;
+  if(e.key==='d'||e.key==='D'||e.key==='ArrowRight') state.swingDir=-1;
 });
 document.addEventListener('keyup',function(e){
   keys[e.key]=false;
-  if((e.key==='a'||e.key==='A'||e.key==='ArrowLeft')&&state.swingDir===-1) state.swingDir=0;
-  if((e.key==='d'||e.key==='D'||e.key==='ArrowRight')&&state.swingDir===1) state.swingDir=0;
+  if((e.key==='a'||e.key==='A'||e.key==='ArrowLeft')&&state.swingDir===1) state.swingDir=0;
+  if((e.key==='d'||e.key==='D'||e.key==='ArrowRight')&&state.swingDir===-1) state.swingDir=0;
 });
 
 // Touch controls
@@ -1156,8 +1164,8 @@ canvas.addEventListener('touchstart',function(e){
   }
   touchStartX=e.touches[0].clientX;
   var mid=window.innerWidth/2;
-  if(touchStartX<mid) state.swingDir=-1;
-  else state.swingDir=1;
+  if(touchStartX<mid) state.swingDir=1;
+  else state.swingDir=-1;
 },{passive:false});
 canvas.addEventListener('touchend',function(e){
   e.preventDefault();
