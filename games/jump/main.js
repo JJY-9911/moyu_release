@@ -171,7 +171,7 @@ var state={
   // Skill: 日炎圣盾
   shieldBurnTimer:0,
   // Skill: 盈能冲击
-  energyCharge:0, energyLastAlt:0, energyBlastAnim:0,
+  energyCharge:0, energyLastAlt:0, energyBlastAnim:0, energyBlastReady:0,
   // Skill: 暴风鼠刃
   blades:[], bladeTimer:0, bladeCooldown:0,
   // Skill: 狂怒基因
@@ -564,9 +564,10 @@ function update(dt){
     state.fireTimer+=dt;
     if(state.fireTimer>=60){ // every 1 second at 60fps
       state.fireTimer=0;
+      var fbAngle=-Math.PI/2+(Math.random()-0.5)*20*Math.PI/180;
       state.fireballs.push({
         x:state.px, y:state.py,
-        vx:0, vy:-12,
+        vx:Math.cos(fbAngle)*12, vy:Math.sin(fbAngle)*12,
         life:600
       });
     }
@@ -648,13 +649,19 @@ function update(dt){
     state.energyLastAlt=state.py;
     if(state.energyCharge>=2000){
       state.energyCharge-=2000;
-      state.energyBlastAnim=30; // visual effect frames
-      // Check if boss is within 100px
+      state.energyBlastAnim=30;
+      state.energyBlastReady=180; // 3秒窗口期 (60fps)
+    }
+    // 窗口期内检测boss是否在400px范围内
+    if(state.energyBlastReady>0){
+      state.energyBlastReady-=dt;
       if(state.boss && !state.boss.defeated){
         var edx=state.px-(state.boss.x+state.boss.w/2);
         var edy=state.py-state.boss.lineY;
-        if(Math.sqrt(edx*edx+edy*edy)<150+state.boss.w/2){
+        if(Math.sqrt(edx*edx+edy*edy)<400+state.boss.w/2){
           damageBoss(20);
+          state.energyBlastAnim=30;
+          state.energyBlastReady=0; // 命中后消耗
         }
       }
     }
@@ -669,11 +676,12 @@ function update(dt){
       state.bladeTimer+=dt;
       if(state.bladeTimer>=30){ // every 0.5 second
         state.bladeTimer=0;
-        // 朝正上方发射
+        // 朝上方20度范围内随机方向发射
+        var blAngle=-Math.PI/2+(Math.random()-0.5)*20*Math.PI/180;
         state.blades.push({
           x:state.px, y:state.py,
           startX:state.px, startY:state.py,
-          vx:0, vy:-16,
+          vx:Math.cos(blAngle)*16, vy:Math.sin(blAngle)*16,
           fixed:false, returning:false, hitBoss:false, dist:0
         });
       }
@@ -916,10 +924,19 @@ function draw(){
   }
 
   // Draw energy blast effect
-  if(hasSkill('energyBlast') && state.energyBlastAnim>0){
+  if(hasSkill('energyBlast') && (state.energyBlastAnim>0 || state.energyBlastReady>0)){
     ctx.save();
-    ctx.globalAlpha=Math.min(1, state.energyBlastAnim/10);
-    var blastR=100*(1-state.energyBlastAnim/30)*1.2+40;
+    var maxR=160;
+    if(state.energyBlastAnim>0){
+      // 扩张阶段：从小到大
+      var expandPct=1-state.energyBlastAnim/30;
+      var blastR=maxR*expandPct+40;
+      ctx.globalAlpha=Math.min(1, state.energyBlastAnim/10);
+    } else {
+      // 窗口期：保持最大，逐渐淡化
+      var blastR=maxR+40;
+      ctx.globalAlpha=Math.max(0.05, state.energyBlastReady/180)*0.6;
+    }
     if(thunderImg){
       ctx.drawImage(thunderImg, state.px-blastR, state.py-blastR, blastR*2, blastR*2);
     } else {
@@ -933,11 +950,11 @@ function draw(){
   // Draw energy charge HUD
   if(hasSkill('energyBlast')){
     var chargePct=Math.min(1, state.energyCharge/2000);
-    // small bar under player
     ctx.fillStyle='rgba(0,0,0,0.4)';
     ctx.fillRect(state.px-20, state.py+SPRITE_H+8, 40, 4);
-    ctx.fillStyle=chargePct>=1?'#5cf':'#48a';
-    ctx.fillRect(state.px-20, state.py+SPRITE_H+8, 40*chargePct, 4);
+    var barColor=state.energyBlastReady>0?'#ff0':chargePct>=1?'#5cf':'#48a';
+    ctx.fillStyle=barColor;
+    ctx.fillRect(state.px-20, state.py+SPRITE_H+8, 40*(state.energyBlastReady>0?1:chargePct), 4);
   }
 
   // Draw blades (暴风鼠刃)
@@ -1244,6 +1261,7 @@ function actuallyStartGame(){
   state.energyCharge=0;
   state.energyLastAlt=0;
   state.energyBlastAnim=0;
+  state.energyBlastReady=0;
   state.blades=[];
   state.bladeTimer=0;
   state.bladeCooldown=0;
