@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>钓鱼达人 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="../../index.html" class="back-btn">← 返回</a>
+  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+  <button class="reset-btn" id="resetBtn">🔄 重置</button>
+
+  <!-- HUD -->
+  <div class="hud">
+    <span class="hud-gold"><span class="pixel-coin"></span> <span id="goldNum">0</span></span>
+    <span class="hud-rod" id="rodInfo">🎣 木竿 Lv.1</span>
+  </div>
+
+  <!-- Loading screen -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading-text">加载中...</div>
+    <div class="loading-bar-wrap"><div class="loading-bar" id="loadingBar"></div></div>
+  </div>
+
+  <div class="game-layout">
+    <!-- Main canvas area -->
+    <div class="main-area">
+      <div class="canvas-wrap">
+        <canvas id="gameCanvas"></canvas>
+        <div class="canvas-hint" id="canvasHint">A/D 移动 · E 互动 · 点击水面钓鱼</div>
+      </div>
+    </div>
+
+    <!-- Right sidebar: backpack + codex + upgrades -->
+    <div class="sidebar sidebar-right">
+      <div class="panel">
+        <div class="panel-title">🎒 背包 <span id="backpackCount">0/10</span></div>
+        <div id="backpackGrid" class="backpack-grid"></div>
+        <div class="panel-footer">
+          <button class="pixel-btn" id="sellAllBtn" style="width:100%">💰 全部卖出</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">📖 图鉴 <span id="codexProgress">0/12</span></div>
+        <div id="codexList" class="panel-body"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">⬆️ 升级</div>
+        <div class="panel-body" id="upgradePanel"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="display:none;"></div>
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script src="main.js"></script>
+</body>
+</html>
