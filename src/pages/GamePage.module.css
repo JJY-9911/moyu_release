@@ -1,0 +1,167 @@
+/* GamePage layout */
+.pageHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #12121f;
+  border-bottom: 1px solid #1e1e35;
+}
+
+.backLink {
+  color: #aaa;
+  font-size: 14px;
+  padding: 6px 14px;
+  background: #1e1e35;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.backLink:hover {
+  background: #7b2ff7;
+  color: #fff;
+}
+
+.gameTitle {
+  font-size: 18px;
+  color: #e0e0e0;
+}
+
+.pageBody {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px;
+  min-height: calc(100vh - 56px);
+}
+
+.mainCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* iframe wrapper */
+.frameWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #2a2a4a;
+}
+
+.frameWrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: none;
+}
+
+/* Toolbar below iframe */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #1a1a2e;
+  border-radius: 0 0 12px 12px;
+  margin-top: -16px;
+  border: 1px solid #2a2a4a;
+  border-top: none;
+}
+
+.toolbarName {
+  font-size: 15px;
+  color: #e0e0e0;
+}
+
+/* Game info section */
+.infoSection {
+  background: #1a1a2e;
+  border-radius: 12px;
+  border: 1px solid #2a2a4a;
+  padding: 20px 24px;
+}
+
+.infoHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.infoCover {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #2a2a4a;
+}
+
+.infoTitle h2 {
+  font-size: 20px;
+  color: #e0e0e0;
+  margin-bottom: 4px;
+}
+
+.ratingPlaceholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 14px;
+}
+
+.ratingStars {
+  color: #555;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.gameDesc {
+  color: #888;
+  font-size: 14px;
+  line-height: 1.7;
+  min-height: 48px;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebarTitle {
+  font-size: 14px;
+  color: #888;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid #1e1e35;
+  margin-bottom: 4px;
+}
+
+/* Responsive: hide sidebar on narrow screens */
+@media (max-width: 900px) {
+  .sidebar {
+    display: none;
+  }
+
+  .pageBody {
+    padding: 12px;
+  }
+}

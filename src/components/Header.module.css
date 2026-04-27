@@ -1,0 +1,22 @@
+.header {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #888;
+}

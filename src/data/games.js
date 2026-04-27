@@ -1,0 +1,73 @@
+/**
+ * Game_Registry — 游戏元数据集中管理模块
+ */
+
+export const games = [
+  {
+    id: 'feed-fish',
+    name: '摸大鲲',
+    icon: '🐟',
+    category: 'idle',
+    categoryLabel: '挂机',
+    hot: true,
+    desc: '收集金币喂鱼，养出传说中的鲲',
+  },
+  {
+    id: 'alcohol',
+    name: '酒吧模拟器',
+    icon: '🍸',
+    category: 'casual',
+    categoryLabel: '休闲',
+    hot: false,
+    desc: '扮演调酒师，记住配方，为顾客调制鸡尾酒',
+  },
+  {
+    id: 'jump',
+    name: '撅地求生',
+    icon: '🚀',
+    category: 'casual',
+    categoryLabel: '休闲',
+    hot: true,
+    desc: '踩着弹簧飞向太空，躲避障碍物',
+  },
+  {
+    id: 'fishing',
+    name: '钓鱼达人',
+    icon: '🎣',
+    category: 'casual',
+    categoryLabel: '休闲',
+    hot: false,
+    desc: '抛竿钓鱼，收集稀有鱼种，升级装备成为钓鱼大师',
+  },
+];
+
+export const categories = [
+  { key: 'all', label: '全部' },
+  { key: 'idle', label: '挂机' },
+  { key: 'clicker', label: '点击' },
+  { key: 'mowing', label: '割草' },
+  { key: 'casual', label: '休闲' },
+  { key: 'tower', label: '塔防' },
+];
+
+/**
+ * 根据 id 查找游戏，未找到返回 null
+ */
+export function getGameById(id) {
+  return games.find((g) => g.id === id) || null;
+}
+
+/**
+ * 生成游戏封面图路径
+ */
+export function getCoverPath(id) {
+  return `/games/${id}/assets/cover.webp`;
+}
+
+/**
+ * 按分类筛选游戏，'all' 返回全部
+ */
+export function getGamesByCategory(category) {
+  if (category === 'all') return games;
+  return games.filter((g) => g.category === category);
+}

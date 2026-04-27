@@ -1,0 +1,32 @@
+.tabsWrap {
+  background: #12121f;
+  border-bottom: 1px solid #1e1e35;
+  padding: 8px 16px 0;
+}
+
+.tabsWrap :global(.ant-tabs-nav::before) {
+  border-bottom: none;
+}
+
+.tabsWrap :global(.ant-tabs-tab) {
+  padding: 8px 20px;
+  border-radius: 20px;
+  background: #1e1e35;
+  color: #aaa;
+  margin: 0 6px 8px 0;
+  transition: all 0.2s;
+}
+
+.tabsWrap :global(.ant-tabs-tab:hover),
+.tabsWrap :global(.ant-tabs-tab-active) {
+  background: linear-gradient(135deg, #7b2ff7, #00d2ff);
+  color: #fff;
+}
+
+.tabsWrap :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: #fff;
+}
+
+.tabsWrap :global(.ant-tabs-ink-bar) {
+  display: none;
+}

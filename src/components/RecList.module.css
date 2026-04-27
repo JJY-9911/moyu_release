@@ -1,0 +1,43 @@
+.recCard {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  border: 1px solid #2a2a4a;
+  transition: all 0.2s;
+  cursor: pointer;
+  align-items: center;
+}
+
+.recCard:hover {
+  border-color: #7b2ff7;
+  background: #1e1e35;
+}
+
+.recCover {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #2a2a4a;
+  flex-shrink: 0;
+}
+
+.recInfo {
+  min-width: 0;
+}
+
+.recName {
+  font-size: 13px;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recTag {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
