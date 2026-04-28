@@ -1,16 +1,16 @@
 .header {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  padding: 24px 32px;
+  background: #fff;
+  padding: 16px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: bold;
-  background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+  background: linear-gradient(90deg, #7b2ff7, #00d2ff);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -18,5 +18,5 @@
 
 .subtitle {
   font-size: 14px;
-  color: #888;
+  color: #999;
 }
