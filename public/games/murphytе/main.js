@@ -38,7 +38,7 @@ function loadImg(s){const i=new Image();i.src=AB+s;i._failed=false;i.onerror=fun
 const imgPlayer=loadImg('Slime1_Attack_body.webp');       // 640x256, 10cols x 4rows, 64x64 (attack/ult)
 const imgPlayerWalk=loadImg('Slime1_Walk_body.webp');     // 512x256, 8cols x 4rows, 64x64 (idle/walk)
 const imgFountain=loadImg('Tree_idol_human.webp');// 128x128 static
-const imgWater=loadImg('Water.webp');                      // 688x576, 3 frames of 688x192
+const imgWater=loadImg('water.webp');                      // 688x576, 3 frames of 688x192
 const imgRedBuff=loadImg('red.webp');                       // 64x64 static
 const imgBlueBuff=loadImg('blue.webp');                    // 128x128 static
 const imgGreenBuff=loadImg('green.webp');                   // green buff
@@ -946,7 +946,7 @@ function updateBoss(){
   if(boss.chasing){
     const dx=player.x-boss.x,dy=player.y-boss.y,d=Math.sqrt(dx*dx+dy*dy);
     if(d>boss.speed){boss.x+=dx/d*boss.speed;boss.y+=dy/d*boss.speed;boss.dir=dirFromDxDy(dx,dy);}
-    if(player.invincibleTimer===0&&!ult.active&&!phaseActive&&dist(player,boss)<80){
+    if(player.invincibleTimer===0&&!ult.active&&ult.immunityTimer===0&&!phaseActive&&dist(player,boss)<80){
       player.hp--;player.invincibleTimer=120;
       if(player.hp<=0){triggerGameOver();return;}
     }
@@ -969,7 +969,7 @@ function updateBuffs(){
     const bb=blueBuffs[i],pos=BLUE_BUFF_POS[i];
     if(!bb.alive){bb.respawnTimer--;
       if(bb.respawnTimer<=0){bb.alive=true;bb.hp=bb.maxHp;bb.x=pos.x;bb.y=pos.y;}
-    } else {
+    } else {updateBurnOnEntity(bb);
       if(bb.hp<=0){addDeathEffect(bb.x,bb.y,100,0);bb.alive=false;bb.respawnTimer=BUFF_RESPAWN;player.hasBlueBuff=true;player.blueBuffTimer=3600;}
     }
   }
@@ -977,7 +977,7 @@ function updateBuffs(){
     const gb=greenBuffs[i],pos=GREEN_BUFF_POS[i];
     if(!gb.alive){gb.respawnTimer--;
       if(gb.respawnTimer<=0){gb.alive=true;gb.hp=gb.maxHp;gb.x=pos.x;gb.y=pos.y;}
-    } else {
+    } else {updateBurnOnEntity(gb);
       if(gb.hp<=0){addDeathEffect(gb.x,gb.y,100,0);gb.alive=false;gb.respawnTimer=BUFF_RESPAWN;player.hp=player.maxHp;}
     }
   }
