@@ -1,385 +1,918 @@
 (function(){
 'use strict';
 
-const WORLD_W=2400, WORLD_H=2400;
-const VIEW_W=600, VIEW_H=600;
-const RIVER_HALF=283; // river band: |x-y| < RIVER_HALF
-const ATTACK_RANGE=150;
-const ATTACK_INTERVAL=60; // ticks (1s at 60fps)
+// ── Constants ──────────────────────────────────────────────────────────────
+const WORLD_W=3200, WORLD_H=3200;
+const VIEW_W=800, VIEW_H=450;
+const RIVER_HALF=350;
+const ATTACK_RANGE=210;
+const ATTACK_INTERVAL=60;
 const R_MAX_DIST=400;
-const R_COOLDOWN_BASE=1800; // 30s
-const MINION_SPAWN_INTERVAL=180; // 3s
-const BUFF_RESPAWN=5400; // 90s
+const R_COOLDOWN_BASE=1800;
+const BUFF_RESPAWN=5400;
 const BOSS_RESPAWN=5400;
-const FOUNTAIN_RADIUS=140;
-const BUFF_RADIUS=55;
-const BOSS_SPAWN_RADIUS=130;
+const FOUNTAIN_RADIUS=130;
+const BUFF_RADIUS=60;
+const BOSS_SPAWN_RADIUS=140;
+const OBSTACLE_COUNT=18;
 
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 
 function resize(){
-  const s=Math.min(window.innerWidth,window.innerHeight);
-  canvas.style.width=s+'px'; canvas.style.height=s+'px';
-  canvas.width=VIEW_W; canvas.height=VIEW_H;
+  const aw=window.innerWidth,ah=window.innerHeight;
+  let w,h;
+  if(aw/ah>VIEW_W/VIEW_H){h=ah;w=h*(VIEW_W/VIEW_H);}
+  else{w=aw;h=w*(VIEW_H/VIEW_W);}
+  canvas.style.width=Math.floor(w)+'px';
+  canvas.style.height=Math.floor(h)+'px';
+  canvas.width=VIEW_W;canvas.height=VIEW_H;
 }
-window.addEventListener('resize',resize); resize();
+window.addEventListener('resize',resize);resize();
 
-// ── Obstacles (axis-aligned for collision simplicity) ──────────────────────
-const OBSTACLES=[
-  {x:200,y:460,w:160,h:35},{x:160,y:580,w:40,h:120},
-  {x:130,y:800,w:160,h:35},{x:80,y:970,w:40,h:130},
-  {x:320,y:730,w:150,h:35},{x:260,y:920,w:40,h:110},
-  {x:390,y:1080,w:160,h:35},{x:620,y:880,w:150,h:35},
-  {x:720,y:1080,w:160,h:35},{x:570,y:1270,w:40,h:120},
-  {x:870,y:1270,w:160,h:35},{x:470,y:1530,w:160,h:35},
-  {x:770,y:1580,w:200,h:35},{x:1070,y:1480,w:160,h:35},
-  {x:870,y:680,w:120,h:35},{x:1070,y:880,w:120,h:35},
-  {x:1270,y:1080,w:120,h:35},{x:1470,y:1280,w:120,h:35},
-  {x:1670,y:1480,w:120,h:35},{x:270,y:1880,w:200,h:35},
-  {x:670,y:1880,w:200,h:35},{x:1070,y:1880,w:200,h:35},
+// ── Asset loading ──────────────────────────────────────────────────────────
+const AB='assets/';
+function loadImg(s){const i=new Image();i.src=AB+s;return i;}
+
+const imgPlayer=loadImg('Slime1_Attack_body.webp');       // 640x256, 10cols x 4rows, 64x64 (attack/ult)
+const imgPlayerWalk=loadImg('Slime1_Walk_body.webp');     // 512x256, 8cols x 4rows, 64x64 (idle/walk)
+const imgFountain=loadImg('Tree_idol_human.webp');// 128x128 static
+const imgWater=loadImg('Water.webp');                      // 688x576, 3 frames of 688x192
+const imgRedBuff=loadImg('red.png');                       // 64x64 static
+const imgBlueBuff=loadImg('blue.webp');                    // 128x128 static
+const imgGreenBuff=loadImg('green.webp');                   // green buff
+const imgStar=loadImg('star.webp');                        // click marker
+const imgShadow=loadImg('shadow.webp');                    // 26x19 shadow
+const imgPlant1=loadImg('Plant1_Walk_without_shadow.webp');// 384x256, 6x4, 64x64
+const imgPlant3=loadImg('Plant3_Walk_without_shadow.webp');// 384x256, 6x4, 64x64
+const imgDeath=loadImg('Plant1_Death_brown.webp');         // 640x256, 10x4, 64x64
+const imgLand=loadImg('land.webp');                        // 416x960 tileset, 32x32 tiles
+
+// Fire spell frames: 8 individual 640x360 images
+const FIRE_FRAME_COUNT=8;
+const imgFireFrames=[];
+for(let i=1;i<=FIRE_FRAME_COUNT;i++){
+  imgFireFrames.push(loadImg('fire/Fire Spell_Frame_0'+i+'.webp'));
+}
+
+const barrierFiles=[
+  'barrier/Beige_rpck_dark_shadow1.webp','barrier/Bones_shadow1_1.webp',
+  'barrier/Dark_totem_dark_shadow4.webp','barrier/Eye_plant_shadow2_2.webp',
+  'barrier/Jaws_plant_shadow2_1.webp','barrier/Many_eyes_plant_shadow2_1.webp',
+  'barrier/Meat_flower_shadow2_2.webp','barrier/Rock2_shadow2_2.webp',
+  'barrier/Rock3_shadow2_3.webp','barrier/Ruins_shadow1_4.webp',
+  'barrier/Ruins_shadow2_1.webp','barrier/Ruins_shadow2_2.webp',
+  'barrier/Spike_plant_shadow2_2.webp','barrier/mushroom2_dark_shadow1.webp',
+];
+const imgBarriers=barrierFiles.map(loadImg);
+const barrierHitboxes=[
+  {cx:0,cy:0,hw:0.16,hh:0.29}, // Beige_rpck 128
+  {cx:0,cy:0,hw:0.27,hh:0.22}, // Bones 256
+  {cx:0,cy:0,hw:0.26,hh:0.18}, // Dark_totem4 128
+  {cx:0,cy:0,hw:0.30,hh:0.45}, // Eye_plant 64
+  {cx:0,cy:0,hw:0.43,hh:0.50}, // Jaws_plant 128
+  {cx:0,cy:0,hw:0.35,hh:0.48}, // Many_eyes 64
+  {cx:0,cy:0,hw:0.47,hh:0.44}, // Meat_flower 64
+  {cx:0,cy:0,hw:0.40,hh:0.46}, // Rock2 64
+  {cx:0,cy:0,hw:0.41,hh:0.44}, // Rock3 64
+  {cx:0,cy:0,hw:0.50,hh:0.43}, // Ruins1_4 64
+  {cx:0,cy:0,hw:0.43,hh:0.41}, // Ruins2_1 128
+  {cx:0,cy:0,hw:0.30,hh:0.30}, // Ruins2_2 128
+  {cx:0,cy:0,hw:0.35,hh:0.34}, // Spike_plant 128
+  {cx:0,cy:0,hw:0.22,hh:0.31}, // mushroom2 128
+];
+// Original pixel sizes for proper scaling (display at 2x)
+const barrierSrcSizes=[128,256,128,64,128,64,64,64,64,64,128,128,128,128];
+
+// Tree images for border decoration
+const imgTrees=[];
+for(let i=1;i<=6;i++) imgTrees.push(loadImg('trees/'+i+'.webp'));
+
+// Defense/altar images
+const imgLightningAltar=[loadImg('defense/Dark_totem_dark_shadow2.webp'),loadImg('defense/white_crystal_light_shadow3.webp')];
+const imgFireAltar=[loadImg('defense/Building1_dark_shadow.webp'),loadImg('defense/Building2_dark_shadow.webp')];
+const imgLightningAttack=[];
+for(let i=1;i<=5;i++) imgLightningAttack.push(loadImg('altar/1/Explosion_'+i+'.webp'));
+const imgFireAttack=[];
+for(let i=1;i<=10;i++) imgFireAttack.push(loadImg('altar/Explosion_3/Explosion_'+i+'.webp'));
+
+const bossFiles=['boss/centipede_dark_shadow1.webp','boss/Dark_totem_dark_shadow1.webp'];
+const imgBosses=bossFiles.map(loadImg);
+
+// ── Sprite sheet helper ────────────────────────────────────────────────────
+// Sprite sheets use 4-row directional layout:
+// Row 0=down, 1=left, 2=right, 3=up
+// direction: 0=down,1=left,2=right,3=up
+function dirFromDxDy(dx,dy){
+  // Sprite row layout: 0=down, 1=up, 2=left, 3=right
+  if(Math.abs(dx)>Math.abs(dy)) return dx<0?2:3;
+  return dy<0?1:0;
+}
+
+// Draw one frame from a sprite sheet
+// img: Image, fw/fh: frame size, col: frame index, row: direction row
+// x,y: screen center, drawW/drawH: draw size
+function drawFrame(img,fw,fh,col,row,x,y,drawW,drawH){
+  if(!img.complete||!img.naturalWidth) return false;
+  ctx.drawImage(img, col*fw, row*fh, fw, fh, x-drawW/2, y-drawH/2, drawW, drawH);
+  return true;
+}
+
+// ── Hero portraits ─────────────────────────────────────────────────────────
+const imgHeroes=[
+  loadImg('main_actor/yingxiong.webp'),
+  loadImg('main_actor/lieshou.webp'),
+  loadImg('main_actor/yingyan.webp'),
+  loadImg('main_actor/yingren.webp'),
+  loadImg('main_actor/xuemo.webp'),
 ];
 
-const FOUNTAIN_POS={x:160,y:2200};
-const BOSS_SPAWN={x:1500,y:900};
-const BLUE_BUFF_POS={x:480,y:1100};
-const RED_BUFF_POS={x:1000,y:1600};
+const HEROES=[
+  {
+    name:'英雄之力',hp:4,
+    ultName:'降临',ultDesc:'跳跃至鼠标悬停处，造成巨额伤害（对boss和buff无效）',
+    passiveName:'怒视',passiveDesc:'自动攻击对小兵有击退效果',
+    ultType:'jump', // reuse existing ult
+    passiveType:'knockback',
+  },
+  {
+    name:'猎手之力',hp:5,
+    ultName:'思乡',ultDesc:'瞬间传送回泉水，30秒冷却',
+    passiveName:'悬赏',passiveDesc:'击杀boss获得双倍金币',
+    ultType:'teleport',
+    passiveType:'bounty',
+  },
+  {
+    name:'鹰眼之力',hp:2,
+    ultName:'虚化',ultDesc:'免疫伤害，移速提升5倍，持续10秒。30秒冷却',
+    passiveName:'百步',passiveDesc:'射程为全屏',
+    ultType:'phase',
+    passiveType:'fullrange',
+  },
+  {
+    name:'影忍之力',hp:3,
+    ultName:'血烟',ultDesc:'在射程范围内制造血雾，每0.2秒造成0.5伤害，持续20秒。40秒冷却',
+    passiveName:'潜行',passiveDesc:'基础移速为2倍，免疫障碍物伤害',
+    ultType:'bloodmist',
+    passiveType:'stealth',
+  },
+  {
+    name:'血魔之力',hp:10,
+    ultName:'无',ultDesc:'无大招',
+    passiveName:'血魔',passiveDesc:'每击杀100个小兵恢复一点血量。与boss战斗时，小兵无法进入河流',
+    ultType:'none',
+    passiveType:'bloodlord',
+  },
+];
+
+// ── Game phase ─────────────────────────────────────────────────────────────
+let gamePhase='select'; // 'select' | 'playing'
+let selectedHero=0;
+let heroChoice=-1; // confirmed choice
+let selectHover=-1;
+let minionKillCount=0; // for blood lord passive
+let phaseActive=false; // eagle eye ult
+let phaseTimer=0;
+let bloodMistActive=false;
+let bloodMistTimer=0;
+let bloodMistX=0,bloodMistY=0;
+let castAnim={active:false,timer:0,duration:40}; // cast animation for non-jump ults
+
+// ── Upgrade system ─────────────────────────────────────────────────────────
+let shopOpen=false;
+let shopSelect=0;
+const BASE_PRICE=10;
+const PRICE_INCREASE=1.1;
+let totalPurchases=0;
+function getPrice(key){
+  if(key==='altar') return 1000;
+  return Math.round(BASE_PRICE*Math.pow(PRICE_INCREASE,totalPurchases));
+}
+
+const upgrades={
+  hero:{count:0,max:36,name:'供奉英雄',getDesc(){const n=this.count+1;return '子弹数量→'+(1+n)+' ('+this.count+'/'+this.max+')';}},
+  blood:{count:0,max:999,name:'供奉血魔',bleedRate:0.1,getDesc(){const nr=(0.1*Math.pow(1.5,this.count+1)).toFixed(2);return '流血: 每秒-'+nr;}},
+  shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*5)+'%';}},
+  hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1);}},
+  eagle:{count:0,max:9,name:'供奉鹰眼',getDesc(){const n=this.count+1;return '间隔-'+(n*0.1).toFixed(1)+'s 射程+'+(n*5)+'% ('+this.count+'/'+this.max+')';}},
+  altar:{count:0,max:8,name:'供奉祭坛',getDesc(){return '激活一座祭坛 ('+(this.count+1)+'/'+this.max+')';}},
+};
+const upgradeKeys=['hero','blood','shadow','hunter','eagle','altar'];
+
+// ── Altars ─────────────────────────────────────────────────────────────────
+const ALTAR_COUNT=8;
+let altars=[];
+
+// ── Fixed positions ────────────────────────────────────────────────────────
+const FOUNTAIN_POS={x:200,y:2900};
+const BOSS_SPAWN={x:2000,y:1200};
+
+// ── Random generation ──────────────────────────────────────────────────────
+function inRiver(x,y){return Math.abs(x-y)<RIVER_HALF;}
+function inPlayableRaw(x,y){
+  if(x<0||y<0||x>WORLD_W||y>WORLD_H) return false;
+  return (y-x)>-RIVER_HALF;
+}
+function inFountainCheck(x,y){return (x-FOUNTAIN_POS.x)**2+(y-FOUNTAIN_POS.y)**2<(FOUNTAIN_RADIUS+80)**2;}
+function nearBossSpawn(x,y){return (x-BOSS_SPAWN.x)**2+(y-BOSS_SPAWN.y)**2<(BOSS_SPAWN_RADIUS+100)**2;}
+
+function generateObstacles(){
+  const obs=[];let att=0;
+  while(obs.length<OBSTACLE_COUNT&&att<500){
+    att++;
+    const imgIdx=Math.floor(Math.random()*imgBarriers.length);
+    const srcSz=barrierSrcSizes[imgIdx];
+    const scale=srcSz<=64?2.5:srcSz<=128?1.5:1.0; // scale up small sprites more
+    const w=srcSz*scale, h=srcSz*scale;
+    const x=100+Math.random()*(WORLD_W-200),y=100+Math.random()*(WORLD_H-200);
+    if(!inPlayableRaw(x,y)||inRiver(x,y)||inFountainCheck(x,y)||nearBossSpawn(x,y)) continue;
+    let ok=true;
+    for(const o of obs){if(Math.sqrt((o.x-x)**2+(o.y-y)**2)<200){ok=false;break;}}
+    if(!ok) continue;
+    obs.push({x,y,w,h,imgIdx});
+  }
+  return obs;
+}
+
+function generateBuffPos(obstacles,other){
+  for(let i=0;i<300;i++){
+    const x=300+Math.random()*(WORLD_W-600),y=300+Math.random()*(WORLD_H-600);
+    if(!inPlayableRaw(x,y)||inRiver(x,y)||inFountainCheck(x,y)||nearBossSpawn(x,y)) continue;
+    let onObs=false;
+    for(const o of obstacles){if(Math.abs(x-o.x)<o.w/2+70&&Math.abs(y-o.y)<o.h/2+70){onObs=true;break;}}
+    if(onObs) continue;
+    if(other&&Math.sqrt((x-other.x)**2+(y-other.y)**2)<400) continue;
+    return {x,y};
+  }
+  return {x:600,y:1800};
+}
+
+let OBSTACLES=generateObstacles();
+let RED_BUFF_POS=[];
+let BLUE_BUFF_POS=[];
+let GREEN_BUFF_POS=[];
+function generateAllBuffPos(){
+  RED_BUFF_POS=[];BLUE_BUFF_POS=[];GREEN_BUFF_POS=[];
+  const all=[];
+  for(let i=0;i<2;i++){const p=generateBuffPos(OBSTACLES,all.length?all[all.length-1]:null);RED_BUFF_POS.push(p);all.push(p);}
+  for(let i=0;i<2;i++){const p=generateBuffPos(OBSTACLES,all[all.length-1]);BLUE_BUFF_POS.push(p);all.push(p);}
+  for(let i=0;i<2;i++){const p=generateBuffPos(OBSTACLES,all[all.length-1]);GREEN_BUFF_POS.push(p);all.push(p);}
+}
+generateAllBuffPos();
+
+function generateAltars(){
+  altars=[];
+  for(let i=0;i<ALTAR_COUNT;i++){
+    const type=i<4?'lightning':'fire';
+    const imgIdx=Math.floor(Math.random()*2);
+    for(let att=0;att<200;att++){
+      const x=200+Math.random()*(WORLD_W-400),y=200+Math.random()*(WORLD_H-400);
+      if(!inPlayableRaw(x,y)||inRiver(x,y)||inFountainCheck(x,y)||nearBossSpawn(x,y)) continue;
+      let ok=true;
+      for(const o of OBSTACLES){if(Math.abs(x-o.x)<150&&Math.abs(y-o.y)<150){ok=false;break;}}
+      for(const a of altars){if(Math.sqrt((x-a.x)**2+(y-a.y)**2)<300){ok=false;break;}}
+      if(!ok) continue;
+      altars.push({x,y,type,imgIdx,active:false,attackTimer:0,animFrame:0,animTimer:0,
+        effectActive:false,effectX:0,effectY:0,effectFrame:0,effectTimer:0});
+      break;
+    }
+  }
+}
+generateAltars();
+
+function randomBossType(){
+  const idx=Math.floor(Math.random()*imgBosses.length);
+  const hp=100+Math.floor(Math.random()*10)*100;
+  return {imgIdx:idx,hp,gold:hp};
+}
+let bossType=randomBossType();
+
+// ── Wave system ────────────────────────────────────────────────────────────
+const WAVE_INTERVALS=[2700,2700,3300,3300,3300,3900,3900,3900,3900,4500];
+const WAVE_COUNTS=[10,15,20,25,30,35,40,45,50];
+let waveIndex=0,waveTimer=300,waveSpawnQueue=0,waveSpawnDelay=0;
+function getWaveInterval(){return waveIndex<WAVE_INTERVALS.length?WAVE_INTERVALS[waveIndex]:4500;}
+function getWaveCount(){return WAVE_COUNTS[waveIndex%WAVE_COUNTS.length];}
+
+// ── Death effects (frame animated) ────────────────────────────────────────
+const deathEffects=[];
+function addDeathEffect(x,y,size,dir){
+  deathEffects.push({x,y,size:size||40,dir:dir||0,frame:0,timer:0,maxFrames:10,done:false});
+}
+
+// ── Water (static tile) ────────────────────────────────────────────────────
+
+// ── Ground tile map ─────────────────────────────────────────────────────────
+// Pick grass tiles from land.webp tileset (32x32 each, 13 cols x 30 rows)
+// Use tiles from rows 0-5 which are solid grass variants
+const LAND_TW=32, LAND_TH=32, LAND_COLS=13;
+// Good grass tile positions (col, row) — solid green ground tiles
+const GRASS_TILES=[
+  [0,0],[1,0],[2,0],[3,0],[4,0],[5,0],
+  [0,3],[1,3],[2,3],[3,3],[4,3],[5,3],
+  [0,4],[1,4],[2,4],[3,4],[4,4],[5,4],
+  [6,0],[7,0],[8,0],[9,0],[10,0],
+];
+const GROUND_TILE_SIZE=64; // display size per tile
+const GROUND_COLS=Math.ceil(WORLD_W/GROUND_TILE_SIZE);
+const GROUND_ROWS=Math.ceil(WORLD_H/GROUND_TILE_SIZE);
+// Pre-generate random tile assignments
+let groundMap=[];
+function generateGroundMap(){
+  groundMap=[];
+  for(let r=0;r<GROUND_ROWS;r++){
+    const row=[];
+    for(let c=0;c<GROUND_COLS;c++){
+      row.push(GRASS_TILES[Math.floor(Math.random()*GRASS_TILES.length)]);
+    }
+    groundMap.push(row);
+  }
+}
+generateGroundMap();
+
+// ── Tree border ────────────────────────────────────────────────────────────
+let treeBorder=[];
+function generateTreeBorder(){
+  treeBorder=[];
+  const treeSize=64;
+  const spacing=50;
+  // Left edge
+  for(let y=RIVER_HALF+100;y<WORLD_H;y+=spacing+Math.random()*30){
+    const xOff=-10+Math.random()*40;
+    treeBorder.push({x:xOff,y,imgIdx:Math.floor(Math.random()*imgTrees.length),sz:treeSize+Math.random()*20});
+  }
+  // Bottom edge
+  for(let x=0;x<WORLD_W-RIVER_HALF;x+=spacing+Math.random()*30){
+    const yOff=WORLD_H-10-Math.random()*40;
+    treeBorder.push({x,y:yOff,imgIdx:Math.floor(Math.random()*imgTrees.length),sz:treeSize+Math.random()*20});
+  }
+}
+generateTreeBorder();
+
+// ── Water wave animation ────────────────────────────────────────────────────
+// Water.webp contains 6 wide wave shapes (y regions), shown one at a time
+const WATER_WAVES=[
+  {sy:6,sh:23},   // wave 0
+  {sy:38,sh:23},  // wave 1
+  {sy:69,sh:24},  // wave 2
+  {sy:102,sh:23}, // wave 3
+  {sy:134,sh:23}, // wave 4
+  {sy:166,sh:23}, // wave 5
+];
+const WATER_FRAME_COUNT=WATER_WAVES.length;
+let waterFrame=0, waterTimer=0;
+
+// Pre-generate sparse wave positions along the river
+const WAVE_DRAW_W=344, WAVE_DRAW_H=24;
+let wavePositions=[];
+function generateWavePositions(){
+  wavePositions=[];
+  // Scatter ~25 wave sprites across the river diagonal
+  for(let i=0;i<25;i++){
+    // River runs from (0,RIVER_HALF) to (WORLD_W-RIVER_HALF, WORLD_H)
+    // Random point along the diagonal band
+    const t=Math.random();
+    const cx=t*(WORLD_W-RIVER_HALF);
+    const cy=RIVER_HALF+t*(WORLD_H-RIVER_HALF);
+    // Offset perpendicular to diagonal within river width
+    const perpOff=(Math.random()-0.5)*RIVER_HALF*1.2;
+    const px=cx+perpOff*0.707;
+    const py=cy-perpOff*0.707;
+    wavePositions.push({x:px,y:py});
+  }
+}
+generateWavePositions();
 
 // ── State ──────────────────────────────────────────────────────────────────
 let tick=0;
-let mouseX=VIEW_W/2, mouseY=VIEW_H/2;
+let mouseX=VIEW_W/2,mouseY=VIEW_H/2;
 
 const player={
-  x:300,y:2000,hp:3,maxHp:3,gold:0,speed:1,
-  targetX:300,targetY:2000,moving:false,
+  x:FOUNTAIN_POS.x,y:FOUNTAIN_POS.y,hp:3,maxHp:3,gold:0,speed:1.5,
+  targetX:FOUNTAIN_POS.x,targetY:FOUNTAIN_POS.y,moving:false,
   attackTimer:0,
   hasRedBuff:false,redBuffTimer:0,
   hasBlueBuff:false,blueBuffTimer:0,
-  invincibleTimer:0, // brief invincibility after hit
+  invincibleTimer:0,
+  dir:0, // 0=down,1=left,2=right,3=up
+  animFrame:0,animTimer:0,
 };
 
-let rCooldown=0;
-let rMaxCooldown=R_COOLDOWN_BASE;
-
-// Ult jump state
-const ult={active:false,sx:0,sy:0,tx:0,ty:0,progress:0,duration:30,landRadius:120,immunityTimer:0};
-
+let rCooldown=0,rMaxCooldown=R_COOLDOWN_BASE;
+const ult={active:false,sx:0,sy:0,tx:0,ty:0,progress:0,duration:60,landRadius:120,immunityTimer:0};
 let camX=0,camY=0;
-
-// Minions array
 const minions=[];
-let minionSpawnTimer=0;
-
-// Bullets array
 const bullets=[];
 
-// Burn ticks on enemies: Map<entity, {timer, source}>
-// We'll store burn directly on entities
-
-// Boss
 const boss={
   x:BOSS_SPAWN.x,y:BOSS_SPAWN.y,
   hp:50,maxHp:50,
   alive:false,respawnTimer:0,
-  chasing:false,speed:0.217,
-  burnTimer:0,burnDmgTimer:0,
-  slowTimer:0,
+  chasing:false,speed:0.33,
+  burnTimer:0,burnDmgTimer:0,slowTimer:0,
+  gold:100,
+  dir:0,animFrame:0,animTimer:0,
 };
 
-// Buffs
-const redBuff={x:RED_BUFF_POS.x,y:RED_BUFF_POS.y,hp:10,maxHp:10,alive:false,respawnTimer:0,burnTimer:0,burnDmgTimer:0,slowTimer:0};
-const blueBuff={x:BLUE_BUFF_POS.x,y:BLUE_BUFF_POS.y,hp:10,maxHp:10,alive:false,respawnTimer:0};
+const redBuffs=RED_BUFF_POS.map(p=>({x:p.x,y:p.y,hp:10,maxHp:10,alive:false,respawnTimer:0,burnTimer:0,burnDmgTimer:0,slowTimer:0}));
+const blueBuffs=BLUE_BUFF_POS.map(p=>({x:p.x,y:p.y,hp:10,maxHp:10,alive:false,respawnTimer:0}));
+const greenBuffs=GREEN_BUFF_POS.map(p=>({x:p.x,y:p.y,hp:10,maxHp:10,alive:false,respawnTimer:0}));
 
-// Game over
 let gameOver=false;
-let gameOverTimer=0;
+
+// Click marker
+let clickMarker={active:false,x:0,y:0,timer:0,maxTimer:30};
+
+// Current attack target type (for HUD buff tooltip)
+let currentTargetType='';
+
+// Track fountain state for exit invincibility
+let wasInFountain=true;
+
+// ── Selection screen input ─────────────────────────────────────────────────
+canvas.addEventListener('click',function(e){
+  const r=canvas.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*(VIEW_W/r.width);
+  const my=(e.clientY-r.top)*(VIEW_H/r.height);
+
+  if(gamePhase==='select'){
+    for(let i=0;i<5;i++){
+      const iy=50+i*78;
+      if(mx>=20&&mx<=84&&my>=iy&&my<=iy+64){selectedHero=i;return;}
+    }
+    if(mx>=VIEW_W/2-60&&mx<=VIEW_W/2+60&&my>=VIEW_H-50&&my<=VIEW_H-20){
+      heroChoice=selectedHero;applyHeroChoice();gamePhase='playing';
+    }
+    return;
+  }
+
+  // Shop click handling
+  if(shopOpen){
+    const px=VIEW_W/2-200,py=30,pw=400;
+    for(let i=0;i<upgradeKeys.length;i++){
+      const iy=py+68+i*52;
+      const btnX=px+pw-80,btnY=iy+2,btnW=60,btnH=24;
+      if(mx>=btnX&&mx<=btnX+btnW&&my>=btnY&&my<=btnY+btnH){
+        const key=upgradeKeys[i];
+        const u=upgrades[key];
+        if(u.count>=u.max) return;
+        const price=getPrice(key);
+        if(player.gold<price) return;
+        player.gold-=price;
+        u.count++;
+        if(key!=='altar') totalPurchases++;
+        // Apply effects
+        if(key==='blood'){u.bleedRate=0.05*Math.pow(1.5,u.count);}
+        if(key==='shadow'){
+          const base=HEROES[heroChoice].passiveType==='stealth'?2:1;
+          player.speed=base*(1+u.count*0.05);
+        }
+        if(key==='eagle'){/* applied dynamically in fireAtNearest/getAttackRange */}
+        if(key==='altar'){
+          // Activate next inactive altar
+          for(const a of altars){if(!a.active){a.active=true;break;}}
+        }
+        return;
+      }
+    }
+  }
+});
+
+function applyHeroChoice(){
+  const h=HEROES[heroChoice];
+  player.hp=h.hp;player.maxHp=h.hp;
+  // Stealth passive: 2x move speed
+  if(h.passiveType==='stealth') player.speed=2.5;
+  // Full range passive
+  // Blood lord: track kills
+  minionKillCount=0;
+  // Reset ult cooldown based on hero
+  if(h.ultType==='bloodmist'){rMaxCooldown=2400;} // 40s
+  else if(h.ultType==='none'){rMaxCooldown=999999;} // no ult
+  else{rMaxCooldown=R_COOLDOWN_BASE;} // 30s
+  rCooldown=0;
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function wx(x){return x-camX;}
 function wy(y){return y-camY;}
-function dist(a,b){const dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);}
+function inPlayable(x,y){return inPlayableRaw(x,y);}
+function inFountain(x,y){return (x-FOUNTAIN_POS.x)**2+(y-FOUNTAIN_POS.y)**2<FOUNTAIN_RADIUS*FOUNTAIN_RADIUS;}
+function rectContains(o,x,y,r){return x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&y+r>o.y-o.h/2&&y-r<o.y+o.h/2;}
+function collidesObstacle(x,y,r){return false;} // obstacles are passable
 
-function inRiver(x,y){return Math.abs(x-y)<RIVER_HALF;}
-function inPlayable(x,y){
-  // Playable: inside world bounds AND (below river lower edge OR in river)
-  // River lower edge: x-y = RIVER_HALF => y = x - RIVER_HALF
-  // Playable area: y > x - RIVER_HALF  (below the lower river edge)
-  // Also must be inside world square
-  if(x<0||y<0||x>WORLD_W||y>WORLD_H) return false;
-  return (y-x)>-RIVER_HALF; // includes river and playable triangle
-}
-function inFountain(x,y){
-  const dx=x-FOUNTAIN_POS.x,dy=y-FOUNTAIN_POS.y;
-  return dx*dx+dy*dy<FOUNTAIN_RADIUS*FOUNTAIN_RADIUS;
+function getAttackRange(){
+  let range=ATTACK_RANGE;
+  if(heroChoice>=0&&HEROES[heroChoice].passiveType==='fullrange') range=Math.max(VIEW_W,VIEW_H);
+  range*=(1+upgrades.eagle.count*0.05);
+  return range;
 }
 
-function rectContains(o,x,y,r){
-  // AABB check with radius r
-  return x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&y+r>o.y-o.h/2&&y-r<o.y+o.h/2;
-}
-function collidesObstacle(x,y,r){
+function playerOnObstacle(){
   for(const o of OBSTACLES){
-    if(rectContains(o,x,y,r)) return true;
+    const hb=barrierHitboxes[o.imgIdx];
+    // Shrink hitbox to 70% of visible content so damage only triggers on clear overlap
+    const hw=o.w*hb.hw*0.7, hh=o.w*hb.hh*0.7;
+    const cx=o.x+o.w*hb.cx, cy=o.y+o.w*hb.cy;
+    const dx=Math.abs(player.x-cx), dy=Math.abs(player.y-cy);
+    if(dx<hw&&dy<hh) return true;
   }
   return false;
 }
 
-// Move entity toward target, stop at obstacles/boundary
-function moveToward(entity,tx,ty,speed){
-  const dx=tx-entity.x, dy=ty-entity.y;
-  const d=Math.sqrt(dx*dx+dy*dy);
-  if(d<speed){entity.x=tx;entity.y=ty;return true;}
-  const nx=entity.x+dx/d*speed;
-  const ny=entity.y+dy/d*speed;
-  const r=entity===player?12:8;
-  if(inPlayable(nx,ny)&&!collidesObstacle(nx,ny,r)&&!inFountain(nx,ny)){
-    entity.x=nx;entity.y=ny;
-  }
-  return false;
-}
-
-// Pathfinding: simple steering around obstacles for minions
-// Returns a direction vector (dx,dy) normalized
-function steerMinion(m,tx,ty){
-  const dx=tx-m.x,dy=ty-m.y;
-  const d=Math.sqrt(dx*dx+dy*dy);
+function steer(entity,tx,ty,speed,radius){
+  const dx=tx-entity.x,dy=ty-entity.y,d=Math.sqrt(dx*dx+dy*dy);
   if(d<1) return {dx:0,dy:0};
   const ndx=dx/d,ndy=dy/d;
-  // Try direct
-  const nx=m.x+ndx*m.speed,ny=m.y+ndy*m.speed;
-  if(!collidesObstacle(nx,ny,8)&&inPlayable(nx,ny)&&!inFountain(nx,ny)){
-    return {dx:ndx,dy:ndy};
-  }
-  // Try perpendicular directions
-  for(const angle of [0.4,-0.4,0.8,-0.8,1.2,-1.2,Math.PI/2,-Math.PI/2]){
-    const a=Math.atan2(ndy,ndx)+angle;
-    const adx=Math.cos(a),ady=Math.sin(a);
-    const ax=m.x+adx*m.speed,ay=m.y+ady*m.speed;
-    if(!collidesObstacle(ax,ay,8)&&inPlayable(ax,ay)&&!inFountain(ax,ay)){
-      return {dx:adx,dy:ady};
+  // Try direct path first
+  const nx=entity.x+ndx*speed,ny=entity.y+ndy*speed;
+  if(!collidesObstacle(nx,ny,radius)&&inPlayable(nx,ny)&&!inFountain(nx,ny)) return {dx:ndx,dy:ndy};
+  // Try increasingly wider angles to steer around obstacles
+  const baseAngle=Math.atan2(ndy,ndx);
+  for(let step=1;step<=12;step++){
+    const angle=step*0.25; // 0.25, 0.5, 0.75 ... up to 3.0 radians
+    for(const sign of [1,-1]){
+      const a=baseAngle+angle*sign;
+      const adx=Math.cos(a),ady=Math.sin(a);
+      const ax=entity.x+adx*speed,ay=entity.y+ady*speed;
+      if(!collidesObstacle(ax,ay,radius)&&inPlayable(ax,ay)&&!inFountain(ax,ay)){
+        return {dx:adx,dy:ady};
+      }
     }
   }
   return {dx:0,dy:0};
 }
 
-// Spawn a minion at a random edge of the visible area (world boundary edge)
+function steerMinion(m,tx,ty){
+  const spd=m.slowTimer>0?m.speed*0.7:m.speed;
+  return steer(m,tx,ty,spd,16);
+}
+
 function spawnMinion(){
   let x,y;
-  // Spawn along the playable boundary edges
   const edge=Math.floor(Math.random()*3);
-  if(edge===0){x=Math.random()*WORLD_W;y=WORLD_H-5;}       // bottom
-  else if(edge===1){x=5;y=Math.random()*WORLD_H;}           // left
-  else{x=Math.random()*800;y=WORLD_H-5-Math.random()*800;}  // bottom-left area
-  // Ensure in playable
+  if(edge===0){x=Math.random()*WORLD_W;y=WORLD_H-5;}
+  else if(edge===1){x=5;y=WORLD_H*0.3+Math.random()*WORLD_H*0.7;}
+  else{x=Math.random()*1000;y=WORLD_H-5-Math.random()*1000;}
   if(!inPlayable(x,y)||inFountain(x,y)) return;
-  minions.push({x,y,hp:3,maxHp:3,speed:0.217,burnTimer:0,burnDmgTimer:0,slowTimer:0,hitTimer:0});
+  const type=Math.random()<0.5?0:1;
+  const baseHp=type===0?2:1;
+  const hp=baseHp+Math.max(0,waveIndex-1); // +1 HP per wave, first wave no bonus
+  const speed=type===0?0.33:0.66;
+  minions.push({x,y,hp,maxHp:hp,speed,type,burnTimer:0,burnDmgTimer:0,slowTimer:0,hitTimer:0,dir:0,animFrame:0,animTimer:0,bleedTimer:0,bleedRate:0,bleedDmgTimer:0});
 }
 
 // ── Input ──────────────────────────────────────────────────────────────────
 canvas.addEventListener('contextmenu',function(e){
-  e.preventDefault();
-  if(gameOver) return;
+  e.preventDefault();if(gameOver||gamePhase!=='playing') return;
   const r=canvas.getBoundingClientRect();
-  const sx=(e.clientX-r.left)*(VIEW_W/r.width);
-  const sy=(e.clientY-r.top)*(VIEW_H/r.height);
-  const wx2=sx+camX, wy2=sy+camY;
+  const sx=(e.clientX-r.left)*(VIEW_W/r.width),sy=(e.clientY-r.top)*(VIEW_H/r.height);
+  const wx2=sx+camX,wy2=sy+camY;
   if(!inPlayable(wx2,wy2)) return;
-  player.targetX=wx2; player.targetY=wy2; player.moving=true;
+  player.targetX=wx2;player.targetY=wy2;player.moving=true;
+  clickMarker.active=true;clickMarker.x=wx2;clickMarker.y=wy2;clickMarker.timer=clickMarker.maxTimer;
 });
-
 canvas.addEventListener('mousemove',function(e){
   const r=canvas.getBoundingClientRect();
   mouseX=(e.clientX-r.left)*(VIEW_W/r.width);
   mouseY=(e.clientY-r.top)*(VIEW_H/r.height);
 });
-
 window.addEventListener('keydown',function(e){
-  if(gameOver) return;
+  if(gameOver){if(e.key==='Escape')restartGame();return;}
+  if(gamePhase!=='playing') return;
+  if(e.key==='p'||e.key==='P'){
+    if(inFountain(player.x,player.y)) shopOpen=!shopOpen;
+    else shopOpen=false;
+    return;
+  }
+  if(e.key==='Escape'&&shopOpen){shopOpen=false;return;}
+  if(shopOpen) return; // block other keys while shop open
   if(e.key==='r'||e.key==='R'){
+    if(inFountain(player.x,player.y)) return; // can't ult in fountain
     if(rCooldown>0) return;
-    // Cancel movement
+    const h=HEROES[heroChoice];
+    if(h.ultType==='none') return;
+    // Block re-casting during blood mist or phase active
+    if(bloodMistActive||phaseActive) return;
     player.moving=false;
-    // Compute target in world coords
-    const wmx=mouseX+camX, wmy=mouseY+camY;
-    const dx=wmx-player.x, dy=wmy-player.y;
-    const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<1) return;
-    const dist2=Math.min(d,R_MAX_DIST);
-    let tx=player.x+dx/d*dist2;
-    let ty=player.y+dy/d*dist2;
-    // Clamp to playable
-    if(!inPlayable(tx,ty)){tx=player.x+dx/d*(dist2*0.5);ty=player.y+dy/d*(dist2*0.5);}
-    // If landing on obstacle, stop before it
-    if(collidesObstacle(tx,ty,12)){
-      // Walk back until clear
-      for(let s=dist2;s>0;s-=10){
-        const cx=player.x+dx/d*s, cy=player.y+dy/d*s;
-        if(!collidesObstacle(cx,cy,12)&&inPlayable(cx,cy)){tx=cx;ty=cy;break;}
-      }
+
+    if(h.ultType==='jump'){
+      // 降临: jump to mouse
+      const wmx=mouseX+camX,wmy=mouseY+camY;
+      const dx=wmx-player.x,dy=wmy-player.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<1) return;
+      const dist2=Math.min(d,R_MAX_DIST);
+      let tx=player.x+dx/d*dist2,ty=player.y+dy/d*dist2;
+      if(!inPlayable(tx,ty)){tx=player.x+dx/d*(dist2*0.5);ty=player.y+dy/d*(dist2*0.5);}
+      player.dir=dirFromDxDy(dx,dy);
+      ult.active=true;ult.sx=player.x;ult.sy=player.y;ult.tx=tx;ult.ty=ty;ult.progress=0;
+    } else if(h.ultType==='teleport'){
+      // 思乡: teleport to fountain
+      castAnim.active=true;castAnim.timer=castAnim.duration;
+      player.x=FOUNTAIN_POS.x;player.y=FOUNTAIN_POS.y;
+      player.targetX=FOUNTAIN_POS.x;player.targetY=FOUNTAIN_POS.y;
+    } else if(h.ultType==='phase'){
+      // 虚化: immune + 5x speed for 10s
+      castAnim.active=true;castAnim.timer=castAnim.duration;
+      phaseActive=true;phaseTimer=600;
+    } else if(h.ultType==='bloodmist'){
+      // 血烟: AoE damage in attack range for 20s
+      castAnim.active=true;castAnim.timer=castAnim.duration;
+      bloodMistActive=true;bloodMistTimer=1200;
+      bloodMistX=player.x;bloodMistY=player.y;
     }
-    ult.active=true; ult.sx=player.x; ult.sy=player.y;
-    ult.tx=tx; ult.ty=ty; ult.progress=0;
     rCooldown=rMaxCooldown;
   }
-  if(e.key==='Escape'&&gameOver){restartGame();}
 });
 
 // ── Update ─────────────────────────────────────────────────────────────────
 function updatePlayer(){
-  if(ult.active) return; // frozen during ult jump
+  if(ult.active) return;
 
-  // Move
+  // Phase ult (eagle eye): speed boost + immunity
+  // Cast animation countdown
+  if(castAnim.active){castAnim.timer--;if(castAnim.timer<=0)castAnim.active=false;}
+
+  let curSpeed=player.speed;
+  if(phaseActive){
+    phaseTimer--;
+    if(phaseTimer<=0) phaseActive=false;
+    else curSpeed=player.speed*5;
+  }
+
   if(player.moving){
-    const dx=player.targetX-player.x, dy=player.targetY-player.y;
-    const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<player.speed){
-      player.x=player.targetX; player.y=player.targetY; player.moving=false;
-    } else {
-      const nx=player.x+dx/d*player.speed;
-      const ny=player.y+dy/d*player.speed;
-      if(inPlayable(nx,ny)&&!collidesObstacle(nx,ny,12)){
-        player.x=nx; player.y=ny;
-      } else {
-        player.moving=false;
+    const dx=player.targetX-player.x,dy=player.targetY-player.y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<curSpeed){player.x=player.targetX;player.y=player.targetY;player.moving=false;}
+    else{
+      const nx=player.x+dx/d*curSpeed,ny=player.y+dy/d*curSpeed;
+      if(inPlayable(nx,ny)){
+        player.x=nx;player.y=ny;
+        player.dir=dirFromDxDy(dx,dy);
       }
     }
   }
 
-  // Buff timers
+  // Blood mist ult: AoE damage tick
+  if(bloodMistActive){
+    bloodMistTimer--;
+    if(bloodMistTimer<=0) bloodMistActive=false;
+    else {
+      bloodMistX=player.x;bloodMistY=player.y;
+      if(tick%12===0){
+        const range=getAttackRange();
+        for(const m of minions){if(dist({x:bloodMistX,y:bloodMistY},m)<range) m.hp-=0.5;}
+        if(boss.alive&&dist({x:bloodMistX,y:bloodMistY},boss)<range) boss.hp-=0.5;
+      }
+    }
+  }
+
   if(player.hasRedBuff){player.redBuffTimer--;if(player.redBuffTimer<=0)player.hasRedBuff=false;}
-  if(player.hasBlueBuff){player.blueBuffTimer--;if(player.blueBuffTimer<=0){player.hasBlueBuff=false;rMaxCooldown=R_COOLDOWN_BASE;}}
+  if(player.hasBlueBuff){player.blueBuffTimer--;if(player.blueBuffTimer<=0){player.hasBlueBuff=false;
+  }}
   if(player.invincibleTimer>0) player.invincibleTimer--;
 
-  // Attack timer
-  player.attackTimer++;
-  if(player.attackTimer>=ATTACK_INTERVAL){
-    player.attackTimer=0;
-    fireAtNearest();
+  // Fountain exit: grant 5s invincibility
+  const nowInFountain=inFountain(player.x,player.y);
+  if(wasInFountain&&!nowInFountain){player.invincibleTimer=300;}
+  wasInFountain=nowInFountain;
+
+  // Damage from standing on obstacles (stealth passive = immune)
+  const h=HEROES[heroChoice];
+  if(h.passiveType!=='stealth'&&player.invincibleTimer===0&&!phaseActive&&playerOnObstacle()){
+    player.hp--;player.invincibleTimer=120;
+    if(player.hp<=0){triggerGameOver();return;}
   }
+
+  player.attackTimer++;
+  const atkInterval=Math.max(6,ATTACK_INTERVAL-upgrades.eagle.count*6); // -0.1s per eagle upgrade
+  if(player.attackTimer>=atkInterval&&!inFountain(player.x,player.y)){player.attackTimer=0;fireAtNearest();}
 }
 
 function fireAtNearest(){
-  // Find nearest target in range: minions first, then boss, then buffs
-  let nearest=null, nearestDist=ATTACK_RANGE;
+  const range=getAttackRange();
+  let nearest=null,nd=range;
+  for(const m of minions){const d=dist(player,m);if(d<nd){nd=d;nearest={type:'minion',ref:m};}}
+  if(boss.alive){const d=dist(player,boss);if(d<nd){nd=d;nearest={type:'boss',ref:boss};}}
+  if(redBuffs.some(b=>b.alive)){for(const rb of redBuffs){if(rb.alive){const d=dist(player,rb);if(d<nd){nd=d;nearest={type:'redbuff',ref:rb};}}}}
+  if(blueBuffs.some(b=>b.alive)){for(const bb of blueBuffs){if(bb.alive){const d=dist(player,bb);if(d<nd){nd=d;nearest={type:'bluebuff',ref:bb};}}}}
+  if(greenBuffs.some(b=>b.alive)){for(const gb of greenBuffs){if(gb.alive){const d=dist(player,gb);if(d<nd){nd=d;nearest={type:'greenbuff',ref:gb};}}}}
+  if(!nearest){currentTargetType='';return;}
+  currentTargetType=nearest.type;
 
-  for(const m of minions){
-    const d=dist(player,m);
-    if(d<nearestDist){nearestDist=d;nearest={type:'minion',ref:m};}
-  }
-  if(boss.alive){
-    const d=dist(player,boss);
-    if(d<nearestDist){nearestDist=d;nearest={type:'boss',ref:boss};}
-  }
-  if(redBuff.alive){
-    const d=dist(player,redBuff);
-    if(d<nearestDist){nearestDist=d;nearest={type:'redbuff',ref:redBuff};}
-  }
-  if(blueBuff.alive){
-    const d=dist(player,blueBuff);
-    if(d<nearestDist){nearestDist=d;nearest={type:'bluebuff',ref:blueBuff};}
-  }
+  const bulletCount=1+upgrades.hero.count;
+  const dx2=nearest.ref.x-player.x, dy2=nearest.ref.y-player.y;
+  const baseAngle=Math.atan2(dy2,dx2);
+  const totalDist2=Math.sqrt(dx2*dx2+dy2*dy2);
+  const spreadAngle=bulletCount>1?Math.min(Math.PI*0.8,(bulletCount-1)*0.08):0;
 
-  if(!nearest) return;
-  bullets.push({
-    x:player.x,y:player.y,
-    tx:nearest.ref.x,ty:nearest.ref.y,
-    target:nearest,speed:6,
-    applyBurn:player.hasRedBuff,
-  });
+  for(let b=0;b<bulletCount;b++){
+    // First bullet tracks target, others spread at angles
+    const angleOff=bulletCount<=1?0:(b-(bulletCount-1)/2)*(spreadAngle/(bulletCount-1));
+    const isTracking=(b===0); // only first bullet tracks
+    const angle=baseAngle+angleOff;
+    const tx2=player.x+Math.cos(angle)*totalDist2;
+    const ty2=player.y+Math.sin(angle)*totalDist2;
+    const curveType=Math.floor(Math.random()*3);
+    const curveDir=Math.random()<0.5?1:-1;
+    const bleed=upgrades.blood.count>0;
+    bullets.push({
+      x:player.x,y:player.y,sx:player.x,sy:player.y,
+      tx:isTracking?nearest.ref.x:tx2,ty:isTracking?nearest.ref.y:ty2,
+      target:isTracking?nearest:null,
+      speed:0.1,applyBurn:player.hasRedBuff,applyBleed:bleed,
+      animFrame:0,animTimer:0,
+      curveType,curveDir,totalDist:totalDist2,traveled:0,isTracking,
+      hunterBonus:upgrades.hunter.count,
+    });
+  }
 }
 
 function updateBullets(){
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
+    // Accelerate
+    b.speed=Math.min(b.speed+0.06, 5);
+    // Animate fire frames
+    b.animTimer++;
+    if(b.animTimer>=4){b.animTimer=0;b.animFrame=(b.animFrame+1)%FIRE_FRAME_COUNT;}
+
+    // Update target position to track living target (tracking bullets only)
+    if(b.isTracking&&b.target){
+      const tRef=b.target.ref;
+      if(tRef&&tRef.hp!==undefined&&tRef.hp>0){
+        b.tx=tRef.x; b.ty=tRef.y;
+      }
+    }
+
+    // Distance to target
     const dx=b.tx-b.x, dy=b.ty-b.y;
     const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<b.speed){
-      // Hit
-      hitTarget(b.target,1,b.applyBurn);
-      bullets.splice(i,1);
+
+    // Homing: when close, get pulled toward target (tracking only)
+    const homingRadius=80;
+    let moveX,moveY;
+    if(b.isTracking&&d<homingRadius){
+      // Strong homing — fly directly at target
+      if(d<b.speed||d<6){
+        // Hit
+        if(b.target) hitTarget(b.target,1,b.applyBurn,b.applyBleed,b.hunterBonus);
+        bullets.splice(i,1);
+        continue;
+      }
+      moveX=dx/d*b.speed;
+      moveY=dy/d*b.speed;
+    } else if(!b.isTracking&&b.traveled>=b.totalDist){
+      // Non-tracking: past target, keep flying in locked direction
+      if(!b.lockedDx){
+        const a=Math.atan2(b.ty-b.sy,b.tx-b.sx);
+        b.lockedDx=Math.cos(a);b.lockedDy=Math.sin(a);
+      }
+      b.traveled+=b.speed;
+      moveX=b.lockedDx*b.speed;
+      moveY=b.lockedDy*b.speed;
     } else {
-      b.x+=dx/d*b.speed; b.y+=dy/d*b.speed;
+      // Curved flight toward target
+      const ndx=dx/d, ndy=dy/d;
+      // Perpendicular for curve offset
+      const perpX=-ndy, perpY=ndx;
+      // Progress estimate for curve shape (0 at start, 1 near target)
+      b.traveled+=b.speed;
+      const totalEst=Math.max(b.totalDist, d+b.traveled);
+      const t=Math.min(b.traveled/totalEst, 0.95);
+      let offset=0;
+      if(b.curveType===1) offset=Math.sin(t*Math.PI)*30*b.curveDir;
+      else if(b.curveType===2) offset=Math.sin(t*Math.PI)*70*b.curveDir;
+      // Blend: mostly toward target + curve offset
+      moveX=ndx*b.speed + perpX*offset*0.03;
+      moveY=ndy*b.speed + perpY*offset*0.03;
+      // Normalize to speed
+      const ml=Math.sqrt(moveX*moveX+moveY*moveY);
+      if(ml>0){moveX=moveX/ml*b.speed;moveY=moveY/ml*b.speed;}
     }
+
+    b.x+=moveX;
+    b.y+=moveY;
+
+    // Non-tracking bullets: pierce through enemies, remove when off-screen
+    if(!b.isTracking){
+      // Check collision with enemies (pierce — don't remove bullet)
+      if(!b.hitSet) b.hitSet=new Set();
+      for(const m of minions){
+        if(dist(b,m)<20){
+          if(!b.hitSet.has(m)){b.hitSet.add(m);hitTarget({type:'minion',ref:m},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
+        }
+      }
+      if(boss.alive&&dist(b,boss)<40){
+        if(!b.hitSet.has(boss)){b.hitSet.add(boss);hitTarget({type:'boss',ref:boss},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
+      }
+      // Remove when outside view with margin
+      const sx=b.x-camX,sy=b.y-camY;
+      if(sx<-80||sx>VIEW_W+80||sy<-80||sy>VIEW_H+80){bullets.splice(i,1);continue;}
+    }
+
+    // Safety: remove tracking bullets if traveled too far
+    if(b.isTracking&&b.traveled>b.totalDist*3){bullets.splice(i,1);}
   }
 }
 
-function hitTarget(target,dmg,applyBurn){
-  const e=target.ref;
-  if(!e||e.hp===undefined) return;
-  // boss/buff only take normal attack damage (not ult)
-  e.hp-=dmg;
-  if(applyBurn&&target.type!=='player'){
-    e.burnTimer=18; // 60s * 0.3 = burn ticks (we use 18 = 3s of burn)
-    // Actually burn = 60s buff, but burn effect on enemy = ongoing
-    e.burnTimer=360; // 6s burn per hit refresh
-    e.burnDmgTimer=0;
-    e.slowTimer=360;
+function hitTarget(target,dmg,applyBurn,applyBleed,hunterBonus){
+  const e=target.ref;if(!e||e.hp===undefined) return;
+  let totalDmg=dmg;
+  // Hunter bonus: extra damage to boss
+  if(hunterBonus&&(target.type==='boss')) totalDmg+=hunterBonus;
+  e.hp-=totalDmg;
+  if(applyBurn&&target.type!=='player'){e.burnTimer=360;e.burnDmgTimer=0;e.slowTimer=360;}
+  // Bleed effect
+  if(applyBleed&&target.type!=='player'){
+    e.bleedTimer=e.bleedTimer||0;
+    e.bleedTimer=600; // 10s bleed
+    e.bleedRate=upgrades.blood.bleedRate;
+    e.bleedDmgTimer=0;
+  }
+  // Knockback passive
+  if(heroChoice>=0&&HEROES[heroChoice].passiveType==='knockback'&&target.type==='minion'){
+    const dx=e.x-player.x,dy=e.y-player.y;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(d>1){e.x+=dx/d*30;e.y+=dy/d*30;}
   }
   if(e.hp<=0) killEntity(target);
 }
 
 function killEntity(target){
+  const e=target.ref;
+  const dir=e.dir||0;
   if(target.type==='minion'){
-    const idx=minions.indexOf(target.ref);
-    if(idx>=0) minions.splice(idx,1);
+    const idx=minions.indexOf(e);
+    if(idx>=0){addDeathEffect(e.x,e.y,72,dir);minions.splice(idx,1);}
     player.gold+=1;
+    minionKillCount++;
+    // Blood lord passive: heal every 500 kills
+    if(heroChoice>=0&&HEROES[heroChoice].passiveType==='bloodlord'&&minionKillCount%100===0){
+      if(player.hp<player.maxHp) player.hp++;
+    }
   } else if(target.type==='boss'){
-    boss.alive=false;
-    boss.respawnTimer=BOSS_RESPAWN;
-    player.gold+=100;
+    addDeathEffect(boss.x,boss.y,240,dir);
+    boss.alive=false;boss.respawnTimer=BOSS_RESPAWN;
+    let goldReward=boss.gold;
+    // Bounty passive: double boss gold
+    if(heroChoice>=0&&HEROES[heroChoice].passiveType==='bounty') goldReward*=2;
+    player.gold+=goldReward;
+    bossType=randomBossType();
   } else if(target.type==='redbuff'){
-    redBuff.alive=false;
-    redBuff.respawnTimer=BUFF_RESPAWN;
-    player.hasRedBuff=true;
-    player.redBuffTimer=3600; // 60s
+    addDeathEffect(e.x,e.y,100,0);
+    e.alive=false;e.respawnTimer=BUFF_RESPAWN;
+    player.hasRedBuff=true;player.redBuffTimer=3600;
   } else if(target.type==='bluebuff'){
-    blueBuff.alive=false;
-    blueBuff.respawnTimer=BUFF_RESPAWN;
-    player.hasBlueBuff=true;
-    player.blueBuffTimer=3600;
-    rMaxCooldown=Math.round(R_COOLDOWN_BASE*0.1); // 90% reduction
+    addDeathEffect(e.x,e.y,100,0);
+    e.alive=false;e.respawnTimer=BUFF_RESPAWN;
+    player.hasBlueBuff=true;player.blueBuffTimer=3600;
+  } else if(target.type==='greenbuff'){
+    addDeathEffect(e.x,e.y,100,0);
+    e.alive=false;e.respawnTimer=BUFF_RESPAWN;
+    player.hp=player.maxHp;
   }
 }
 
 function updateBurnOnEntity(e){
-  if(e.burnTimer>0){
-    e.burnTimer--;
-    e.burnDmgTimer++;
-    if(e.burnDmgTimer>=12){ // every 0.2s at 60fps
-      e.burnDmgTimer=0;
-      e.hp-=0.5;
-      if(e.hp<=0) e.hp=0;
-    }
-  } else {
-    e.slowTimer=0;
+  if(e.burnTimer>0){e.burnTimer--;e.burnDmgTimer++;
+    if(e.burnDmgTimer>=12){e.burnDmgTimer=0;e.hp-=0.5;if(e.hp<=0)e.hp=0;}
+  } else e.slowTimer=0;
+  // Bleed
+  if(e.bleedTimer>0){e.bleedTimer--;
+    e.bleedDmgTimer=(e.bleedDmgTimer||0)+1;
+    if(e.bleedDmgTimer>=60){e.bleedDmgTimer=0;e.hp-=(e.bleedRate||0.05);if(e.hp<=0)e.hp=0;}
   }
 }
 
-function updateMinions(){
-  minionSpawnTimer++;
-  if(minionSpawnTimer>=MINION_SPAWN_INTERVAL){
-    minionSpawnTimer=0;
-    spawnMinion();
-  }
+function updateWaves(){
+  waveTimer--;
+  if(waveTimer<=0&&waveSpawnQueue===0){waveSpawnQueue=getWaveCount();waveSpawnDelay=0;waveIndex++;waveTimer=getWaveInterval();}
+  if(waveSpawnQueue>0){waveSpawnDelay++;if(waveSpawnDelay>=6){waveSpawnDelay=0;spawnMinion();waveSpawnQueue--;}}
+}
 
+function updateMinions(){
   for(let i=minions.length-1;i>=0;i--){
     const m=minions[i];
-    if(m.hp<=0){minions.splice(i,1);player.gold+=1;continue;}
-
+    if(m.hp<=0){addDeathEffect(m.x,m.y,72,m.dir);minions.splice(i,1);player.gold+=1;continue;}
     updateBurnOnEntity(m);
-    if(m.hp<=0){minions.splice(i,1);player.gold+=1;continue;}
-
+    if(m.hp<=0){addDeathEffect(m.x,m.y,72,m.dir);minions.splice(i,1);player.gold+=1;continue;}
     if(m.hitTimer>0) m.hitTimer--;
-
     const spd=m.slowTimer>0?m.speed*0.7:m.speed;
     const dir=steerMinion(m,player.x,player.y);
-    const nx=m.x+dir.dx*spd, ny=m.y+dir.dy*spd;
-    if(inPlayable(nx,ny)&&!inFountain(nx,ny)) {m.x=nx;m.y=ny;}
+    const nx=m.x+dir.dx*spd,ny=m.y+dir.dy*spd;
+    // Blood lord passive: minions can't enter river when boss alive
+    const blockRiver=heroChoice>=0&&HEROES[heroChoice].passiveType==='bloodlord'&&boss.alive;
+    if(inPlayable(nx,ny)&&!inFountain(nx,ny)&&!(blockRiver&&inRiver(nx,ny))){
+      if(dir.dx!==0||dir.dy!==0) m.dir=dirFromDxDy(dir.dx,dir.dy);
+      m.x=nx;m.y=ny;
+    }
+    // Animate
+    m.animTimer++;
+    if(m.animTimer>=10){m.animTimer=0;m.animFrame=(m.animFrame+1)%6;}
 
-    // Collision with player
-    if(player.invincibleTimer===0&&!ult.active&&ult.immunityTimer===0&&dist(player,m)<20){
-      player.hp--;
-      player.invincibleTimer=120;
+    if(player.invincibleTimer===0&&!ult.active&&ult.immunityTimer===0&&!phaseActive&&dist(player,m)<40){
+      player.hp--;player.invincibleTimer=120;
       if(player.hp<=0){triggerGameOver();return;}
     }
   }
@@ -389,73 +922,54 @@ function updateBoss(){
   if(!boss.alive){
     boss.respawnTimer--;
     if(boss.respawnTimer<=0){
-      boss.alive=true;
-      boss.hp=boss.maxHp;
-      boss.x=BOSS_SPAWN.x; boss.y=BOSS_SPAWN.y;
-      boss.chasing=false;
+      boss.alive=true;boss.hp=bossType.hp;boss.maxHp=bossType.hp;boss.gold=bossType.gold;
+      boss.x=BOSS_SPAWN.x;boss.y=BOSS_SPAWN.y;boss.chasing=false;
     }
     return;
   }
-
   updateBurnOnEntity(boss);
-  if(boss.hp<=0){
-    boss.alive=false; boss.respawnTimer=BOSS_RESPAWN; player.gold+=100; return;
-  }
+  if(boss.hp<=0){addDeathEffect(boss.x,boss.y,240,boss.dir);boss.alive=false;boss.respawnTimer=BOSS_RESPAWN;player.gold+=boss.gold;bossType=randomBossType();return;}
+  if(inRiver(player.x,player.y)){boss.chasing=true;}
+  else if(boss.chasing){boss.chasing=false;boss.hp=boss.maxHp;}
 
-  const playerInRiver=inRiver(player.x,player.y);
-  if(playerInRiver){
-    boss.chasing=true;
-  } else {
-    if(boss.chasing){
-      // Return to spawn
-      boss.chasing=false;
-      boss.hp=boss.maxHp;
-    }
-  }
+  // Boss: no animation, static frame
 
   if(boss.chasing){
-    const dx=player.x-boss.x, dy=player.y-boss.y;
-    const d=Math.sqrt(dx*dx+dy*dy);
-    if(d>boss.speed){boss.x+=dx/d*boss.speed;boss.y+=dy/d*boss.speed;}
-    // Collision with player
-    if(player.invincibleTimer===0&&dist(player,boss)<40){
-      player.hp--;
-      player.invincibleTimer=120;
+    const dx=player.x-boss.x,dy=player.y-boss.y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d>boss.speed){boss.x+=dx/d*boss.speed;boss.y+=dy/d*boss.speed;boss.dir=dirFromDxDy(dx,dy);}
+    if(player.invincibleTimer===0&&!phaseActive&&dist(player,boss)<80){
+      player.hp--;player.invincibleTimer=120;
       if(player.hp<=0){triggerGameOver();return;}
     }
   } else {
-    // Return to spawn
-    const dx=BOSS_SPAWN.x-boss.x, dy=BOSS_SPAWN.y-boss.y;
-    const d=Math.sqrt(dx*dx+dy*dy);
+    const dx=BOSS_SPAWN.x-boss.x,dy=BOSS_SPAWN.y-boss.y,d=Math.sqrt(dx*dx+dy*dy);
     if(d>boss.speed){boss.x+=dx/d*boss.speed;boss.y+=dy/d*boss.speed;}
   }
 }
 
 function updateBuffs(){
-  if(!redBuff.alive){
-    redBuff.respawnTimer--;
-    if(redBuff.respawnTimer<=0){
-      redBuff.alive=true; redBuff.hp=redBuff.maxHp;
-      redBuff.x=RED_BUFF_POS.x; redBuff.y=RED_BUFF_POS.y;
-    }
-  } else {
-    updateBurnOnEntity(redBuff);
-    if(redBuff.hp<=0){
-      redBuff.alive=false; redBuff.respawnTimer=BUFF_RESPAWN;
-      player.hasRedBuff=true; player.redBuffTimer=3600;
+  for(let i=0;i<redBuffs.length;i++){
+    const rb=redBuffs[i],pos=RED_BUFF_POS[i];
+    if(!rb.alive){rb.respawnTimer--;
+      if(rb.respawnTimer<=0){rb.alive=true;rb.hp=rb.maxHp;rb.x=pos.x;rb.y=pos.y;}
+    } else {updateBurnOnEntity(rb);
+      if(rb.hp<=0){addDeathEffect(rb.x,rb.y,100,0);rb.alive=false;rb.respawnTimer=BUFF_RESPAWN;player.hasRedBuff=true;player.redBuffTimer=3600;}
     }
   }
-  if(!blueBuff.alive){
-    blueBuff.respawnTimer--;
-    if(blueBuff.respawnTimer<=0){
-      blueBuff.alive=true; blueBuff.hp=blueBuff.maxHp;
-      blueBuff.x=BLUE_BUFF_POS.x; blueBuff.y=BLUE_BUFF_POS.y;
+  for(let i=0;i<blueBuffs.length;i++){
+    const bb=blueBuffs[i],pos=BLUE_BUFF_POS[i];
+    if(!bb.alive){bb.respawnTimer--;
+      if(bb.respawnTimer<=0){bb.alive=true;bb.hp=bb.maxHp;bb.x=pos.x;bb.y=pos.y;}
+    } else {
+      if(bb.hp<=0){addDeathEffect(bb.x,bb.y,100,0);bb.alive=false;bb.respawnTimer=BUFF_RESPAWN;player.hasBlueBuff=true;player.blueBuffTimer=3600;}
     }
-  } else {
-    if(blueBuff.hp<=0){
-      blueBuff.alive=false; blueBuff.respawnTimer=BUFF_RESPAWN;
-      player.hasBlueBuff=true; player.blueBuffTimer=3600;
-      rMaxCooldown=Math.round(R_COOLDOWN_BASE*0.1);
+  }
+  for(let i=0;i<greenBuffs.length;i++){
+    const gb=greenBuffs[i],pos=GREEN_BUFF_POS[i];
+    if(!gb.alive){gb.respawnTimer--;
+      if(gb.respawnTimer<=0){gb.alive=true;gb.hp=gb.maxHp;gb.x=pos.x;gb.y=pos.y;}
+    } else {
+      if(gb.hp<=0){addDeathEffect(gb.x,gb.y,100,0);gb.alive=false;gb.respawnTimer=BUFF_RESPAWN;player.hp=player.maxHp;}
     }
   }
 }
@@ -464,263 +978,456 @@ function updateUlt(){
   if(!ult.active) return;
   ult.progress+=1/ult.duration;
   if(ult.progress>=1){
-    ult.progress=1;
-    player.x=ult.tx; player.y=ult.ty;
-    ult.active=false;
-    ult.immunityTimer=60; // 1s immunity after landing
-    // AoE damage to minions only
+    ult.progress=1;player.x=ult.tx;player.y=ult.ty;
+    ult.active=false;ult.immunityTimer=60;
     for(let i=minions.length-1;i>=0;i--){
       if(dist({x:ult.tx,y:ult.ty},minions[i])<ult.landRadius){
+        addDeathEffect(minions[i].x,minions[i].y,72,minions[i].dir);
         minions[i].hp-=999;
         if(minions[i].hp<=0){minions.splice(i,1);player.gold+=1;}
       }
     }
   } else {
-    // Interpolate position (arc)
     const t=ult.progress;
-    player.x=ult.sx+(ult.tx-ult.sx)*t;
-    player.y=ult.sy+(ult.ty-ult.sy)*t;
+    player.x=ult.sx+(ult.tx-ult.sx)*t;player.y=ult.sy+(ult.ty-ult.sy)*t;
   }
 }
 
-function triggerGameOver(){
-  gameOver=true;
+function updateDeathEffects(){
+  for(let i=deathEffects.length-1;i>=0;i--){
+    const de=deathEffects[i];
+    de.timer++;
+    if(de.timer>=5){de.timer=0;de.frame++;}
+    if(de.frame>=de.maxFrames){deathEffects.splice(i,1);}
+  }
 }
 
+function triggerGameOver(){gameOver=true;}
+
 function restartGame(){
+  gamePhase='select';selectedHero=0;heroChoice=-1;
   gameOver=false;
-  player.x=300;player.y=2000;player.hp=3;player.gold=0;
-  player.moving=false;player.targetX=300;player.targetY=2000;
-  player.attackTimer=0;player.invincibleTimer=0;
+  player.x=FOUNTAIN_POS.x;player.y=FOUNTAIN_POS.y;player.hp=3;player.gold=0;
+  player.moving=false;player.targetX=FOUNTAIN_POS.x;player.targetY=FOUNTAIN_POS.y;
+  player.attackTimer=0;player.invincibleTimer=0;player.animFrame=0;player.dir=0;
   player.hasRedBuff=false;player.hasBlueBuff=false;
   rCooldown=0;rMaxCooldown=R_COOLDOWN_BASE;
-  ult.active=false;
-  minions.length=0;bullets.length=0;
-  boss.alive=false;boss.respawnTimer=300;boss.hp=boss.maxHp;boss.chasing=false;
-  redBuff.alive=false;redBuff.respawnTimer=300;redBuff.hp=redBuff.maxHp;
-  blueBuff.alive=false;blueBuff.respawnTimer=300;blueBuff.hp=blueBuff.maxHp;
-  tick=0;minionSpawnTimer=0;
+  ult.active=false;ult.immunityTimer=0;
+  minions.length=0;bullets.length=0;deathEffects.length=0;
+  OBSTACLES=generateObstacles();
+  generateGroundMap();
+  generateTreeBorder();
+  generateWavePositions();
+  generateAllBuffPos();
+  bossType=randomBossType();
+  boss.alive=false;boss.respawnTimer=300;boss.chasing=false;boss.animFrame=0;
+  for(let i=0;i<redBuffs.length;i++){redBuffs[i].alive=false;redBuffs[i].respawnTimer=60;redBuffs[i].hp=redBuffs[i].maxHp;redBuffs[i].x=RED_BUFF_POS[i].x;redBuffs[i].y=RED_BUFF_POS[i].y;}
+  for(let i=0;i<blueBuffs.length;i++){blueBuffs[i].alive=false;blueBuffs[i].respawnTimer=60;blueBuffs[i].hp=blueBuffs[i].maxHp;blueBuffs[i].x=BLUE_BUFF_POS[i].x;blueBuffs[i].y=BLUE_BUFF_POS[i].y;}
+  for(let i=0;i<greenBuffs.length;i++){greenBuffs[i].alive=false;greenBuffs[i].respawnTimer=60;greenBuffs[i].hp=greenBuffs[i].maxHp;greenBuffs[i].x=GREEN_BUFF_POS[i].x;greenBuffs[i].y=GREEN_BUFF_POS[i].y;}
+  tick=0;waveIndex=0;waveTimer=300;waveSpawnQueue=0;
+  minionKillCount=0;phaseActive=false;phaseTimer=0;bloodMistActive=false;bloodMistTimer=0;castAnim.active=false;
+  wasInFountain=true;currentTargetType='';
+  shopOpen=false;totalPurchases=0;
+  for(const k of upgradeKeys){upgrades[k].count=0;}
+  upgrades.blood.bleedRate=0.05;
+  generateAltars();
 }
 
 function update(){
-  if(gameOver) return;
+  if(gamePhase!=='playing'||gameOver) return;
   tick++;
   if(rCooldown>0) rCooldown--;
+  // Blue buff: cap cooldown to 3 seconds (180 ticks)
+  if(player.hasBlueBuff&&rCooldown>180) rCooldown=180;
   if(ult.immunityTimer>0) ult.immunityTimer--;
-  updateUlt();
-  updatePlayer();
-  updateMinions();
-  updateBoss();
-  updateBuffs();
-  updateBullets();
-  // Camera
+  waterTimer++;if(waterTimer>=60){waterTimer=0;waterFrame=(waterFrame+1)%WATER_FRAME_COUNT;}
+  updateUlt();updatePlayer();updateWaves();updateMinions();
+  updateBoss();updateBuffs();updateBullets();updateDeathEffects();updateAltars();
+  if(clickMarker.active){clickMarker.timer--;if(clickMarker.timer<=0)clickMarker.active=false;}
   camX=Math.max(0,Math.min(WORLD_W-VIEW_W,player.x-VIEW_W/2));
   camY=Math.max(0,Math.min(WORLD_H-VIEW_H,player.y-VIEW_H/2));
 }
 
+function updateAltars(){
+  for(const a of altars){
+    if(!a.active) continue;
+    a.attackTimer++;
+    // Effect animation
+    if(a.effectActive){
+      a.effectTimer++;
+      const maxFrames=a.type==='lightning'?5:10;
+      const frameDur=a.type==='lightning'?12:12; // 1s for lightning (5*12=60), 2s for fire (10*12=120)
+      if(a.effectTimer>=frameDur){a.effectTimer=0;a.effectFrame++;}
+      if(a.effectFrame>=maxFrames){a.effectActive=false;a.effectFrame=0;}
+    }
+    if(a.type==='lightning'){
+      // Attack every 0.2s (12 ticks), range 200px
+      if(a.attackTimer>=12){
+        a.attackTimer=0;
+        let nearest=null,nd=200;
+        for(const m of minions){const d=dist(a,m);if(d<nd){nd=d;nearest=m;}}
+        if(nearest){
+          nearest.hp-=1;
+          a.effectActive=true;a.effectFrame=0;a.effectTimer=0;
+          a.effectX=nearest.x;a.effectY=nearest.y;
+          if(nearest.hp<=0){/* will be cleaned up in updateMinions */}
+        }
+      }
+    } else {
+      // Fire altar: every 10s (600 ticks), AoE 500px near player, 9999 dmg to minions
+      if(a.attackTimer>=600){
+        a.attackTimer=0;
+        // Drop near player
+        const fx=player.x+(Math.random()-0.5)*200;
+        const fy=player.y+(Math.random()-0.5)*200;
+        a.effectActive=true;a.effectFrame=0;a.effectTimer=0;
+        a.effectX=fx;a.effectY=fy;
+        for(let i=minions.length-1;i>=0;i--){
+          if(dist({x:fx,y:fy},minions[i])<500){
+            minions[i].hp-=9999;
+          }
+        }
+      }
+    }
+  }
+}
+
 // ── Draw ───────────────────────────────────────────────────────────────────
 function drawMap(){
-  // Background: dark green playable area
-  ctx.fillStyle='#1a4a1a';
-  ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.fillStyle='#000000';ctx.fillRect(0,0,VIEW_W,VIEW_H);
 
-  // Non-playable upper-right triangle (dark)
+  // Non-playable
+  ctx.save();ctx.fillStyle='#1e1e1e';ctx.beginPath();
+  ctx.moveTo(wx(0),wy(0));ctx.lineTo(wx(WORLD_W),wy(0));ctx.lineTo(wx(WORLD_W),wy(WORLD_H));
+  ctx.lineTo(wx(WORLD_H-RIVER_HALF),wy(WORLD_H));ctx.lineTo(wx(0),wy(RIVER_HALF));
+  ctx.closePath();ctx.fill();ctx.restore();
+
+  // River: base color + one wave shape per frame, tiled
   ctx.save();
-  ctx.fillStyle='#1e1e1e';
   ctx.beginPath();
-  ctx.moveTo(wx(0),wy(0));
-  ctx.lineTo(wx(WORLD_W),wy(0));
-  ctx.lineTo(wx(WORLD_W),wy(WORLD_H));
-  ctx.lineTo(wx(WORLD_H-RIVER_HALF),wy(WORLD_H));
-  ctx.lineTo(wx(0),wy(RIVER_HALF));
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(wx(0),wy(RIVER_HALF));ctx.lineTo(wx(WORLD_W-RIVER_HALF),wy(WORLD_H));
+  ctx.lineTo(wx(WORLD_W),wy(WORLD_H-RIVER_HALF));ctx.lineTo(wx(RIVER_HALF),wy(0));
+  ctx.closePath();ctx.clip();
+  // Base color
+  ctx.fillStyle='#0B4151';ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // Wave overlay: sparse wave sprites at pre-generated positions
+  if(imgWater.complete&&imgWater.naturalWidth){
+    const wv=WATER_WAVES[waterFrame];
+    const srcW=imgWater.naturalWidth;
+    ctx.globalAlpha=0.85;
+    for(const wp of wavePositions){
+      const sx=wx(wp.x)-WAVE_DRAW_W/2, sy=wy(wp.y)-WAVE_DRAW_H/2;
+      if(sx>VIEW_W+50||sx<-WAVE_DRAW_W-50||sy>VIEW_H+50||sy<-WAVE_DRAW_H-50) continue;
+      ctx.drawImage(imgWater, 0, wv.sy, srcW, wv.sh, sx, sy, WAVE_DRAW_W, WAVE_DRAW_H);
+    }
+    ctx.globalAlpha=1;
+  }
   ctx.restore();
 
-  // River band (deep blue)
-  ctx.save();
-  ctx.fillStyle='#1a4a8a';
-  ctx.beginPath();
-  ctx.moveTo(wx(0),wy(RIVER_HALF));
-  ctx.lineTo(wx(WORLD_W-RIVER_HALF),wy(WORLD_H));
-  ctx.lineTo(wx(WORLD_W),wy(WORLD_H-RIVER_HALF));
-  ctx.lineTo(wx(RIVER_HALF),wy(0));
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-  // Obstacles
-  ctx.fillStyle='#111';
+  // Obstacles with barrier sprite images
   for(const o of OBSTACLES){
     const sx=wx(o.x),sy=wy(o.y);
-    if(sx<-300||sx>VIEW_W+300||sy<-300||sy>VIEW_H+300) continue;
-    ctx.fillRect(sx-o.w/2,sy-o.h/2,o.w,o.h);
+    if(sx<-200||sx>VIEW_W+200||sy<-200||sy>VIEW_H+200) continue;
+    const img=imgBarriers[o.imgIdx];
+    if(img.complete&&img.naturalWidth){
+      ctx.drawImage(img,sx-o.w/2,sy-o.h/2,o.w,o.h);
+    } else {
+      ctx.fillStyle='#111';ctx.fillRect(sx-o.w/2,sy-o.h/2,o.w,o.h);
+    }
   }
 
-  // Fountain
-  ctx.save();ctx.globalAlpha=0.8;
-  ctx.fillStyle='#f5e06a';
-  ctx.beginPath();ctx.arc(wx(FOUNTAIN_POS.x),wy(FOUNTAIN_POS.y),FOUNTAIN_RADIUS,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#c8a800';ctx.lineWidth=4;ctx.stroke();
+  // Tree border (left and bottom edges)
+  for(const t of treeBorder){
+    const sx=wx(t.x),sy=wy(t.y);
+    if(sx<-100||sx>VIEW_W+100||sy<-100||sy>VIEW_H+100) continue;
+    const img=imgTrees[t.imgIdx];
+    if(img.complete&&img.naturalWidth){
+      const aspect=img.naturalHeight/img.naturalWidth;
+      const tw=t.sz, th=t.sz*aspect;
+      ctx.drawImage(img,sx-tw/2,sy-th,tw,th);
+    }
+  }
+
+  // Fountain with magic circle
+  const fx=wx(FOUNTAIN_POS.x),fy=wy(FOUNTAIN_POS.y);
+  const fSize=FOUNTAIN_RADIUS*2;
+  ctx.save();ctx.globalAlpha=0.85;
+  if(imgFountain.complete&&imgFountain.naturalWidth){
+    ctx.drawImage(imgFountain,fx-fSize/2,fy-fSize/2,fSize,fSize);
+  } else {
+    ctx.fillStyle='#f5e06a';ctx.beginPath();ctx.arc(fx,fy,FOUNTAIN_RADIUS,0,Math.PI*2);ctx.fill();
+  }
   ctx.restore();
-  ctx.fillStyle='#7a5c00';ctx.font='bold 13px Courier New';ctx.textAlign='center';
-  ctx.fillText('泉水',wx(FOUNTAIN_POS.x),wy(FOUNTAIN_POS.y)+5);
 
-  // Blue buff zone
-  if(!blueBuff.alive){
-    ctx.save();ctx.globalAlpha=0.25;
-    ctx.fillStyle='#6ab0f5';
-    ctx.beginPath();ctx.arc(wx(BLUE_BUFF_POS.x),wy(BLUE_BUFF_POS.y),BUFF_RADIUS,0,Math.PI*2);ctx.fill();
-    ctx.restore();
-    ctx.fillStyle='#336';ctx.font='10px Courier New';ctx.textAlign='center';
-    ctx.fillText('蓝buff('+Math.ceil(blueBuff.respawnTimer/60)+'s)',wx(BLUE_BUFF_POS.x),wy(BLUE_BUFF_POS.y)+5);
+  // Buff zones (when dead)
+  for(let i=0;i<blueBuffs.length;i++){
+    if(!blueBuffs[i].alive){
+      const pos=BLUE_BUFF_POS[i];
+      ctx.save();ctx.globalAlpha=0.25;ctx.fillStyle='#6ab0f5';
+      ctx.beginPath();ctx.arc(wx(pos.x),wy(pos.y),BUFF_RADIUS,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.fillStyle='#aac';ctx.font='10px Courier New';ctx.textAlign='center';
+      ctx.fillText('蓝buff('+Math.ceil(blueBuffs[i].respawnTimer/60)+'s)',wx(pos.x),wy(pos.y)+5);
+    }
   }
-
-  // Red buff zone
-  if(!redBuff.alive){
-    ctx.save();ctx.globalAlpha=0.25;
-    ctx.fillStyle='#f5a0a0';
-    ctx.beginPath();ctx.arc(wx(RED_BUFF_POS.x),wy(RED_BUFF_POS.y),BUFF_RADIUS,0,Math.PI*2);ctx.fill();
-    ctx.restore();
-    ctx.fillStyle='#633';ctx.font='10px Courier New';ctx.textAlign='center';
-    ctx.fillText('红buff('+Math.ceil(redBuff.respawnTimer/60)+'s)',wx(RED_BUFF_POS.x),wy(RED_BUFF_POS.y)+5);
+  for(let i=0;i<redBuffs.length;i++){
+    if(!redBuffs[i].alive){
+      const pos=RED_BUFF_POS[i];
+      ctx.save();ctx.globalAlpha=0.25;ctx.fillStyle='#f5a0a0';
+      ctx.beginPath();ctx.arc(wx(pos.x),wy(pos.y),BUFF_RADIUS,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.fillStyle='#caa';ctx.font='10px Courier New';ctx.textAlign='center';
+      ctx.fillText('红buff('+Math.ceil(redBuffs[i].respawnTimer/60)+'s)',wx(pos.x),wy(pos.y)+5);
+    }
+  }
+  for(let i=0;i<greenBuffs.length;i++){
+    if(!greenBuffs[i].alive){
+      const pos=GREEN_BUFF_POS[i];
+      ctx.save();ctx.globalAlpha=0.25;ctx.fillStyle='#a0f5a0';
+      ctx.beginPath();ctx.arc(wx(pos.x),wy(pos.y),BUFF_RADIUS,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.fillStyle='#aca';ctx.font='10px Courier New';ctx.textAlign='center';
+      ctx.fillText('绿buff('+Math.ceil(greenBuffs[i].respawnTimer/60)+'s)',wx(pos.x),wy(pos.y)+5);
+    }
   }
 
   // Boss spawn zone
-  ctx.save();
-  ctx.fillStyle='rgba(180,60,160,0.25)';
-  ctx.beginPath();
-  ctx.arc(wx(BOSS_SPAWN.x),wy(BOSS_SPAWN.y),BOSS_SPAWN_RADIUS,Math.PI*0.25,Math.PI*1.25);
-  ctx.closePath();ctx.fill();
-  ctx.strokeStyle='#c040a0';ctx.lineWidth=2;ctx.stroke();
-  ctx.restore();
+  ctx.save();ctx.fillStyle='rgba(180,60,160,0.2)';
+  ctx.beginPath();ctx.arc(wx(BOSS_SPAWN.x),wy(BOSS_SPAWN.y),BOSS_SPAWN_RADIUS,Math.PI*0.25,Math.PI*1.25);
+  ctx.closePath();ctx.fill();ctx.strokeStyle='#c040a0';ctx.lineWidth=2;ctx.stroke();ctx.restore();
   if(!boss.alive){
-    ctx.fillStyle='#804060';ctx.font='10px Courier New';ctx.textAlign='center';
+    ctx.fillStyle='#b070a0';ctx.font='10px Courier New';ctx.textAlign='center';
     ctx.fillText('boss('+Math.ceil(boss.respawnTimer/60)+'s)',wx(BOSS_SPAWN.x),wy(BOSS_SPAWN.y));
   }
 
   // World boundary
-  ctx.strokeStyle='#cc0000';ctx.lineWidth=3;
-  ctx.strokeRect(wx(0),wy(0),WORLD_W,WORLD_H);
+  ctx.strokeStyle='#cc0000';ctx.lineWidth=3;ctx.strokeRect(wx(0),wy(0),WORLD_W,WORLD_H);
 }
 
 function drawHealthBar(x,y,hp,maxHp,w,color){
-  const bx=wx(x)-w/2, by=wy(y)-28;
-  ctx.fillStyle='#333';ctx.fillRect(bx,by,w,5);
-  ctx.fillStyle=color;ctx.fillRect(bx,by,w*(hp/maxHp),5);
+  const bx=wx(x)-w/2,by=wy(y)-32;
+  ctx.fillStyle='#222';ctx.fillRect(bx-1,by-1,w+2,7);
+  ctx.fillStyle='#444';ctx.fillRect(bx,by,w,5);
+  ctx.fillStyle=color;ctx.fillRect(bx,by,w*(Math.max(0,hp)/maxHp),5);
 }
 
 function drawEntities(){
-  // Attack range circle (subtle)
-  ctx.save();ctx.globalAlpha=0.08;
-  ctx.strokeStyle='#88aaff';ctx.lineWidth=1;
-  ctx.beginPath();ctx.arc(wx(player.x),wy(player.y),ATTACK_RANGE,0,Math.PI*2);ctx.stroke();
-  ctx.restore();
+  // Attack range
+  ctx.save();ctx.globalAlpha=0.06;ctx.strokeStyle='#88aaff';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(wx(player.x),wy(player.y),getAttackRange(),0,Math.PI*2);ctx.stroke();ctx.restore();
 
   // Ult landing indicator
   if(ult.active){
-    ctx.save();ctx.globalAlpha=0.3;
-    ctx.strokeStyle='#cc88ff';ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(wx(ult.tx),wy(ult.ty),ult.landRadius,0,Math.PI*2);ctx.stroke();
+    ctx.save();ctx.globalAlpha=0.3;ctx.strokeStyle='#cc88ff';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(wx(ult.tx),wy(ult.ty),ult.landRadius,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+
+  // Death effects (animated sprite)
+  for(const de of deathEffects){
+    const sx=wx(de.x),sy=wy(de.y);
+    if(sx<-100||sx>VIEW_W+100||sy<-100||sy>VIEW_H+100) continue;
+    const alpha=1-(de.frame/de.maxFrames)*0.5;
+    ctx.save();ctx.globalAlpha=alpha;
+    // Death sprite: 10 cols x 4 rows, 64x64
+    const row=Math.min(de.dir,3);
+    drawFrame(imgDeath,64,64,Math.min(de.frame,9),row,sx,sy,de.size,de.size);
     ctx.restore();
   }
 
-  // Minions
+  // Altars
+  for(const a of altars){
+    const asx=wx(a.x),asy=wy(a.y);
+    if(asx<-100||asx>VIEW_W+100||asy<-100||asy>VIEW_H+100) continue;
+    const imgs=a.type==='lightning'?imgLightningAltar:imgFireAltar;
+    const aImg=imgs[a.imgIdx];
+    ctx.save();
+    if(!a.active) ctx.globalAlpha=0.4;
+    if(aImg.complete&&aImg.naturalWidth){ctx.drawImage(aImg,asx-48,asy-48,96,96);}
+    else{ctx.fillStyle=a.type==='lightning'?'#66aaff':'#ff6633';ctx.beginPath();ctx.arc(asx,asy,30,0,Math.PI*2);ctx.fill();}
+    ctx.restore();
+    // Attack effect animation
+    if(a.effectActive){
+      const esx=wx(a.effectX),esy=wy(a.effectY);
+      const eImgs=a.type==='lightning'?imgLightningAttack:imgFireAttack;
+      const eImg=eImgs[Math.min(a.effectFrame,eImgs.length-1)];
+      if(eImg&&eImg.complete&&eImg.naturalWidth){
+        const esz=a.type==='lightning'?80:200;
+        ctx.save();ctx.globalAlpha=0.9;
+        ctx.drawImage(eImg,esx-esz/2,esy-esz,esz,esz*2);
+        ctx.restore();
+      }
+    }
+  }
+
+  // Minions (frame animated, two types)
   for(const m of minions){
     const sx=wx(m.x),sy=wy(m.y);
     if(sx<-50||sx>VIEW_W+50||sy<-50||sy>VIEW_H+50) continue;
+    // Shadow
+    if(imgShadow.complete&&imgShadow.naturalWidth){
+      ctx.save();ctx.globalAlpha=0.5;
+      ctx.drawImage(imgShadow,sx-18,sy+10,36,14);
+      ctx.restore();
+    }
     ctx.save();
     if(m.burnTimer>0){ctx.shadowColor='#ff4400';ctx.shadowBlur=8;}
-    ctx.fillStyle='#cc3333';
-    ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#ff6666';ctx.lineWidth=1.5;ctx.stroke();
+    // Plant sprites: 6 cols x 4 rows, 64x64
+    const mImg=m.type===0?imgPlant3:imgPlant1;
+    const row=Math.min(m.dir,3);
+    const col=m.animFrame%6;
+    if(!drawFrame(mImg,64,64,col,row,sx,sy,72,72)){
+      ctx.fillStyle=m.type===0?'#cc3333':'#33cc33';
+      ctx.beginPath();ctx.arc(sx,sy,16,0,Math.PI*2);ctx.fill();
+    }
     ctx.restore();
-    drawHealthBar(m.x,m.y,m.hp,m.maxHp,24,'#e03030');
+    drawHealthBar(m.x,m.y,m.hp,m.maxHp,48,m.type===0?'#e03030':'#30e030');
   }
 
-  // Red buff
-  if(redBuff.alive){
-    const sx=wx(redBuff.x),sy=wy(redBuff.y);
-    const p=0.65+0.35*Math.sin(tick*0.07);
-    ctx.save();ctx.globalAlpha=p;
-    ctx.fillStyle='#dd2200';
-    ctx.beginPath();ctx.arc(sx,sy,30,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#ff6633';ctx.lineWidth=2;ctx.stroke();
+  // Red buffs (static image)
+  for(const rb of redBuffs){
+    if(!rb.alive) continue;
+    const sx=wx(rb.x),sy=wy(rb.y);
+    ctx.save();
+    const p=0.7+0.3*Math.sin(tick*0.07);ctx.globalAlpha=p;
+    if(imgRedBuff.complete&&imgRedBuff.naturalWidth){
+      ctx.drawImage(imgRedBuff,sx-30,sy-30,60,60);
+    } else {
+      ctx.fillStyle='#dd2200';ctx.beginPath();ctx.arc(sx,sy,30,0,Math.PI*2);ctx.fill();
+    }
     ctx.restore();
-    ctx.fillStyle='#880000';ctx.font='bold 11px Courier New';ctx.textAlign='center';
-    ctx.fillText('红buff',sx,sy+5);
-    drawHealthBar(redBuff.x,redBuff.y,redBuff.hp,redBuff.maxHp,40,'#e03030');
+    drawHealthBar(rb.x,rb.y,rb.hp,rb.maxHp,40,'#e03030');
   }
 
-  // Blue buff
-  if(blueBuff.alive){
-    const sx=wx(blueBuff.x),sy=wy(blueBuff.y);
-    const p=0.65+0.35*Math.sin(tick*0.07+Math.PI);
-    ctx.save();ctx.globalAlpha=p;
-    ctx.fillStyle='#0033cc';
-    ctx.beginPath();ctx.arc(sx,sy,30,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#3399ff';ctx.lineWidth=2;ctx.stroke();
+  // Blue buffs (static image)
+  for(const bb of blueBuffs){
+    if(!bb.alive) continue;
+    const sx=wx(bb.x),sy=wy(bb.y);
+    ctx.save();
+    const p=0.7+0.3*Math.sin(tick*0.07+Math.PI);ctx.globalAlpha=p;
+    if(imgBlueBuff.complete&&imgBlueBuff.naturalWidth){
+      ctx.drawImage(imgBlueBuff,sx-30,sy-30,60,60);
+    } else {
+      ctx.fillStyle='#0033cc';ctx.beginPath();ctx.arc(sx,sy,30,0,Math.PI*2);ctx.fill();
+    }
     ctx.restore();
-    ctx.fillStyle='#003388';ctx.font='bold 11px Courier New';ctx.textAlign='center';
-    ctx.fillText('蓝buff',sx,sy+5);
-    drawHealthBar(blueBuff.x,blueBuff.y,blueBuff.hp,blueBuff.maxHp,40,'#3399ff');
+    drawHealthBar(bb.x,bb.y,bb.hp,bb.maxHp,40,'#3399ff');
   }
 
-  // Boss
+  // Green buffs (static image, uses blue.webp)
+  for(const gb of greenBuffs){
+    if(!gb.alive) continue;
+    const sx=wx(gb.x),sy=wy(gb.y);
+    ctx.save();
+    const p=0.7+0.3*Math.sin(tick*0.07+Math.PI*0.5);ctx.globalAlpha=p;
+    if(imgGreenBuff.complete&&imgGreenBuff.naturalWidth){
+      ctx.drawImage(imgGreenBuff,sx-30,sy-30,60,60);
+    } else {
+      ctx.fillStyle='#00cc33';ctx.beginPath();ctx.arc(sx,sy,30,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+    drawHealthBar(gb.x,gb.y,gb.hp,gb.maxHp,40,'#33ff66');
+  }
+
+  // Boss (animated sprite, 256x256 sheet)
+  // Boss sheets: content varies, use 2x2 grid of 128x128 as 4-frame idle animation
   if(boss.alive){
     const sx=wx(boss.x),sy=wy(boss.y);
     ctx.save();
     if(boss.burnTimer>0){ctx.shadowColor='#ff4400';ctx.shadowBlur=12;}
-    const g=ctx.createRadialGradient(sx,sy,10,sx,sy,45);
-    g.addColorStop(0,'rgba(120,0,200,0.7)');g.addColorStop(1,'rgba(120,0,200,0)');
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(sx,sy,45,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#7700cc';ctx.beginPath();ctx.arc(sx,sy,28,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#cc44ff';ctx.lineWidth=3;ctx.stroke();
-    ctx.fillStyle='#ff0';
-    ctx.beginPath();ctx.arc(sx-9,sy-7,4,0,Math.PI*2);ctx.arc(sx+9,sy-7,4,0,Math.PI*2);ctx.fill();
+    const bImg=imgBosses[bossType.imgIdx];
+    if(bImg.complete&&bImg.naturalWidth){
+      // Full single image, draw entire 256x256 scaled to display size
+      ctx.drawImage(bImg,0,0,256,256,sx-135,sy-135,270,270);
+    } else {
+      ctx.fillStyle='#7700cc';ctx.beginPath();ctx.arc(sx,sy,84,0,Math.PI*2);ctx.fill();
+    }
     ctx.restore();
-    drawHealthBar(boss.x,boss.y,boss.hp,boss.maxHp,60,'#cc44ff');
+    drawHealthBar(boss.x,boss.y,boss.hp,boss.maxHp,160,'#cc44ff');
+    ctx.fillStyle='#fff';ctx.font='bold 10px Courier New';ctx.textAlign='center';
+    ctx.fillText(Math.ceil(Math.max(0,boss.hp))+'/'+boss.maxHp,wx(boss.x),wy(boss.y)-36);
   }
 
-  // Bullets
-  ctx.fillStyle='#ffe066';
+  // Click marker
+  if(clickMarker.active){
+    const cmx=wx(clickMarker.x),cmy=wy(clickMarker.y);
+    const alpha=clickMarker.timer/clickMarker.maxTimer;
+    const scale=1.2-0.4*alpha; // shrinks as it fades
+    const sz=32*scale;
+    ctx.save();ctx.globalAlpha=alpha*0.7;
+    if(imgStar.complete&&imgStar.naturalWidth){
+      ctx.drawImage(imgStar,cmx-sz/2,cmy-sz/2,sz,sz);
+    } else {
+      ctx.strokeStyle='#aaf';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(cmx,cmy,sz/2,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Bullets (fire spell frame animation)
   for(const b of bullets){
-    ctx.beginPath();ctx.arc(wx(b.x),wy(b.y),4,0,Math.PI*2);ctx.fill();
+    const bsx=wx(b.x),bsy=wy(b.y);
+    if(bsx<-60||bsx>VIEW_W+60||bsy<-60||bsy>VIEW_H+60) continue;
+    // Angle: tracking bullets point toward target, non-tracking point in travel direction
+    let angle;
+    if(b.isTracking){
+      angle=Math.atan2(b.ty-b.y, b.tx-b.x)+Math.PI;
+    } else if(b.lockedDx!==undefined){
+      angle=Math.atan2(b.lockedDy, b.lockedDx)+Math.PI;
+    } else {
+      angle=Math.atan2(b.ty-b.sy, b.tx-b.sx)+Math.PI;
+    }
+    const fImg=imgFireFrames[b.animFrame%FIRE_FRAME_COUNT];
+    ctx.save();
+    ctx.translate(bsx,bsy);
+    ctx.rotate(angle);
+    if(fImg.complete&&fImg.naturalWidth){
+      // Draw fire frame scaled down, 640x360 -> 48x27
+      ctx.drawImage(fImg,-12,-7,24,14);
+    } else {
+      ctx.fillStyle='#ffe066';
+      ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
   }
 
-  // Ult arc (player during jump)
+  // Player (animated sprite only during ult, static direction otherwise)
   if(ult.active){
     const t=ult.progress;
-    const px=ult.sx+(ult.tx-ult.sx)*t;
-    const py=ult.sy+(ult.ty-ult.sy)*t;
-    const arc=Math.sin(t*Math.PI)*60; // height
+    const px=ult.sx+(ult.tx-ult.sx)*t,py=ult.sy+(ult.ty-ult.sy)*t;
+    const arc=Math.sin(t*Math.PI)*60;
     const sx2=wx(px),sy2=wy(py)-arc;
     ctx.save();ctx.shadowColor='#cc88ff';ctx.shadowBlur=20;
-    ctx.fillStyle='#888';ctx.beginPath();ctx.arc(sx2,sy2,20,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#cc88ff';ctx.lineWidth=3;ctx.stroke();
+    const pSize=100+arc*0.5;
+    // Ult: loop through all 10 attack frames continuously
+    const ultFrame=Math.floor(tick/4)%10;
+    if(!drawFrame(imgPlayer,64,64,ultFrame,player.dir,sx2,sy2,pSize,pSize)){
+      ctx.fillStyle='#888';ctx.beginPath();ctx.arc(sx2,sy2,40,0,Math.PI*2);ctx.fill();
+    }
     ctx.restore();
   } else {
-    // Player
     const sx=wx(player.x),sy=wy(player.y);
+    // Shadow
+    if(imgShadow.complete&&imgShadow.naturalWidth){
+      ctx.save();ctx.globalAlpha=0.5;
+      ctx.drawImage(imgShadow,sx-26,sy+1,52,20);
+      ctx.restore();
+    }
     ctx.save();
-    if(player.invincibleTimer>0&&Math.floor(tick/4)%2===0){ctx.globalAlpha=0.4;}
+    if(player.invincibleTimer>0&&Math.floor(tick/4)%2===0) ctx.globalAlpha=0.4;
     if(player.hasRedBuff){ctx.shadowColor='#ff4400';ctx.shadowBlur=10;}
     if(player.hasBlueBuff){ctx.shadowColor='#3399ff';ctx.shadowBlur=10;}
-    // Shadow
-    ctx.fillStyle='rgba(0,0,0,0.2)';
-    ctx.beginPath();ctx.ellipse(sx,sy+18,18,7,0,0,Math.PI*2);ctx.fill();
-    // Body
-    ctx.fillStyle='#888';ctx.beginPath();ctx.arc(sx,sy,20,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#444';ctx.lineWidth=3;ctx.stroke();
-    // Cracks
-    ctx.strokeStyle='#666';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(sx-8,sy-5);ctx.lineTo(sx-2,sy+8);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(sx+4,sy-10);ctx.lineTo(sx+10,sy+2);ctx.stroke();
-    // Eyes
-    ctx.fillStyle='#222';
-    ctx.beginPath();ctx.arc(sx-7,sy-5,3,0,Math.PI*2);ctx.arc(sx+7,sy-5,3,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#88aaff';
-    ctx.beginPath();ctx.arc(sx-7,sy-5,1.5,0,Math.PI*2);ctx.arc(sx+7,sy-5,1.5,0,Math.PI*2);ctx.fill();
+    // Idle/walk or cast animation
+    if(castAnim.active){
+      // Play attack animation during cast
+      const castFrame=Math.floor(tick/4)%10;
+      if(!drawFrame(imgPlayer,64,64,castFrame,player.dir,sx,sy,100,100)){
+        ctx.fillStyle='#888';ctx.beginPath();ctx.arc(sx,sy,40,0,Math.PI*2);ctx.fill();
+      }
+    } else {
+      // Normal: walk sprite, cycle all 8 frames
+      const walkFrame=Math.floor(tick/8)%8;
+      if(!drawFrame(imgPlayerWalk,64,64,walkFrame,player.dir,sx,sy,100,100)){
+        ctx.fillStyle='#888';ctx.beginPath();ctx.arc(sx,sy,40,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='#444';ctx.lineWidth=3;ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 }
@@ -728,104 +1435,270 @@ function drawEntities(){
 function drawHUD(){
   ctx.save();
   // HP
-  ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.beginPath();ctx.roundRect(8,8,130,38,6);ctx.fill();
-  ctx.fillStyle='#aaa';ctx.font='bold 10px Courier New';ctx.textAlign='left';
-  ctx.fillText('HP',14,23);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.roundRect(8,8,130,38,6);ctx.fill();
+  ctx.fillStyle='#aaa';ctx.font='bold 10px Courier New';ctx.textAlign='left';ctx.fillText('HP',14,23);
   for(let i=0;i<player.maxHp;i++){
-    ctx.fillStyle=i<player.hp?'#e03030':'#444';
-    ctx.font='18px serif';ctx.fillText('♥',36+i*30,30);
+    ctx.fillStyle=i<player.hp?'#e03030':'#444';ctx.font='18px serif';ctx.fillText('♥',36+i*30,30);
   }
   // Gold
-  ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.beginPath();ctx.roundRect(VIEW_W-95,8,87,38,6);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.roundRect(VIEW_W-95,8,87,38,6);ctx.fill();
   ctx.fillStyle='#ffd700';ctx.font='bold 13px Courier New';ctx.textAlign='right';
   ctx.fillText('⬡ '+player.gold,VIEW_W-12,32);
-
-  // Buff icons
+  // Wave
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(VIEW_W/2-70,8,140,22,4);ctx.fill();
+  ctx.fillStyle='#ccc';ctx.font='bold 11px Courier New';ctx.textAlign='center';
+  const nextWaveSec=Math.ceil(waveTimer/60);
+  if(waveSpawnQueue>0){
+    ctx.fillText('第 '+waveIndex+' 波 进行中',VIEW_W/2,24);
+  } else {
+    ctx.fillText('第 '+(waveIndex+1)+' 波 '+nextWaveSec+'s',VIEW_W/2,24);
+  }
+  // Buffs
   let biy=52;
   if(player.hasRedBuff){
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(8,biy,90,20,4);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(8,biy,100,20,4);ctx.fill();
     ctx.fillStyle='#ff6633';ctx.font='bold 10px Courier New';ctx.textAlign='left';
-    ctx.fillText('🔥灼伤 '+Math.ceil(player.redBuffTimer/60)+'s',12,biy+14);
-    biy+=24;
+    ctx.fillText('🔥灼伤 '+Math.ceil(player.redBuffTimer/60)+'s',12,biy+14);biy+=24;
   }
   if(player.hasBlueBuff){
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(8,biy,90,20,4);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(8,biy,100,20,4);ctx.fill();
     ctx.fillStyle='#66aaff';ctx.font='bold 10px Courier New';ctx.textAlign='left';
-    ctx.fillText('💧大招 '+Math.ceil(player.blueBuffTimer/60)+'s',12,biy+14);
+    ctx.fillText('💧冷却3s '+Math.ceil(player.blueBuffTimer/60)+'s',12,biy+14);
   }
-
-  // R cooldown bar
+  // R cooldown
   const bx=VIEW_W/2,by=VIEW_H-22;
-  ctx.fillStyle='rgba(0,0,0,0.65)';
-  ctx.beginPath();ctx.roundRect(bx-60,by-26,120,34,6);ctx.fill();
-  ctx.fillStyle='#222';ctx.fillRect(bx-44,by-10,88,10);
+  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.beginPath();ctx.roundRect(bx-70,by-26,140,34,6);ctx.fill();
+  ctx.fillStyle='#222';ctx.fillRect(bx-54,by-10,108,10);
   ctx.fillStyle=rCooldown===0?'#aa44ff':'#553388';
-  ctx.fillRect(bx-44,by-10,88*(1-rCooldown/rMaxCooldown),10);
-  ctx.strokeStyle='#7733cc';ctx.lineWidth=1;ctx.strokeRect(bx-44,by-10,88,10);
-  ctx.fillStyle=rCooldown===0?'#cc88ff':'#888';
-  ctx.font='bold 11px Courier New';ctx.textAlign='center';
-  ctx.fillText(rCooldown===0?'[R] 势不可挡 就绪':'[R] '+Math.ceil(rCooldown/60)+'s',bx,by-14);
-
+  ctx.fillRect(bx-54,by-10,108*(1-rCooldown/rMaxCooldown),10);
+  ctx.strokeStyle='#7733cc';ctx.lineWidth=1;ctx.strokeRect(bx-54,by-10,108,10);
+  ctx.fillStyle=rCooldown===0?'#cc88ff':'#888';ctx.font='bold 11px Courier New';ctx.textAlign='center';
+  const ultLabel=heroChoice>=0?HEROES[heroChoice].ultName:'势不可挡';
+  ctx.fillText(rCooldown===0?'[R] '+ultLabel+' 就绪':'[R] '+Math.ceil(rCooldown/60)+'s',bx,by-14);
   // Minimap
-  const mm=90,mx=VIEW_W-mm-8,my=VIEW_H-mm-8;
-  ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(mx,my,mm,mm);
-  ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(mx,my,mm,mm);
-  // River
-  ctx.fillStyle='#1a4a8a';
-  ctx.beginPath();
-  ctx.moveTo(mx,my+mm*(RIVER_HALF/WORLD_H));
-  ctx.lineTo(mx+mm*(WORLD_W-RIVER_HALF)/WORLD_W,my+mm);
-  ctx.lineTo(mx+mm,my+mm*(WORLD_H-RIVER_HALF)/WORLD_H);
-  ctx.lineTo(mx+mm*(RIVER_HALF/WORLD_W),my);
-  ctx.closePath();ctx.fill();
-  // Minion dots
+  const mmW=110,mmH=110,mx=VIEW_W-mmW-8,my=VIEW_H-mmH-8;
+  ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(mx,my,mmW,mmH);
+  ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(mx,my,mmW,mmH);
+  ctx.fillStyle='#1a4a8a';ctx.beginPath();
+  ctx.moveTo(mx,my+mmH*(RIVER_HALF/WORLD_H));
+  ctx.lineTo(mx+mmW*(WORLD_W-RIVER_HALF)/WORLD_W,my+mmH);
+  ctx.lineTo(mx+mmW,my+mmH*(WORLD_H-RIVER_HALF)/WORLD_H);
+  ctx.lineTo(mx+mmW*(RIVER_HALF/WORLD_W),my);ctx.closePath();ctx.fill();
   ctx.fillStyle='#cc3333';
-  for(const m of minions){
-    ctx.beginPath();ctx.arc(mx+(m.x/WORLD_W)*mm,my+(m.y/WORLD_H)*mm,1.5,0,Math.PI*2);ctx.fill();
-  }
-  // Boss dot
-  if(boss.alive){
-    ctx.fillStyle='#cc44ff';
-    ctx.beginPath();ctx.arc(mx+(boss.x/WORLD_W)*mm,my+(boss.y/WORLD_H)*mm,3,0,Math.PI*2);ctx.fill();
-  }
-  // Player dot
-  ctx.fillStyle='#88aaff';
-  ctx.beginPath();ctx.arc(mx+(player.x/WORLD_W)*mm,my+(player.y/WORLD_H)*mm,3,0,Math.PI*2);ctx.fill();
-  // Viewport
+  for(const m of minions){ctx.beginPath();ctx.arc(mx+(m.x/WORLD_W)*mmW,my+(m.y/WORLD_H)*mmH,1.5,0,Math.PI*2);ctx.fill();}
+  if(boss.alive){ctx.fillStyle='#cc44ff';ctx.beginPath();ctx.arc(mx+(boss.x/WORLD_W)*mmW,my+(boss.y/WORLD_H)*mmH,3,0,Math.PI*2);ctx.fill();}
+  ctx.fillStyle='#88aaff';ctx.beginPath();ctx.arc(mx+(player.x/WORLD_W)*mmW,my+(player.y/WORLD_H)*mmH,3,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=0.8;
-  ctx.strokeRect(mx+(camX/WORLD_W)*mm,my+(camY/WORLD_H)*mm,(VIEW_W/WORLD_W)*mm,(VIEW_H/WORLD_H)*mm);
+  ctx.strokeRect(mx+(camX/WORLD_W)*mmW,my+(camY/WORLD_H)*mmH,(VIEW_W/WORLD_W)*mmW,(VIEW_H/WORLD_H)*mmH);
 
+  // Buff effect tooltip when attacking a buff
+  if(currentTargetType==='redbuff'||currentTargetType==='bluebuff'||currentTargetType==='greenbuff'){
+    let tipText='',tipColor='';
+    if(currentTargetType==='redbuff'){tipText='🔥 击败后：普攻附带灼伤，每0.2秒造成0.5伤害并减速30%，持续60秒';tipColor='#ff6633';}
+    else if(currentTargetType==='bluebuff'){tipText='💧 击败后：大招冷却缩短为3秒，持续60秒';tipColor='#66aaff';}
+    else if(currentTargetType==='greenbuff'){tipText='💚 击败后：立即回满血量';tipColor='#66ff66';}
+    const tw=ctx.measureText(tipText).width;
+    const tpx=VIEW_W/2,tpy=VIEW_H-58;
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.beginPath();ctx.roundRect(tpx-tw/2-10,tpy-14,tw+20,22,5);ctx.fill();
+    ctx.fillStyle=tipColor;ctx.font='bold 11px Courier New';ctx.textAlign='center';
+    ctx.fillText(tipText,tpx,tpy);
+  }
+
+  // Fountain hint
+  if(inFountain(player.x,player.y)&&!shopOpen){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.roundRect(VIEW_W/2-80,VIEW_H/2-15,160,30,6);ctx.fill();
+    ctx.fillStyle='#e0c060';ctx.font='bold 12px Courier New';ctx.textAlign='center';
+    ctx.fillText('按 P 打开供奉面板',VIEW_W/2,VIEW_H/2+4);
+  }
+
+  ctx.restore();
+
+  // Shop panel overlay
+  if(shopOpen) drawShop();
+}
+
+function drawShop(){
+  ctx.save();
+  const px=VIEW_W/2-200,py=30,pw=400,ph=VIEW_H-60;
+  ctx.fillStyle='rgba(10,10,20,0.92)';ctx.beginPath();ctx.roundRect(px,py,pw,ph,10);ctx.fill();
+  ctx.strokeStyle='#e0c060';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#e0c060';ctx.font='bold 18px Courier New';ctx.textAlign='center';
+  ctx.fillText('供奉面板',VIEW_W/2,py+28);
+  ctx.fillStyle='#ffd700';ctx.font='12px Courier New';
+  ctx.fillText('金币: '+player.gold,VIEW_W/2,py+48);
+
+  for(let i=0;i<upgradeKeys.length;i++){
+    const key=upgradeKeys[i];
+    const u=upgrades[key];
+    const iy=py+68+i*52;
+    const price=getPrice(key);
+    const canBuy=player.gold>=price&&u.count<u.max;
+
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    ctx.beginPath();ctx.roundRect(px+12,iy-4,pw-24,44,6);ctx.fill();
+
+    ctx.fillStyle='#fff';ctx.font='bold 13px Courier New';ctx.textAlign='left';
+    ctx.fillText(u.name,px+20,iy+14);
+    ctx.fillStyle='#aaa';ctx.font='11px Courier New';
+    ctx.fillText(u.getDesc(),px+20,iy+30);
+
+    // Buy button
+    const btnX=px+pw-80,btnY=iy+2,btnW=60,btnH=24;
+    ctx.fillStyle=canBuy?'#e0c060':'#555';
+    ctx.beginPath();ctx.roundRect(btnX,btnY,btnW,btnH,4);ctx.fill();
+    ctx.fillStyle=canBuy?'#1a1a2e':'#888';ctx.font='bold 11px Courier New';ctx.textAlign='center';
+    if(u.count>=u.max) ctx.fillText('已满',btnX+btnW/2,btnY+16);
+    else ctx.fillText(price+'G',btnX+btnW/2,btnY+16);
+  }
+
+  ctx.fillStyle='#888';ctx.font='10px Courier New';ctx.textAlign='center';
+  ctx.fillText('按 P 或 ESC 关闭',VIEW_W/2,py+ph-12);
   ctx.restore();
 }
 
 function drawGameOver(){
-  ctx.save();
-  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.save();ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,VIEW_W,VIEW_H);
   ctx.fillStyle='#e03030';ctx.font='bold 48px Courier New';ctx.textAlign='center';
   ctx.fillText('游戏结束',VIEW_W/2,VIEW_H/2-30);
   ctx.fillStyle='#ffd700';ctx.font='bold 20px Courier New';
-  ctx.fillText('金币: '+player.gold,VIEW_W/2,VIEW_H/2+20);
+  ctx.fillText('金币: '+player.gold+'  波次: '+waveIndex,VIEW_W/2,VIEW_H/2+20);
   ctx.fillStyle='#aaa';ctx.font='14px Courier New';
   ctx.fillText('按 ESC 重新开始',VIEW_W/2,VIEW_H/2+55);
   ctx.restore();
 }
 
+function drawSelectScreen(){
+  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.fillStyle='#e0c060';ctx.font='bold 28px Courier New';ctx.textAlign='center';
+  ctx.fillText('选择神力',VIEW_W/2,36);
+
+  // Hero icons on left
+  for(let i=0;i<5;i++){
+    const iy=55+i*78;
+    const isSelected=i===selectedHero;
+    const sz=isSelected?72:60;
+    const ix=isSelected?24:30;
+    // Background highlight
+    if(isSelected){
+      ctx.fillStyle='rgba(255,200,60,0.2)';
+      ctx.beginPath();ctx.roundRect(ix-6,iy-6,sz+12,sz+12,8);ctx.fill();
+      ctx.strokeStyle='#e0c060';ctx.lineWidth=2;ctx.stroke();
+    }
+    const img=imgHeroes[i];
+    if(img.complete&&img.naturalWidth){
+      ctx.drawImage(img,ix,iy,sz,sz);
+    } else {
+      ctx.fillStyle='#333';ctx.fillRect(ix,iy,sz,sz);
+    }
+  }
+
+  // Detail panel on right
+  const h=HEROES[selectedHero];
+  const px=120,py=60;
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  ctx.beginPath();ctx.roundRect(px,py,VIEW_W-px-20,VIEW_H-py-60,10);ctx.fill();
+
+  ctx.fillStyle='#fff';ctx.font='bold 20px Courier New';ctx.textAlign='left';
+  ctx.fillText(h.name,px+16,py+30);
+
+  ctx.fillStyle='#e03030';ctx.font='16px Courier New';
+  ctx.fillText('♥ 血量: '+h.hp,px+16,py+58);
+
+  ctx.fillStyle='#cc88ff';ctx.font='bold 15px Courier New';
+  ctx.fillText('大招: '+h.ultName,px+16,py+88);
+  ctx.fillStyle='#bbb';ctx.font='13px Courier New';
+  // Word wrap ult desc
+  wrapText(ctx,h.ultDesc,px+30,py+108,VIEW_W-px-60,18);
+
+  ctx.fillStyle='#66ccff';ctx.font='bold 15px Courier New';
+  ctx.fillText('被动: '+h.passiveName,px+16,py+160);
+  ctx.fillStyle='#bbb';ctx.font='13px Courier New';
+  wrapText(ctx,h.passiveDesc,px+30,py+180,VIEW_W-px-60,18);
+
+  // Portrait large
+  const pImg=imgHeroes[selectedHero];
+  if(pImg.complete&&pImg.naturalWidth){
+    ctx.save();ctx.globalAlpha=0.3;
+    ctx.drawImage(pImg,VIEW_W-200,py+20,160,160);
+    ctx.restore();
+  }
+
+  // Confirm button
+  ctx.fillStyle='#e0c060';
+  ctx.beginPath();ctx.roundRect(VIEW_W/2-60,VIEW_H-48,120,32,6);ctx.fill();
+  ctx.fillStyle='#1a1a2e';ctx.font='bold 14px Courier New';ctx.textAlign='center';
+  ctx.fillText('确认选择',VIEW_W/2,VIEW_H-27);
+}
+
+function wrapText(c,text,x,y,maxW,lineH){
+  let line='';
+  for(let i=0;i<text.length;i++){
+    const test=line+text[i];
+    if(c.measureText(test).width>maxW&&line.length>0){
+      c.fillText(line,x,y);y+=lineH;line=text[i];
+    } else line=test;
+  }
+  if(line) c.fillText(line,x,y);
+}
+
+// Fog of war offscreen canvas (reused)
+const fogCanvas=document.createElement('canvas');
+fogCanvas.width=VIEW_W;fogCanvas.height=VIEW_H;
+const fctx=fogCanvas.getContext('2d');
+
 function draw(){
+  if(gamePhase==='select'){drawSelectScreen();return;}
   ctx.clearRect(0,0,VIEW_W,VIEW_H);
   drawMap();
   drawEntities();
+
+  // Blood mist visual
+  if(bloodMistActive){
+    ctx.save();ctx.globalAlpha=0.15+0.05*Math.sin(tick*0.1);
+    ctx.fillStyle='#880022';
+    const range=getAttackRange();
+    ctx.beginPath();ctx.arc(wx(bloodMistX),wy(bloodMistY),range,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Fog of war
+  const range=getAttackRange();
+  fctx.clearRect(0,0,VIEW_W,VIEW_H);
+  fctx.globalCompositeOperation='source-over';
+  fctx.fillStyle='rgba(29,31,42,0.45)';
+  fctx.fillRect(0,0,VIEW_W,VIEW_H);
+  fctx.globalCompositeOperation='destination-out';
+  const fpx=wx(player.x),fpy=wy(player.y);
+  const grd=fctx.createRadialGradient(fpx,fpy,range*0.6,fpx,fpy,range);
+  grd.addColorStop(0,'rgba(0,0,0,1)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  fctx.fillStyle=grd;
+  fctx.beginPath();fctx.arc(fpx,fpy,range,0,Math.PI*2);fctx.fill();
+  ctx.drawImage(fogCanvas,0,0);
   drawHUD();
   if(gameOver) drawGameOver();
 }
 
 // ── Init & Loop ────────────────────────────────────────────────────────────
-// Initial spawn timers
 boss.respawnTimer=300;
-redBuff.respawnTimer=60;
-blueBuff.respawnTimer=60;
-
-function loop(){update();draw();requestAnimationFrame(loop);}
-loop();
+for(const rb of redBuffs) rb.respawnTimer=60;
+for(const bb of blueBuffs) bb.respawnTimer=60;
+for(const gb of greenBuffs) gb.respawnTimer=60;
+let lastTime=0;
+const FRAME_TIME=1000/60; // target 60fps
+let accumulator=0;
+function loop(now){
+  if(!lastTime) lastTime=now;
+  accumulator+=now-lastTime;
+  lastTime=now;
+  // Cap to avoid spiral of death
+  if(accumulator>200) accumulator=200;
+  while(accumulator>=FRAME_TIME){
+    update();
+    accumulator-=FRAME_TIME;
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
 })();

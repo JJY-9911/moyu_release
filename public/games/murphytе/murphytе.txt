@@ -1,4 +1,4 @@
-游戏名：石头人模拟器
+游戏名：史莱姆突围
 
 1. 基本玩法：在地图上，玩家扮演石头人墨菲特，通过鼠标右键点击地图控制石头人向点击的方向移动，到点击处位置停止。中途点击其他地方则马上更改目的地，和英雄联盟的移动方式一样。
 从视角边缘随机刷新小兵，朝玩家移动，玩家碰到小兵会扣1血。玩家初始血量为3.
@@ -44,5 +44,140 @@ boss出生点: 每隔一定时间boss刷新在该区域，boss不会主动离开
 击败红buff后，石头人的普攻对小兵/boss/蓝buff附带灼伤，每0.2秒造成 0.5 伤害并减速30%。
 击败蓝buff后，大招减少90%冷却时间。buff持续时间为60秒。
 击败buff不会获得金币
+
+
+第二次更新：
+机制修改：
+1.  河流、泉水、boss区域固定，障碍物、红蓝buff位置都改为随机生成。
+2.  小兵分波次生成，无限波，每隔一定时间生成一波。间隔时间分别为30秒、30秒、40秒、40秒、40秒、50秒、50秒、50秒、50秒、60秒，之后全部是60秒。每波小兵数量分别为10、15、20、25、30、35、40、45、50，不断循环。
+3.  画幅变为16:9，并且玩家视角与地图大小的差距再大一点，目的是显得地图更大
+
+第三次更新：
+素材修改：
+1.  主角移动及大招跳跃、落地素材替换为public/games/murphytе/assets/Slime1_Attack_body.webp
+2.  泉水素材用public/games/murphytе/assets/magic_circle_dark_shadow.webp
+3.  障碍物素材用public/games/murphytе/assets/barrier，随机组合
+4.  boss素材用public/games/murphytе/assets/boss，随机刷新，每个素材对应一种boss，每种boss血量从100到1000不等，随机分配血量，开始与boss战斗时要显示血量，血量和击败后得到的金币一样多。
+5.  河流位置用public/games/murphytе/assets/Water.webp制作河流
+6.  红蓝buff素材用public/games/murphytе/assets/red.png和public/games/murphytе/assets/blue.webp
+7.  小兵分两种，素材用public/games/murphytе/assets/Plant3_Walk_without_shadow.webp和public/games/murphytе/assets/Plant1_Walk_without_shadow.webp，
+一种小兵初始血量为 3，一种小兵初始血量为 2，血量少的小兵移速是另外一种的2倍，两种小兵数量随机。小兵/boss/红蓝buff死亡时，素材用public/games/murphytе/assets/Plant1_Death_brown.webp
+
+
+第四次更新：
+游戏开始前先选择主角初始神力，五大神力图标靠左纵向展示，点击时图标变大，展示血量、大招、被动文案。底部有确认按钮
+1.  英雄之力
+素材public/games/murphytе/assets/main_actor/yingxiong.webp
+血量：3
+大招：降临（势不可挡更名）
+    文案：跳跃至鼠标悬停处，造成巨额伤害（对boss和buff无效）
+    实现：略
+被动：怒视
+    文案：自动攻击对小兵有击退效果。
+    实现：小兵被击中后向远离玩家的方向后退30px
+
+2.  猎手之力
+素材public/games/murphytе/assets/main_actor/lieshou.webp
+血量： 2
+大招：思乡
+    瞬间传送回泉水，30秒冷却
+被动： 悬赏
+    文案： 击杀boss获得双倍金币
+    实现： 略
+
+3.  鹰眼之力
+素材public/games/murphytе/assets/main_actor/yingyan.webp
+血量： 4
+大招： 虚化
+    免疫伤害，移速提升5倍，持续10秒。30秒冷却
+
+被动： 百步
+    文案： 射程为全屏
+    实现： 自动攻击会在全屏范围内搜索敌人
+
+4.  影忍之力
+素材public/games/murphytе/assets/main_actor/yingren.webp
+血量： 5
+大招：血烟
+    在射程范围内制造血雾，每秒造成0.5伤害，持续20秒。40秒冷却
+被动： 潜行
+    文案： 基础移速为2倍，免疫障碍物伤害
+
+5.  血魔之力
+素材public/games/murphytе/assets/main_actor/xuemo.webp
+血量： 10
+大招： 无
+被动： 每击杀500个小兵恢复一点血量。与boss战斗时，小兵无法进入河流。
+
+
+第五次更新：
+1.在地图左边和底边边缘用public/games/murphytе/assets/trees里的素材围起来
+2. public/games/murphytе/assets/barrier下的障碍物素材有改动，更新一下
+
+第六次更新：
+每一波小兵血量都会全体增加1
+在泉水中无法攻击或使用大招
+去掉泉水处的泉水文案
+泉水处可以消耗金币获得能力提升
+按 P 键打开能力面板。文案提示
+能力面板： 所有能力初始价格都是10，每次供奉后，所有能力都会涨价10%
+
+    供奉英雄： 
+        文案：增加子弹数量。可供奉36次
+        实现：每次供奉后，主角会多发射一颗子弹，子弹之间形成夹角，不重合。主角只有初始的子弹具有追踪功能。
+
+    供奉血魔：
+        文案：子弹会让敌人进入流血状态，每秒减少 0.05
+        实现：每次供奉后，每秒减少血量都会增加50%，并将效果更新到文案上
+
+    供奉影刃：
+        文案：移速提高5%
+        实现：略
+
+    供奉猎手：
+        文案：对boss伤害增加 1
+
+    供奉鹰眼：
+        文案：  射击间隔减少0.1s，射程增大5%。可供奉9次
+        实现：  略
+
+    供奉祭坛： 价格固定 1000
+        文案：祭坛会帮助你攻击敌人
+        祭坛开局会和建筑物一样随机刷新在地图上。共有8座，两种各4座。供奉后便会激活祭坛开始攻击
+    
+    1.  闪电祭坛
+        文案： 小范围攻击，射速极快。
+        实现： 朝半径200px范围内的小兵发射子弹，攻击间隔为0.2秒
+        祭坛素材：
+           public/games/murphytе/assets/defense/Dark_totem_dark_shadow2.webp
+           public/games/murphytе/assets/defense/white_crystal_light_shadow3.webp
+        攻击素材：
+            public/games/murphytе/assets/altar/1
+            帧动画，1秒内
+
+    2.  天火祭坛
+        文案： 全图攻击，造成范围伤害。
+        实现： 解锁后，每10秒攻击一次，在主角附近落下一颗火球，对500px范围内造成9999伤害（只对小兵有效）
+        祭坛素材：
+            public/games/murphytе/assets/defense/Building1_dark_shadow.webp
+            public/games/murphytе/assets/defense/Building2_dark_shadow.webp
+        攻击素材：
+            public/games/murphytе/assets/altar/Explosion_3
+            帧动画，2秒内
+
+
+
+第七次更新：
+1. 英雄之力血量调整为4，猎手之力血量调整为5，鹰眼之力血量调整为2，影忍之力血量调整为3。
+2. 新增绿buff，素材public/games/murphytе/assets/green.webp，效果是击败后回满血。与红蓝buff一样每隔90秒刷新，初始血量10。
+3. 影忍之力大招血雾调整为每0.2秒造成0.5伤害（原为每秒0.5伤害）。
+4. 小兵波次间隔时间全部增加15秒。间隔时间分别为45秒、45秒、55秒、55秒、55秒、65秒、65秒、65秒、65秒、75秒，之后全部是75秒。
+
+第八次更新：
+1. 蓝buff效果调整：击败蓝buff后，持续时间内大招冷却固定为3秒。血烟和虚化持续时间内不可叠加释放大招。
+
+第九次更新：
+1. 每局三种buff各存在2个，共6个buff随机分布在地图上，各自独立刷新。
+
 
 

@@ -39,6 +39,15 @@ export const games = [
     hot: false,
     desc: '抛竿钓鱼，收集稀有鱼种，升级装备成为钓鱼大师',
   },
+  {
+    id: 'murphyt\u0435',
+    name: '史莱姆突围',
+    icon: '🟢',
+    category: 'mowing',
+    categoryLabel: '割草',
+    hot: true,
+    desc: '选择神力，击退小兵浪潮，挑战boss，升级祭坛守卫领地',
+  },
 ];
 
 export const categories = [
