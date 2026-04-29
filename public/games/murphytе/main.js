@@ -33,13 +33,13 @@ window.addEventListener('resize',resize);resize();
 // ── Asset loading ──────────────────────────────────────────────────────────
 const AB='assets/';
 const allImages=[];
-function loadImg(s){const i=new Image();i.src=AB+s;allImages.push(i);return i;}
+function loadImg(s){const i=new Image();i.src=AB+s;i._failed=false;i.onerror=function(){i._failed=true;};allImages.push(i);return i;}
 
 const imgPlayer=loadImg('Slime1_Attack_body.webp');       // 640x256, 10cols x 4rows, 64x64 (attack/ult)
 const imgPlayerWalk=loadImg('Slime1_Walk_body.webp');     // 512x256, 8cols x 4rows, 64x64 (idle/walk)
 const imgFountain=loadImg('Tree_idol_human.webp');// 128x128 static
 const imgWater=loadImg('Water.webp');                      // 688x576, 3 frames of 688x192
-const imgRedBuff=loadImg('red.png');                       // 64x64 static
+const imgRedBuff=loadImg('red.webp');                       // 64x64 static
 const imgBlueBuff=loadImg('blue.webp');                    // 128x128 static
 const imgGreenBuff=loadImg('green.webp');                   // green buff
 const imgCover=loadImg('cover.webp');                       // loading screen cover
@@ -48,7 +48,7 @@ const imgShadow=loadImg('shadow.webp');                    // 26x19 shadow
 const imgPlant1=loadImg('Plant1_Walk_without_shadow.webp');// 384x256, 6x4, 64x64
 const imgPlant3=loadImg('Plant3_Walk_without_shadow.webp');// 384x256, 6x4, 64x64
 const imgDeath=loadImg('Plant1_Death_brown.webp');         // 640x256, 10x4, 64x64
-const imgLand=loadImg('land.webp');                        // 416x960 tileset, 32x32 tiles
+
 
 // Fire spell frames: 8 individual 640x360 images
 const FIRE_FRAME_COUNT=8;
@@ -430,6 +430,7 @@ let currentTargetType='';
 
 // Track fountain state for exit invincibility
 let wasInFountain=true;
+let fountainShieldTimer=0; // separate timer for golden aura visual
 
 // ── Selection screen input ─────────────────────────────────────────────────
 canvas.addEventListener('click',function(e){
@@ -664,7 +665,7 @@ function updatePlayer(){
       if(tick%12===0){
         const range=getAttackRange();
         for(const m of minions){if(dist({x:bloodMistX,y:bloodMistY},m)<range) m.hp-=0.5;}
-        if(boss.alive&&dist({x:bloodMistX,y:bloodMistY},boss)<range) boss.hp-=0.5;
+        if(boss.alive&&dist({x:bloodMistX,y:bloodMistY},boss)-120<range) boss.hp-=0.5;
       }
     }
   }
@@ -676,8 +677,11 @@ function updatePlayer(){
 
   // Fountain exit: grant 5s invincibility
   const nowInFountain=inFountain(player.x,player.y);
-  if(wasInFountain&&!nowInFountain){player.invincibleTimer=300;}
+  if(wasInFountain&&!nowInFountain){player.invincibleTimer=300;fountainShieldTimer=300;}
+  // While inside fountain, keep invincible (prevent edge-case damage)
+  if(nowInFountain){player.invincibleTimer=Math.max(player.invincibleTimer,2);}
   wasInFountain=nowInFountain;
+  if(fountainShieldTimer>0) fountainShieldTimer--;
 
   // Damage from standing on obstacles (stealth passive = immune)
   const h=HEROES[heroChoice];
@@ -695,7 +699,7 @@ function fireAtNearest(){
   const range=getAttackRange();
   let nearest=null,nd=range;
   for(const m of minions){const d=dist(player,m);if(d<nd){nd=d;nearest={type:'minion',ref:m};}}
-  if(boss.alive){const d=dist(player,boss);if(d<nd){nd=d;nearest={type:'boss',ref:boss};}}
+  if(boss.alive){const d=dist(player,boss)-120;if(d<nd){nd=d;nearest={type:'boss',ref:boss};}}
   if(redBuffs.some(b=>b.alive)){for(const rb of redBuffs){if(rb.alive){const d=dist(player,rb);if(d<nd){nd=d;nearest={type:'redbuff',ref:rb};}}}}
   if(blueBuffs.some(b=>b.alive)){for(const bb of blueBuffs){if(bb.alive){const d=dist(player,bb);if(d<nd){nd=d;nearest={type:'bluebuff',ref:bb};}}}}
   if(greenBuffs.some(b=>b.alive)){for(const gb of greenBuffs){if(gb.alive){const d=dist(player,gb);if(d<nd){nd=d;nearest={type:'greenbuff',ref:gb};}}}}
@@ -805,7 +809,7 @@ function updateBullets(){
           if(!b.hitSet.has(m)){b.hitSet.add(m);hitTarget({type:'minion',ref:m},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
         }
       }
-      if(boss.alive&&dist(b,boss)<40){
+      if(boss.alive&&dist(b,boss)<130){
         if(!b.hitSet.has(boss)){b.hitSet.add(boss);hitTarget({type:'boss',ref:boss},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
       }
       // Remove when outside view with margin
@@ -939,7 +943,7 @@ function updateBoss(){
   if(boss.chasing){
     const dx=player.x-boss.x,dy=player.y-boss.y,d=Math.sqrt(dx*dx+dy*dy);
     if(d>boss.speed){boss.x+=dx/d*boss.speed;boss.y+=dy/d*boss.speed;boss.dir=dirFromDxDy(dx,dy);}
-    if(player.invincibleTimer===0&&!phaseActive&&dist(player,boss)<80){
+    if(player.invincibleTimer===0&&!ult.active&&!phaseActive&&dist(player,boss)<80){
       player.hp--;player.invincibleTimer=120;
       if(player.hp<=0){triggerGameOver();return;}
     }
@@ -1028,7 +1032,7 @@ function restartGame(){
   for(let i=0;i<greenBuffs.length;i++){greenBuffs[i].alive=false;greenBuffs[i].respawnTimer=60;greenBuffs[i].hp=greenBuffs[i].maxHp;greenBuffs[i].x=GREEN_BUFF_POS[i].x;greenBuffs[i].y=GREEN_BUFF_POS[i].y;}
   tick=0;waveIndex=0;waveTimer=300;waveSpawnQueue=0;
   minionKillCount=0;phaseActive=false;phaseTimer=0;bloodMistActive=false;bloodMistTimer=0;castAnim.active=false;
-  wasInFountain=true;currentTargetType='';
+  wasInFountain=true;fountainShieldTimer=0;currentTargetType='';
   shopOpen=false;totalPurchases=0;
   for(const k of upgradeKeys){upgrades[k].count=0;}
   upgrades.blood.bleedRate=0.05;
@@ -1412,7 +1416,19 @@ function drawEntities(){
       ctx.restore();
     }
     ctx.save();
-    if(player.invincibleTimer>0&&Math.floor(tick/4)%2===0) ctx.globalAlpha=0.4;
+    // Damage invincibility: flicker (but not in fountain or during fountain shield)
+    const inFountainNow=inFountain(player.x,player.y);
+    if(player.invincibleTimer>0&&fountainShieldTimer<=0&&!inFountainNow&&Math.floor(tick/4)%2===0) ctx.globalAlpha=0.4;
+    // Fountain / fountain shield: golden aura
+    if(fountainShieldTimer>0||inFountainNow){
+      const pulse=0.4+0.2*Math.sin(tick*0.15);
+      ctx.shadowColor='#ffd700';ctx.shadowBlur=25+10*Math.sin(tick*0.1);
+      // Draw golden circle behind player
+      const grd=ctx.createRadialGradient(sx,sy,20,sx,sy,55);
+      grd.addColorStop(0,'rgba(255,215,0,'+pulse+')');
+      grd.addColorStop(1,'rgba(255,215,0,0)');
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(sx,sy,55,0,Math.PI*2);ctx.fill();
+    }
     if(player.hasRedBuff){ctx.shadowColor='#ff4400';ctx.shadowBlur=10;}
     if(player.hasBlueBuff){ctx.shadowColor='#3399ff';ctx.shadowBlur=10;}
     // Idle/walk or cast animation
@@ -1663,7 +1679,7 @@ function drawLoadingScreen(){
   ctx.fillStyle='#e0c060';ctx.font='bold 36px Courier New';ctx.textAlign='center';
   ctx.fillText('史莱姆突围',VIEW_W/2,VIEW_H/2-40);
   // Progress
-  const loaded=allImages.filter(img=>img.complete&&img.naturalWidth).length;
+  const loaded=allImages.filter(img=>(img.complete&&img.naturalWidth)||img._failed).length;
   const total=allImages.length;
   const pct=total>0?loaded/total:0;
   // Progress bar
