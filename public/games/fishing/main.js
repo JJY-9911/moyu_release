@@ -41,18 +41,13 @@
 
   // Fish species
   var FISH_LIST = [
-    { id:'f01', name:'鲫鱼',   rarity:'common',    price:10,  icon:1,  desc:'最常见的淡水鱼' },
-    { id:'f02', name:'鲤鱼',   rarity:'common',    price:15,  icon:2,  desc:'生命力顽强的鱼' },
-    { id:'f03', name:'草鱼',   rarity:'common',    price:12,  icon:3,  desc:'喜欢吃水草' },
-    { id:'f04', name:'鲈鱼',   rarity:'common',    price:18,  icon:4,  desc:'肉质鲜美' },
-    { id:'f05', name:'金鱼',   rarity:'rare',      price:50,  icon:5,  desc:'闪闪发光的观赏鱼' },
-    { id:'f06', name:'河豚',   rarity:'rare',      price:65,  icon:6,  desc:'圆滚滚的毒鱼' },
-    { id:'f07', name:'鳗鱼',   rarity:'rare',      price:80,  icon:7,  desc:'滑溜溜的长鱼' },
-    { id:'f08', name:'剑鱼',   rarity:'epic',      price:200, icon:8,  desc:'锋利的长嘴' },
-    { id:'f09', name:'龙鱼',   rarity:'epic',      price:300, icon:9,  desc:'传说中的龙之鱼' },
-    { id:'f10', name:'翻车鱼', rarity:'epic',      price:250, icon:10, desc:'巨大的海洋鱼' },
-    { id:'f11', name:'金龙鱼', rarity:'legendary', price:800, icon:11, desc:'黄金色的神鱼' },
-    { id:'f12', name:'海神鱼', rarity:'legendary', price:1200,icon:12, desc:'传说中的海神坐骑' }
+    { id:'f01', name:'鲈鱼',   rarity:'common',    price:10,  icon:4,  desc:'肉质鲜美的淡水鱼' },
+    { id:'f02', name:'金鱼',   rarity:'common',    price:15,  icon:5,  desc:'闪闪发光的观赏鱼' },
+    { id:'f03', name:'河豚',   rarity:'rare',      price:50,  icon:6,  desc:'圆滚滚的毒鱼' },
+    { id:'f04', name:'鳗鱼',   rarity:'rare',      price:65,  icon:7,  desc:'滑溜溜的长鱼' },
+    { id:'f05', name:'剑鱼',   rarity:'epic',      price:200, icon:8,  desc:'锋利的长嘴' },
+    { id:'f06', name:'龙鱼',   rarity:'epic',      price:300, icon:9,  desc:'传说中的龙之鱼' },
+    { id:'f07', name:'翻车鱼', rarity:'legendary', price:800, icon:10, desc:'巨大的海洋神鱼' }
   ];
 
   var RARITY_WEIGHTS = { common: 100, rare: 30, epic: 8, legendary: 2 };
@@ -118,11 +113,10 @@
     loadImage('barrel1',   base + 'Fishbarrel1.png');
     loadImage('barrel2',   base + 'Fishbarrel4.png');
     loadImage('tile02',    base + 'tile/Tile_02.png');
-    loadImage('tile32',    base + 'tile/Tile_32.png');
-    loadImage('tile33',    base + 'tile/Tile_33.png');
-    loadImage('tile34',    base + 'tile/Tile_34.png');
+    loadImage('tile03',    base + 'tile/Tile_03.png');
+    loadImage('coin',      base + 'MonedaD.png');
     loadImage('origbig',   base + 'origbig.png');
-    for (var i = 1; i <= 12; i++) {
+    for (var i = 4; i <= 10; i++) {
       var num = i < 10 ? '0' + i : '' + i;
       loadImage('icon' + num, base + 'icons/Icons_' + num + '.png');
     }
@@ -162,6 +156,10 @@
 
     // Water animation
     waterOffset: 0,
+
+    // Coin animation
+    coinFrame: 0,
+    coinTimer: 0,
 
     // Effects
     splashParticles: [],
@@ -224,9 +222,15 @@
     var tile = assets.tile02;
     if (!tile) return;
     var ts = TILE_SIZE;
-    for (var gx = GROUND_LEFT; gx < GROUND_RIGHT; gx += ts) {
+    for (var gx = GROUND_LEFT; gx < GROUND_RIGHT - ts; gx += ts) {
       var screenX = Math.round((gx - state.cameraX) * SCALE);
       ctx.drawImage(tile, screenX, GROUND_TOP * SCALE, ts * SCALE + 1, ts * SCALE);
+    }
+    // Edge tile at the end of ground
+    var edgeTile = assets.tile03;
+    if (edgeTile) {
+      var edgeX = Math.round((GROUND_RIGHT - ts - state.cameraX) * SCALE);
+      ctx.drawImage(edgeTile, edgeX, GROUND_TOP * SCALE, ts * SCALE + 1, ts * SCALE);
     }
   }
 
@@ -324,7 +328,10 @@
     frame = state.animFrame % frameCount;
 
     // 根据状态决定具体帧
-    if (gs === 'casting') {
+    if (state.inBoat && gs !== 'rowing') {
+      // 在船上静止时用划船第一帧
+      frame = 0;
+    } else if (gs === 'casting') {
       // 顺序播放 fish 动画帧
       frame = Math.min(state.animFrame, frameCount - 1);
     } else if (gs === 'waiting') {
@@ -339,6 +346,10 @@
     }
 
     var pos = worldToScreen(state.playerX, state.playerY);
+    // 在船上时跟随船的起伏
+    if (state.inBoat) {
+      pos.y += Math.sin(Date.now() * 0.002) * 1 * SCALE;
+    }
     drawSpriteFrame(img, frame, frameCount, pos.x, pos.y, state.facingLeft);
 
     // 咬钩时显示感叹号
@@ -365,12 +376,27 @@
     var rodTipWorldY = state.playerY + 10;
     var rodTip = worldToScreen(rodTipWorldX, rodTipWorldY);
 
-    var baitScreen = worldToScreen(state.baitX, state.baitY);
+    // During casting, animate bait flying to target
+    var currentBaitX, currentBaitY;
+    if (gs === 'casting') {
+      var t = Math.min(state.castProgress / 600, 1);
+      // Ease out
+      var et = 1 - (1 - t) * (1 - t);
+      currentBaitX = state.castStartX + (state.castTargetX - state.castStartX) * et;
+      // Arc: bait goes up then down
+      var arcHeight = 15 * Math.sin(t * Math.PI);
+      currentBaitY = state.castStartY + (state.castTargetY - state.castStartY) * et - arcHeight;
+    } else {
+      currentBaitX = state.baitX;
+      currentBaitY = state.baitY;
+    }
+
+    var baitScreen = worldToScreen(currentBaitX, currentBaitY);
 
     // Bezier control point for line droop
     var midX = (rodTip.x + baitScreen.x) / 2;
     var dist = Math.abs(baitScreen.x - rodTip.x);
-    var droop = dist * 0.3;
+    var droop = dist * 0.25;
     if (gs === 'biting') droop += Math.sin(Date.now() * 0.02) * 5 * SCALE;
     var cpY = Math.max(rodTip.y, baitScreen.y) + droop;
 
@@ -382,7 +408,7 @@
     ctx.quadraticCurveTo(midX, cpY, baitScreen.x, baitScreen.y);
     ctx.stroke();
 
-    // Bobber
+    // Bobber (not during casting)
     if (gs === 'waiting' || gs === 'biting') {
       var bobY = baitScreen.y + (gs === 'biting' ? Math.sin(Date.now() * 0.015) * 4 : 0);
       ctx.fillStyle = '#ff3333';
@@ -540,18 +566,12 @@
       if (exitBoat) {
         keys['KeyQ'] = false;
         state.inBoat = false;
-        state.playerX = GROUND_RIGHT - 10;
+        state.playerX = GROUND_RIGHT - FRAME_W - 5;
         state.playerY = getGroundYAt(state.playerX);
         state.gameState = 'idle';
         return;
       }
 
-      // Fish from boat
-      if (interact && (gs === 'idle' || gs === 'rowing')) {
-        keys['KeyE'] = false;
-        startFishing(true);
-        return;
-      }
       return;
     }
 
@@ -581,14 +601,8 @@
       keys['KeyE'] = false;
       var cx = state.playerX + FRAME_W / 2;
 
-      // Near water edge - fish
-      if (cx > GROUND_RIGHT - 50) {
-        startFishing(false);
-        return;
-      }
-
-      // Near boat - enter boat
-      if (Math.abs(cx - (BOAT_X + 37)) < 50 && !state.inBoat) {
+      // Near water edge or boat - enter boat
+      if (cx > GROUND_RIGHT - 80 && !state.inBoat) {
         state.inBoat = true;
         state.boatX = BOAT_X;
         state.playerX = state.boatX + 10;
@@ -626,6 +640,7 @@
   function getDepthZone(baitX) {
     var waterWidth = WORLD_RIGHT - GROUND_RIGHT;
     var dist = baitX - GROUND_RIGHT;
+    if (dist < 0) dist = 0;
     var ratio = dist / waterWidth;
     return ratio > 0.4 ? 'deep' : 'shallow';
   }
@@ -1088,7 +1103,7 @@
   }
 
   function updateGoldDisplay() {
-    $goldNum.textContent = state.gold;
+    if ($goldNum) $goldNum.textContent = state.gold;
   }
 
   function updateRodInfo() {
@@ -1115,6 +1130,13 @@
     if (state.animTimer >= speed) {
       state.animTimer -= speed;
       state.animFrame++;
+    }
+
+    // Coin animation
+    state.coinTimer += dt;
+    if (state.coinTimer >= 120) {
+      state.coinTimer -= 120;
+      state.coinFrame = (state.coinFrame + 1) % 5;
     }
   }
 
@@ -1144,6 +1166,34 @@
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 4;
     ctx.fillText('🕐 ' + getGameTimeString(), 8 * SCALE, 12 * SCALE);
+    ctx.restore();
+  }
+
+  function drawCoinHUD() {
+    var coinImg = assets.coin;
+    if (!coinImg) return;
+    var coinFW = 16, coinFH = 16;
+    var drawSize = 12 * SCALE;
+
+    // Position: top-right, aligned with clock Y
+    var px = canvas.width - 70 * SCALE;
+    var py = 4 * SCALE;
+
+    // Draw animated coin
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(coinImg,
+      state.coinFrame * coinFW, 0, coinFW, coinFH,
+      px, py, drawSize, drawSize
+    );
+
+    // Draw gold amount
+    ctx.font = 'bold ' + (8 * SCALE) + 'px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(state.gold, px + drawSize + 3 * SCALE, py + drawSize * 0.8);
     ctx.restore();
   }
 
@@ -1206,15 +1256,16 @@
     updateCamera();
     updateDayNight(dt);
 
-    // Render — layer order: sky bg → hut → boat → water → ground → character → UI → day/night overlay
+    // Render — layer order: sky bg → hut → ground → boat → character → water (on top) → UI
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
     drawHut();
-    drawBoat();
-    drawWaterTiles();
     drawGround();
+    drawBoat();
     drawCharacter();
+    drawWaterTiles();
     drawGameTime();
+    drawCoinHUD();
     drawCatchDisplay();
     drawInteractionPrompt();
 
@@ -1243,13 +1294,18 @@
         return;
       }
 
-      // If idle/walking near dock or in boat, start fishing on click
+      // Click on water to fish
       var gs = state.gameState;
-      if (gs === 'idle' || gs === 'walking') {
-        if (state.inBoat) {
-          startFishing(true);
-        } else if (state.playerX + FRAME_W / 2 > GROUND_RIGHT - 50) {
-          startFishing(false);
+      if (gs === 'idle' || gs === 'walking' || (gs === 'idle' && state.inBoat)) {
+        var rect = canvas.getBoundingClientRect();
+        var clickScreenX = (e.clientX - rect.left) * (canvas.width / rect.width);
+        var clickWorldX = clickScreenX / SCALE + state.cameraX;
+
+        // Only fish if clicking on water area
+        if (clickWorldX > GROUND_RIGHT) {
+          if (!state.inBoat && state.playerX + FRAME_W / 2 > GROUND_RIGHT - 80) {
+            startFishing(false);
+          }
         }
       }
     });

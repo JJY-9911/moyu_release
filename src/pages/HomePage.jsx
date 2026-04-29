@@ -24,7 +24,6 @@ const iconMap = {
 
 function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
-
   const filteredGames = getGamesByCategory(selectedCategory);
 
   const menuItems = categories.map((cat) => ({
