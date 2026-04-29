@@ -42,6 +42,7 @@ const imgWater=loadImg('Water.webp');                      // 688x576, 3 frames 
 const imgRedBuff=loadImg('red.png');                       // 64x64 static
 const imgBlueBuff=loadImg('blue.webp');                    // 128x128 static
 const imgGreenBuff=loadImg('green.webp');                   // green buff
+const imgCover=loadImg('cover.webp');                       // loading screen cover
 const imgStar=loadImg('star.webp');                        // click marker
 const imgShadow=loadImg('shadow.webp');                    // 26x19 shadow
 const imgPlant1=loadImg('Plant1_Walk_without_shadow.webp');// 384x256, 6x4, 64x64
@@ -1646,6 +1647,37 @@ function wrapText(c,text,x,y,maxW,lineH){
 const fogCanvas=document.createElement('canvas');
 fogCanvas.width=VIEW_W;fogCanvas.height=VIEW_H;
 const fctx=fogCanvas.getContext('2d');
+
+function drawLoadingScreen(){
+  ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // Cover image as background
+  if(imgCover.complete&&imgCover.naturalWidth){
+    const iw=imgCover.naturalWidth,ih=imgCover.naturalHeight;
+    const scale=Math.max(VIEW_W/iw,VIEW_H/ih);
+    const dw=iw*scale,dh=ih*scale;
+    ctx.save();ctx.globalAlpha=0.5;
+    ctx.drawImage(imgCover,(VIEW_W-dw)/2,(VIEW_H-dh)/2,dw,dh);
+    ctx.restore();
+  }
+  // Title
+  ctx.fillStyle='#e0c060';ctx.font='bold 36px Courier New';ctx.textAlign='center';
+  ctx.fillText('史莱姆突围',VIEW_W/2,VIEW_H/2-40);
+  // Progress
+  const loaded=allImages.filter(img=>img.complete&&img.naturalWidth).length;
+  const total=allImages.length;
+  const pct=total>0?loaded/total:0;
+  // Progress bar
+  const barW=260,barH=14,barX=VIEW_W/2-barW/2,barY=VIEW_H/2+10;
+  ctx.fillStyle='#222';ctx.beginPath();ctx.roundRect(barX-2,barY-2,barW+4,barH+4,6);ctx.fill();
+  ctx.fillStyle='#333';ctx.fillRect(barX,barY,barW,barH);
+  ctx.fillStyle='#7b2ff7';ctx.fillRect(barX,barY,barW*pct,barH);
+  ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
+  // Percentage text
+  ctx.fillStyle='#aaa';ctx.font='12px Courier New';
+  ctx.fillText('加载资源中... '+loaded+'/'+total,VIEW_W/2,barY+barH+20);
+  // Transition to select when done
+  if(loaded>=total) gamePhase='select';
+}
 
 function draw(){
   if(gamePhase==='loading'){drawLoadingScreen();return;}
