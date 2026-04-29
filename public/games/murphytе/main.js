@@ -1249,6 +1249,10 @@ function drawEntities(){
     if(aImg.complete&&aImg.naturalWidth){ctx.drawImage(aImg,asx-48,asy-48,96,96);}
     else{ctx.fillStyle=a.type==='lightning'?'#66aaff':'#ff6633';ctx.beginPath();ctx.arc(asx,asy,30,0,Math.PI*2);ctx.fill();}
     ctx.restore();
+    // Altar name label
+    ctx.fillStyle=a.active?(a.type==='lightning'?'#66aaff':'#ff6633'):'#666';
+    ctx.font='bold 10px Courier New';ctx.textAlign='center';
+    ctx.fillText(a.type==='lightning'?'闪电祭坛':'天火祭坛',asx,asy+56);
     // Attack effect animations (queued)
     if(a.effects){
       const eImgs=a.type==='lightning'?imgLightningAttack:imgFireAttack;
