@@ -183,11 +183,12 @@ let castAnim={active:false,timer:0,duration:40}; // cast animation for non-jump 
 // ── Upgrade system ─────────────────────────────────────────────────────────
 let shopOpen=false;
 let shopSelect=0;
+let infiniteGold=false;
 const BASE_PRICE=10;
-const PRICE_INCREASE=1.1;
+const PRICE_INCREASE=1.3;
 let totalPurchases=0;
 function getPrice(key){
-  if(key==='altar') return 1000;
+  if(key==='altarL'||key==='altarF') return 1000;
   return Math.round(BASE_PRICE*Math.pow(PRICE_INCREASE,totalPurchases));
 }
 
@@ -197,9 +198,10 @@ const upgrades={
   shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*5)+'%';}},
   hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1);}},
   eagle:{count:0,max:9,name:'供奉鹰眼',getDesc(){const n=this.count+1;return '间隔-'+(n*0.1).toFixed(1)+'s 射程+'+(n*5)+'% ('+this.count+'/'+this.max+')';}},
-  altar:{count:0,max:8,name:'供奉祭坛',getDesc(){return '激活一座祭坛 ('+(this.count+1)+'/'+this.max+')';}},
+  altarL:{count:0,max:4,name:'供奉闪电祭坛',getDesc(){return '小范围攻击，射速极快 ('+this.count+'/'+this.max+')';}},
+  altarF:{count:0,max:4,name:'供奉天火祭坛',getDesc(){return '全图攻击，造成范围伤害 ('+this.count+'/'+this.max+')';}},
 };
-const upgradeKeys=['hero','blood','shadow','hunter','eagle','altar'];
+const upgradeKeys=['hero','blood','shadow','hunter','eagle','altarL','altarF'];
 
 // ── Altars ─────────────────────────────────────────────────────────────────
 const ALTAR_COUNT=8;
@@ -291,7 +293,7 @@ let bossType=randomBossType();
 
 // ── Wave system ────────────────────────────────────────────────────────────
 const WAVE_INTERVALS=[2700,2700,3300,3300,3300,3900,3900,3900,3900,4500];
-const WAVE_COUNTS=[10,15,20,25,30,35,40,45,50];
+const WAVE_COUNTS=[10,15,25,25,40,40,50,50,100];
 let waveIndex=0,waveTimer=300,waveSpawnQueue=0,waveSpawnDelay=0;
 function getWaveInterval(){return waveIndex<WAVE_INTERVALS.length?WAVE_INTERVALS[waveIndex]:4500;}
 function getWaveCount(){return WAVE_COUNTS[waveIndex%WAVE_COUNTS.length];}
@@ -451,19 +453,22 @@ canvas.addEventListener('click',function(e){
 
   // Shop click handling
   if(shopOpen){
-    const px=VIEW_W/2-200,py=30,pw=400;
+    const px=VIEW_W/2-200,py=20,pw=400;
+    // Infinite gold toggle button
+    const tgX=px+pw-110,tgY=py+38,tgW=100,tgH=20;
+    if(mx>=tgX&&mx<=tgX+tgW&&my>=tgY&&my<=tgY+tgH){infiniteGold=!infiniteGold;return;}
     for(let i=0;i<upgradeKeys.length;i++){
-      const iy=py+68+i*52;
+      const iy=py+62+i*48;
       const btnX=px+pw-80,btnY=iy+2,btnW=60,btnH=24;
       if(mx>=btnX&&mx<=btnX+btnW&&my>=btnY&&my<=btnY+btnH){
         const key=upgradeKeys[i];
         const u=upgrades[key];
         if(u.count>=u.max) return;
         const price=getPrice(key);
-        if(player.gold<price) return;
-        player.gold-=price;
+        if(!infiniteGold&&player.gold<price) return;
+        if(!infiniteGold) player.gold-=price;
         u.count++;
-        if(key!=='altar') totalPurchases++;
+        if(key!=='altarL'&&key!=='altarF') totalPurchases++;
         // Apply effects
         if(key==='blood'){u.bleedRate=0.05*Math.pow(1.5,u.count);}
         if(key==='shadow'){
@@ -471,9 +476,11 @@ canvas.addEventListener('click',function(e){
           player.speed=base*(1+u.count*0.05);
         }
         if(key==='eagle'){/* applied dynamically in fireAtNearest/getAttackRange */}
-        if(key==='altar'){
-          // Activate next inactive altar
-          for(const a of altars){if(!a.active){a.active=true;break;}}
+        if(key==='altarL'){
+          for(const a of altars){if(!a.active&&a.type==='lightning'){a.active=true;break;}}
+        }
+        if(key==='altarF'){
+          for(const a of altars){if(!a.active&&a.type==='fire'){a.active=true;break;}}
         }
         return;
       }
@@ -800,18 +807,14 @@ function updateBullets(){
     b.x+=moveX;
     b.y+=moveY;
 
-    // Non-tracking bullets: pierce through enemies, remove when off-screen
+    // Non-tracking bullets: destroy on hit, remove when off-screen
     if(!b.isTracking){
-      // Check collision with enemies (pierce — don't remove bullet)
-      if(!b.hitSet) b.hitSet=new Set();
+      let hit=false;
       for(const m of minions){
-        if(dist(b,m)<20){
-          if(!b.hitSet.has(m)){b.hitSet.add(m);hitTarget({type:'minion',ref:m},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
-        }
+        if(dist(b,m)<20){hitTarget({type:'minion',ref:m},1,b.applyBurn,b.applyBleed,b.hunterBonus);hit=true;break;}
       }
-      if(boss.alive&&dist(b,boss)<130){
-        if(!b.hitSet.has(boss)){b.hitSet.add(boss);hitTarget({type:'boss',ref:boss},1,b.applyBurn,b.applyBleed,b.hunterBonus);}
-      }
+      if(!hit&&boss.alive&&dist(b,boss)<130){hitTarget({type:'boss',ref:boss},1,b.applyBurn,b.applyBleed,b.hunterBonus);hit=true;}
+      if(hit){bullets.splice(i,1);continue;}
       // Remove when outside view with margin
       const sx=b.x-camX,sy=b.y-camY;
       if(sx<-80||sx>VIEW_W+80||sy<-80||sy>VIEW_H+80){bullets.splice(i,1);continue;}
@@ -1033,7 +1036,7 @@ function restartGame(){
   tick=0;waveIndex=0;waveTimer=300;waveSpawnQueue=0;
   minionKillCount=0;phaseActive=false;phaseTimer=0;bloodMistActive=false;bloodMistTimer=0;castAnim.active=false;
   wasInFountain=true;fountainShieldTimer=0;currentTargetType='';
-  shopOpen=false;totalPurchases=0;
+  shopOpen=false;totalPurchases=0;infiniteGold=false;
   for(const k of upgradeKeys){upgrades[k].count=0;}
   upgrades.blood.bleedRate=0.05;
   generateAltars();
@@ -1058,38 +1061,36 @@ function updateAltars(){
   for(const a of altars){
     if(!a.active) continue;
     a.attackTimer++;
-    // Effect animation
-    if(a.effectActive){
-      a.effectTimer++;
+    // Update all queued effect animations
+    if(!a.effects) a.effects=[];
+    for(let ei=a.effects.length-1;ei>=0;ei--){
+      const ef=a.effects[ei];
+      ef.timer++;
       const maxFrames=a.type==='lightning'?5:10;
-      const frameDur=a.type==='lightning'?12:12; // 1s for lightning (5*12=60), 2s for fire (10*12=120)
-      if(a.effectTimer>=frameDur){a.effectTimer=0;a.effectFrame++;}
-      if(a.effectFrame>=maxFrames){a.effectActive=false;a.effectFrame=0;}
+      const frameDur=a.type==='lightning'?12:12;
+      if(ef.timer>=frameDur){ef.timer=0;ef.frame++;}
+      if(ef.frame>=maxFrames){a.effects.splice(ei,1);}
     }
     if(a.type==='lightning'){
       // Attack every 0.2s (12 ticks), range 200px
-      if(a.attackTimer>=12){
+      if(a.attackTimer>=30){
         a.attackTimer=0;
-        let nearest=null,nd=200;
+        let nearest=null,nd=250;
         for(const m of minions){const d=dist(a,m);if(d<nd){nd=d;nearest=m;}}
         if(nearest){
           nearest.hp-=1;
-          a.effectActive=true;a.effectFrame=0;a.effectTimer=0;
-          a.effectX=nearest.x;a.effectY=nearest.y;
-          if(nearest.hp<=0){/* will be cleaned up in updateMinions */}
+          a.effects.push({x:nearest.x,y:nearest.y,frame:0,timer:0});
         }
       }
     } else {
       // Fire altar: every 10s (600 ticks), AoE 500px near player, 9999 dmg to minions
       if(a.attackTimer>=600){
         a.attackTimer=0;
-        // Drop near player
         const fx=player.x+(Math.random()-0.5)*200;
         const fy=player.y+(Math.random()-0.5)*200;
-        a.effectActive=true;a.effectFrame=0;a.effectTimer=0;
-        a.effectX=fx;a.effectY=fy;
+        a.effects.push({x:fx,y:fy,frame:0,timer:0});
         for(let i=minions.length-1;i>=0;i--){
-          if(dist({x:fx,y:fy},minions[i])<500){
+          if(dist({x:fx,y:fy},minions[i])<150){
             minions[i].hp-=9999;
           }
         }
@@ -1248,16 +1249,18 @@ function drawEntities(){
     if(aImg.complete&&aImg.naturalWidth){ctx.drawImage(aImg,asx-48,asy-48,96,96);}
     else{ctx.fillStyle=a.type==='lightning'?'#66aaff':'#ff6633';ctx.beginPath();ctx.arc(asx,asy,30,0,Math.PI*2);ctx.fill();}
     ctx.restore();
-    // Attack effect animation
-    if(a.effectActive){
-      const esx=wx(a.effectX),esy=wy(a.effectY);
+    // Attack effect animations (queued)
+    if(a.effects){
       const eImgs=a.type==='lightning'?imgLightningAttack:imgFireAttack;
-      const eImg=eImgs[Math.min(a.effectFrame,eImgs.length-1)];
-      if(eImg&&eImg.complete&&eImg.naturalWidth){
-        const esz=a.type==='lightning'?80:200;
-        ctx.save();ctx.globalAlpha=0.9;
-        ctx.drawImage(eImg,esx-esz/2,esy-esz,esz,esz*2);
-        ctx.restore();
+      for(const ef of a.effects){
+        const esx=wx(ef.x),esy=wy(ef.y);
+        const eImg=eImgs[Math.min(ef.frame,eImgs.length-1)];
+        if(eImg&&eImg.complete&&eImg.naturalWidth){
+          const esz=a.type==='lightning'?80:200;
+          ctx.save();ctx.globalAlpha=0.9;
+          ctx.drawImage(eImg,esx-esz/2,esy-esz,esz,esz*2);
+          ctx.restore();
+        }
       }
     }
   }
@@ -1537,7 +1540,7 @@ function drawHUD(){
 
 function drawShop(){
   ctx.save();
-  const px=VIEW_W/2-200,py=30,pw=400,ph=VIEW_H-60;
+  const px=VIEW_W/2-200,py=20,pw=400,ph=VIEW_H-40;
   ctx.fillStyle='rgba(10,10,20,0.92)';ctx.beginPath();ctx.roundRect(px,py,pw,ph,10);ctx.fill();
   ctx.strokeStyle='#e0c060';ctx.lineWidth=2;ctx.stroke();
   ctx.fillStyle='#e0c060';ctx.font='bold 18px Courier New';ctx.textAlign='center';
@@ -1545,20 +1548,27 @@ function drawShop(){
   ctx.fillStyle='#ffd700';ctx.font='12px Courier New';
   ctx.fillText('金币: '+player.gold,VIEW_W/2,py+48);
 
+  // Infinite gold toggle
+  const tgX=px+pw-110,tgY=py+38,tgW=100,tgH=20;
+  ctx.fillStyle=infiniteGold?'#ffd700':'rgba(255,255,255,0.15)';
+  ctx.beginPath();ctx.roundRect(tgX,tgY,tgW,tgH,4);ctx.fill();
+  ctx.fillStyle=infiniteGold?'#1a1a2e':'#888';ctx.font='bold 10px Courier New';ctx.textAlign='center';
+  ctx.fillText(infiniteGold?'∞ 无限金币 ON':'∞ 无限金币',tgX+tgW/2,tgY+14);
+
   for(let i=0;i<upgradeKeys.length;i++){
     const key=upgradeKeys[i];
     const u=upgrades[key];
-    const iy=py+68+i*52;
+    const iy=py+62+i*48;
     const price=getPrice(key);
-    const canBuy=player.gold>=price&&u.count<u.max;
+    const canBuy=(infiniteGold||player.gold>=price)&&u.count<u.max;
 
     ctx.fillStyle='rgba(255,255,255,0.05)';
-    ctx.beginPath();ctx.roundRect(px+12,iy-4,pw-24,44,6);ctx.fill();
+    ctx.beginPath();ctx.roundRect(px+12,iy-4,pw-24,42,6);ctx.fill();
 
     ctx.fillStyle='#fff';ctx.font='bold 13px Courier New';ctx.textAlign='left';
     ctx.fillText(u.name,px+20,iy+14);
     ctx.fillStyle='#aaa';ctx.font='11px Courier New';
-    ctx.fillText(u.getDesc(),px+20,iy+30);
+    ctx.fillText(u.getDesc(),px+20,iy+28);
 
     // Buy button
     const btnX=px+pw-80,btnY=iy+2,btnW=60,btnH=24;
