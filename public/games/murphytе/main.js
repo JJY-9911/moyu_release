@@ -32,7 +32,8 @@ window.addEventListener('resize',resize);resize();
 
 // ── Asset loading ──────────────────────────────────────────────────────────
 const AB='assets/';
-function loadImg(s){const i=new Image();i.src=AB+s;return i;}
+const allImages=[];
+function loadImg(s){const i=new Image();i.src=AB+s;allImages.push(i);return i;}
 
 const imgPlayer=loadImg('Slime1_Attack_body.webp');       // 640x256, 10cols x 4rows, 64x64 (attack/ult)
 const imgPlayerWalk=loadImg('Slime1_Walk_body.webp');     // 512x256, 8cols x 4rows, 64x64 (idle/walk)
@@ -166,7 +167,7 @@ const HEROES=[
 ];
 
 // ── Game phase ─────────────────────────────────────────────────────────────
-let gamePhase='select'; // 'select' | 'playing'
+let gamePhase='loading'; // 'loading' | 'select' | 'playing'
 let selectedHero=0;
 let heroChoice=-1; // confirmed choice
 let selectHover=-1;
@@ -1647,6 +1648,7 @@ fogCanvas.width=VIEW_W;fogCanvas.height=VIEW_H;
 const fctx=fogCanvas.getContext('2d');
 
 function draw(){
+  if(gamePhase==='loading'){drawLoadingScreen();return;}
   if(gamePhase==='select'){drawSelectScreen();return;}
   ctx.clearRect(0,0,VIEW_W,VIEW_H);
   drawMap();
