@@ -39,15 +39,22 @@
   var WORLD_LEFT = -200;
   var WORLD_RIGHT = 560;
 
-  // Fish species
+  // Fish species (from fishes.png 384x384, 12x12 grid, 32x32 each)
   var FISH_LIST = [
-    { id:'f01', name:'鲈鱼',   rarity:'common',    price:10,  icon:4,  desc:'肉质鲜美的淡水鱼' },
-    { id:'f02', name:'金鱼',   rarity:'common',    price:15,  icon:5,  desc:'闪闪发光的观赏鱼' },
-    { id:'f03', name:'河豚',   rarity:'rare',      price:50,  icon:6,  desc:'圆滚滚的毒鱼' },
-    { id:'f04', name:'鳗鱼',   rarity:'rare',      price:65,  icon:7,  desc:'滑溜溜的长鱼' },
-    { id:'f05', name:'剑鱼',   rarity:'epic',      price:200, icon:8,  desc:'锋利的长嘴' },
-    { id:'f06', name:'龙鱼',   rarity:'epic',      price:300, icon:9,  desc:'传说中的龙之鱼' },
-    { id:'f07', name:'翻车鱼', rarity:'legendary', price:800, icon:10, desc:'巨大的海洋神鱼' }
+    { id:'f01', name:'小丑鱼', rarity:'common',    price:8,   srcX:32,  srcY:0,   desc:'色彩斑斓的热带鱼' },
+    { id:'f02', name:'鲶鱼',   rarity:'common',    price:10,  srcX:352, srcY:0,   desc:'夜行性的底栖鱼' },
+    { id:'f03', name:'金鱼',   rarity:'common',    price:12,  srcX:288, srcY:0,   desc:'闪闪发光的观赏鱼' },
+    { id:'f04', name:'河豚',   rarity:'common',    price:15,  srcX:0,   srcY:32,  desc:'圆滚滚的毒鱼' },
+    { id:'f05', name:'鲤鱼',   rarity:'common',    price:12,  srcX:256, srcY:64,  desc:'生命力顽强的淡水鱼' },
+    { id:'f06', name:'比目鱼', rarity:'rare',      price:40,  srcX:288, srcY:160, desc:'扁平的海底鱼' },
+    { id:'f07', name:'翻车鱼', rarity:'rare',      price:50,  srcX:64,  srcY:32,  desc:'巨大的海洋鱼' },
+    { id:'f08', name:'飞鱼',   rarity:'rare',      price:55,  srcX:288, srcY:32,  desc:'能跃出水面滑翔' },
+    { id:'f09', name:'龙虾',   rarity:'rare',      price:60,  srcX:96,  srcY:320, desc:'美味的甲壳类' },
+    { id:'f10', name:'金枪鱼', rarity:'epic',      price:150, srcX:128, srcY:128, desc:'速度极快的远洋鱼' },
+    { id:'f11', name:'鮟鱇',   rarity:'epic',      price:180, srcX:192, srcY:64,  desc:'深海中的灯笼鱼' },
+    { id:'f12', name:'马林鱼', rarity:'epic',      price:200, srcX:256, srcY:96,  desc:'锋利长嘴的猎手' },
+    { id:'f13', name:'桨鱼',   rarity:'legendary', price:500, srcX:128, srcY:160, desc:'神秘的深海巨鱼' },
+    { id:'f14', name:'龙鱼',   rarity:'legendary', price:800, srcX:64,  srcY:224, desc:'传说中的龙之鱼' }
   ];
 
   var RARITY_WEIGHTS = { common: 100, rare: 30, epic: 8, legendary: 2 };
@@ -102,24 +109,21 @@
 
   function loadAllAssets() {
     var base = 'assets/';
-    loadImage('idle',      base + 'Fisherman_idle.png');
-    loadImage('walk',      base + 'Fisherman_walk.png');
-    loadImage('hook',      base + 'Fisherman_hook.png');
-    loadImage('fish',      base + 'Fisherman_fish.png');
-    loadImage('row',       base + 'Fisherman_row.png');
-    loadImage('water',     base + 'Water.png');
-    loadImage('hut',       base + 'Fishing_hut.png');
-    loadImage('boat',      base + 'Boat.png');
-    loadImage('barrel1',   base + 'Fishbarrel1.png');
-    loadImage('barrel2',   base + 'Fishbarrel4.png');
-    loadImage('tile02',    base + 'tile/Tile_02.png');
-    loadImage('tile03',    base + 'tile/Tile_03.png');
-    loadImage('coin',      base + 'MonedaD.png');
-    loadImage('origbig',   base + 'origbig.png');
-    for (var i = 4; i <= 10; i++) {
-      var num = i < 10 ? '0' + i : '' + i;
-      loadImage('icon' + num, base + 'icons/Icons_' + num + '.png');
-    }
+    loadImage('idle',      base + 'Fisherman_idle.webp');
+    loadImage('walk',      base + 'Fisherman_walk.webp');
+    loadImage('hook',      base + 'Fisherman_hook.webp');
+    loadImage('fish',      base + 'Fisherman_fish.webp');
+    loadImage('row',       base + 'Fisherman_row.webp');
+    loadImage('water',     base + 'Water.webp');
+    loadImage('hut',       base + 'Fishing_hut.webp');
+    loadImage('boat',      base + 'Boat.webp');
+    loadImage('barrel1',   base + 'Fishbarrel1.webp');
+    loadImage('barrel2',   base + 'Fishbarrel4.webp');
+    loadImage('tile02',    base + 'tile/Tile_02.webp');
+    loadImage('tile03',    base + 'tile/Tile_03.webp');
+    loadImage('coin',      base + 'MonedaD.webp');
+    loadImage('origbig',   base + 'origbig.webp');
+    loadImage('fishes',    base + 'fishes.webp');
   }
 
   // ===================== GAME STATE =====================
@@ -456,11 +460,11 @@
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Fish icon
-    var iconKey = 'icon' + (fish.icon < 10 ? '0' + fish.icon : '' + fish.icon);
-    var iconImg = assets[iconKey];
-    if (iconImg) {
-      ctx.drawImage(iconImg, pos.x - 16 * SCALE, pos.y - 16 * SCALE, 32 * SCALE, 32 * SCALE);
+    // Fish icon (from fishes.png sprite sheet)
+    var fishesImg = assets.fishes;
+    if (fishesImg) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(fishesImg, fish.srcX, fish.srcY, 32, 32, pos.x - 16 * SCALE, pos.y - 16 * SCALE, 32 * SCALE, 32 * SCALE);
     }
 
     // Fish name
@@ -844,6 +848,22 @@
     return null;
   }
 
+  // Generate a data URL for a fish icon from the fishes.png sprite sheet
+  var _fishIconCache = {};
+  function getFishIconUrl(fish) {
+    if (_fishIconCache[fish.id]) return _fishIconCache[fish.id];
+    var fishesImg = assets.fishes;
+    if (!fishesImg) return '';
+    var cv = document.createElement('canvas');
+    cv.width = 32; cv.height = 32;
+    var c = cv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    c.drawImage(fishesImg, fish.srcX, fish.srcY, 32, 32, 0, 0, 32, 32);
+    var url = cv.toDataURL();
+    _fishIconCache[fish.id] = url;
+    return url;
+  }
+
   function renderBackpack() {
     var grid = $backpackGrid;
     grid.innerHTML = '';
@@ -855,9 +875,8 @@
         var fish = getFishById(slot.fishId);
         if (fish) {
           cell.className += ' occupied';
-          var iconKey = 'icon' + (fish.icon < 10 ? '0' + fish.icon : '' + fish.icon);
           var img = document.createElement('img');
-          img.src = assets[iconKey] ? assets[iconKey].src : '';
+          img.src = getFishIconUrl(fish);
           img.alt = fish.name;
           cell.appendChild(img);
           var qty = document.createElement('span');
@@ -919,9 +938,8 @@
         var unlocked = isUnlocked(fish.id);
         var item = document.createElement('span');
         item.className = 'codex-item' + (unlocked ? '' : ' locked');
-        var iconKey = 'icon' + (fish.icon < 10 ? '0' + fish.icon : '' + fish.icon);
         var img = document.createElement('img');
-        img.src = assets[iconKey] ? assets[iconKey].src : '';
+        img.src = getFishIconUrl(fish);
         item.appendChild(img);
         var nameSpan = document.createElement('span');
         nameSpan.className = 'rarity-' + fish.rarity;
