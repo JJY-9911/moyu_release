@@ -101,6 +101,10 @@ for(let i=1;i<=10;i++) imgFireAttack.push(loadImg('altar/Explosion_3/Explosion_'
 const bossFiles=['boss/centipede_dark_shadow1.webp','boss/Dark_totem_dark_shadow1.webp'];
 const imgBosses=bossFiles.map(loadImg);
 
+// Ground fog/texture images
+const fogFiles=['fog/Fog_01.webp','fog/Fog_02.webp','fog/Fog_03.webp','fog/Fog_04.webp','fog/Fog_05.webp','fog/Fog_07.webp','fog/Fog_08.webp','fog/Fog_09.webp','fog/Fog_10.webp','fog/Fog_11.webp','fog/Fog_13.webp','fog/Fog_14.webp'];
+const imgFogs=fogFiles.map(loadImg);
+
 // ── Sprite sheet helper ────────────────────────────────────────────────────
 // Sprite sheets use 4-row directional layout:
 // Row 0=down, 1=left, 2=right, 3=up
@@ -197,7 +201,7 @@ const upgrades={
   blood:{count:0,max:999,name:'供奉血魔',bleedRate:0.1,getDesc(){const nr=(0.1*Math.pow(1.5,this.count+1)).toFixed(2);return '流血: 每秒-'+nr;}},
   shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*5)+'%';}},
   hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1);}},
-  eagle:{count:0,max:9,name:'供奉鹰眼',getDesc(){const n=this.count+1;return '间隔-'+(n*0.1).toFixed(1)+'s 射程+'+(n*5)+'% ('+this.count+'/'+this.max+')';}},
+  eagle:{count:0,max:9,name:'供奉鹰眼',getDesc(){const n=this.count+1;return '间隔-'+(n*0.07).toFixed(2)+'s 射程+'+(n*3)+'% ('+this.count+'/'+this.max+')';}},
   altarL:{count:0,max:4,name:'供奉闪电祭坛',getDesc(){return '小范围攻击，射速极快 ('+this.count+'/'+this.max+')';}},
   altarF:{count:0,max:4,name:'供奉天火祭坛',getDesc(){return '全图攻击，造成范围伤害 ('+this.count+'/'+this.max+')';}},
 };
@@ -293,7 +297,7 @@ let bossType=randomBossType();
 
 // ── Wave system ────────────────────────────────────────────────────────────
 const WAVE_INTERVALS=[2700,2700,3300,3300,3300,3900,3900,3900,3900,4500];
-const WAVE_COUNTS=[10,15,25,25,40,40,50,50,100];
+const WAVE_COUNTS=[10,20,30,30,60,60,90,90,150];
 let waveIndex=0,waveTimer=300,waveSpawnQueue=0,waveSpawnDelay=0;
 function getWaveInterval(){return waveIndex<WAVE_INTERVALS.length?WAVE_INTERVALS[waveIndex]:4500;}
 function getWaveCount(){return WAVE_COUNTS[waveIndex%WAVE_COUNTS.length];}
@@ -352,6 +356,25 @@ function generateTreeBorder(){
   }
 }
 generateTreeBorder();
+
+// ── Ground fog textures ─────────────────────────────────────────────────────
+let fogDecals=[];
+const FOG_TILE_SIZE=64;
+function generateFogDecals(){
+  fogDecals=[];
+  const cols=Math.ceil(WORLD_W/FOG_TILE_SIZE);
+  const rows=Math.ceil(WORLD_H/FOG_TILE_SIZE);
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x=c*FOG_TILE_SIZE+FOG_TILE_SIZE/2;
+      const y=r*FOG_TILE_SIZE+FOG_TILE_SIZE/2;
+      if(!inPlayableRaw(x,y)||inRiver(x,y)) continue;
+      const imgIdx=Math.floor(Math.random()*imgFogs.length);
+      fogDecals.push({x,y,imgIdx});
+    }
+  }
+}
+generateFogDecals();
 
 // ── Water wave animation ────────────────────────────────────────────────────
 // Water.webp contains 6 wide wave shapes (y regions), shown one at a time
@@ -515,7 +538,7 @@ function collidesObstacle(x,y,r){return false;} // obstacles are passable
 function getAttackRange(){
   let range=ATTACK_RANGE;
   if(heroChoice>=0&&HEROES[heroChoice].passiveType==='fullrange') range=Math.max(VIEW_W,VIEW_H);
-  range*=(1+upgrades.eagle.count*0.05);
+  range*=(1+upgrades.eagle.count*0.03);
   return range;
 }
 
@@ -698,7 +721,7 @@ function updatePlayer(){
   }
 
   player.attackTimer++;
-  const atkInterval=Math.max(6,ATTACK_INTERVAL-upgrades.eagle.count*6); // -0.1s per eagle upgrade
+  const atkInterval=Math.max(6,ATTACK_INTERVAL-upgrades.eagle.count*4); // -0.07s per eagle upgrade
   if(player.attackTimer>=atkInterval&&!inFountain(player.x,player.y)){player.attackTimer=0;fireAtNearest();}
 }
 
@@ -1027,6 +1050,7 @@ function restartGame(){
   generateGroundMap();
   generateTreeBorder();
   generateWavePositions();
+  generateFogDecals();
   generateAllBuffPos();
   bossType=randomBossType();
   boss.alive=false;boss.respawnTimer=300;boss.chasing=false;boss.animFrame=0;
@@ -1101,13 +1125,25 @@ function updateAltars(){
 
 // ── Draw ───────────────────────────────────────────────────────────────────
 function drawMap(){
-  ctx.fillStyle='#000000';ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  ctx.fillStyle='#4B573E';ctx.fillRect(0,0,VIEW_W,VIEW_H);
 
   // Non-playable
   ctx.save();ctx.fillStyle='#1e1e1e';ctx.beginPath();
   ctx.moveTo(wx(0),wy(0));ctx.lineTo(wx(WORLD_W),wy(0));ctx.lineTo(wx(WORLD_W),wy(WORLD_H));
   ctx.lineTo(wx(WORLD_H-RIVER_HALF),wy(WORLD_H));ctx.lineTo(wx(0),wy(RIVER_HALF));
   ctx.closePath();ctx.fill();ctx.restore();
+
+  // Ground fog textures
+  ctx.save();ctx.globalAlpha=0.2;
+  for(const fd of fogDecals){
+    const sx=wx(fd.x),sy=wy(fd.y);
+    if(sx<-FOG_TILE_SIZE||sx>VIEW_W+FOG_TILE_SIZE||sy<-FOG_TILE_SIZE||sy>VIEW_H+FOG_TILE_SIZE) continue;
+    const img=imgFogs[fd.imgIdx];
+    if(img.complete&&img.naturalWidth){
+      ctx.drawImage(img,sx-FOG_TILE_SIZE/2,sy-FOG_TILE_SIZE/2,FOG_TILE_SIZE,FOG_TILE_SIZE);
+    }
+  }
+  ctx.restore();
 
   // River: base color + one wave shape per frame, tiled
   ctx.save();
