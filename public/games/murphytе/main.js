@@ -198,9 +198,9 @@ function getPrice(key){
 
 const upgrades={
   hero:{count:0,max:36,name:'供奉英雄',getDesc(){const n=this.count+1;return '子弹数量→'+(1+n)+' ('+this.count+'/'+this.max+')';}},
-  blood:{count:0,max:999,name:'供奉血魔',bleedRate:0.1,getDesc(){const nr=(0.1*Math.pow(1.5,this.count+1)).toFixed(2);return '流血: 每秒-'+nr;}},
-  shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*5)+'%';}},
-  hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1);}},
+  blood:{count:0,max:999,name:'供奉血魔',bleedRate:1,getDesc(){const nr=(1*Math.pow(1.5,this.count+1)).toFixed(2);return '流血: 每秒-'+nr;}},
+  shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*10)+'%';}},
+  hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1)*5;}},
   eagle:{count:0,max:9,name:'供奉鹰眼',getDesc(){const n=this.count+1;return '间隔-'+(n*0.07).toFixed(2)+'s 射程+'+(n*3)+'% ('+this.count+'/'+this.max+')';}},
   altarL:{count:0,max:4,name:'供奉闪电祭坛',getDesc(){return '小范围攻击，射速极快 ('+this.count+'/'+this.max+')';}},
   altarF:{count:0,max:4,name:'供奉天火祭坛',getDesc(){return '全图攻击，造成范围伤害 ('+this.count+'/'+this.max+')';}},
@@ -297,10 +297,10 @@ let bossType=randomBossType();
 
 // ── Wave system ────────────────────────────────────────────────────────────
 const WAVE_INTERVALS=[2700,2700,3300,3300,3300,3900,3900,3900,3900,4500];
-const WAVE_COUNTS=[10,20,30,30,60,60,90,90,150];
+const WAVE_COUNTS=[10,20,30,30,60,90,90,150,400];
 let waveIndex=0,waveTimer=300,waveSpawnQueue=0,waveSpawnDelay=0;
 function getWaveInterval(){return waveIndex<WAVE_INTERVALS.length?WAVE_INTERVALS[waveIndex]:4500;}
-function getWaveCount(){return WAVE_COUNTS[waveIndex%WAVE_COUNTS.length];}
+function getWaveCount(){return waveIndex<WAVE_COUNTS.length?WAVE_COUNTS[waveIndex]:WAVE_COUNTS[WAVE_COUNTS.length-1];}
 
 // ── Death effects (frame animated) ────────────────────────────────────────
 const deathEffects=[];
@@ -493,7 +493,7 @@ canvas.addEventListener('click',function(e){
         u.count++;
         if(key!=='altarL'&&key!=='altarF') totalPurchases++;
         // Apply effects
-        if(key==='blood'){u.bleedRate=0.05*Math.pow(1.5,u.count);}
+        if(key==='blood'){u.bleedRate=1*Math.pow(1.5,u.count);}
         if(key==='shadow'){
           const base=HEROES[heroChoice].passiveType==='stealth'?2:1;
           player.speed=base*(1+u.count*0.05);
@@ -759,7 +759,7 @@ function fireAtNearest(){
       speed:0.1,applyBurn:player.hasRedBuff,applyBleed:bleed,
       animFrame:0,animTimer:0,
       curveType,curveDir,totalDist:totalDist2,traveled:0,isTracking,
-      hunterBonus:upgrades.hunter.count,
+      hunterBonus:upgrades.hunter.count*5,
     });
   }
 }
@@ -1062,7 +1062,7 @@ function restartGame(){
   wasInFountain=true;fountainShieldTimer=0;currentTargetType='';
   shopOpen=false;totalPurchases=0;infiniteGold=false;
   for(const k of upgradeKeys){upgrades[k].count=0;}
-  upgrades.blood.bleedRate=0.05;
+  upgrades.blood.bleedRate=1;
   generateAltars();
 }
 
@@ -1096,26 +1096,30 @@ function updateAltars(){
       if(ef.frame>=maxFrames){a.effects.splice(ei,1);}
     }
     if(a.type==='lightning'){
-      // Attack every 0.2s (12 ticks), range 200px
+      // Attack every 0.5s (30 ticks), range 250px, hits ALL minions in range
       if(a.attackTimer>=30){
         a.attackTimer=0;
-        let nearest=null,nd=250;
-        for(const m of minions){const d=dist(a,m);if(d<nd){nd=d;nearest=m;}}
-        if(nearest){
-          nearest.hp-=1;
-          a.effects.push({x:nearest.x,y:nearest.y,frame:0,timer:0});
+        for(const m of minions){
+          if(dist(a,m)<250){
+            m.hp-=1;
+            a.effects.push({x:m.x,y:m.y,frame:0,timer:0});
+          }
         }
       }
     } else {
-      // Fire altar: every 10s (600 ticks), AoE 500px near player, 9999 dmg to minions
+      // Fire altar: every 10s (600 ticks), AoE 150px centered on nearest minion to player, 9999 dmg
       if(a.attackTimer>=600){
         a.attackTimer=0;
-        const fx=player.x+(Math.random()-0.5)*200;
-        const fy=player.y+(Math.random()-0.5)*200;
-        a.effects.push({x:fx,y:fy,frame:0,timer:0});
-        for(let i=minions.length-1;i>=0;i--){
-          if(dist({x:fx,y:fy},minions[i])<150){
-            minions[i].hp-=9999;
+        // Find nearest minion to player
+        let nearest=null,nd=Infinity;
+        for(const m of minions){const d=dist(player,m);if(d<nd){nd=d;nearest=m;}}
+        if(nearest){
+          const fx=nearest.x,fy=nearest.y;
+          a.effects.push({x:fx,y:fy,frame:0,timer:0});
+          for(let i=minions.length-1;i>=0;i--){
+            if(dist({x:fx,y:fy},minions[i])<150){
+              minions[i].hp-=9999;
+            }
           }
         }
       }
@@ -1277,19 +1281,21 @@ function drawEntities(){
   // Altars
   for(const a of altars){
     const asx=wx(a.x),asy=wy(a.y);
-    if(asx<-100||asx>VIEW_W+100||asy<-100||asy>VIEW_H+100) continue;
-    const imgs=a.type==='lightning'?imgLightningAltar:imgFireAltar;
-    const aImg=imgs[a.imgIdx];
-    ctx.save();
-    if(!a.active) ctx.globalAlpha=0.4;
-    if(aImg.complete&&aImg.naturalWidth){ctx.drawImage(aImg,asx-48,asy-48,96,96);}
-    else{ctx.fillStyle=a.type==='lightning'?'#66aaff':'#ff6633';ctx.beginPath();ctx.arc(asx,asy,30,0,Math.PI*2);ctx.fill();}
-    ctx.restore();
-    // Altar name label
-    ctx.fillStyle=a.active?(a.type==='lightning'?'#66aaff':'#ff6633'):'#666';
-    ctx.font='bold 10px Courier New';ctx.textAlign='center';
-    ctx.fillText(a.type==='lightning'?'闪电祭坛':'天火祭坛',asx,asy+56);
-    // Attack effect animations (queued)
+    // Draw altar sprite if in view
+    if(!(asx<-100||asx>VIEW_W+100||asy<-100||asy>VIEW_H+100)){
+      const imgs=a.type==='lightning'?imgLightningAltar:imgFireAltar;
+      const aImg=imgs[a.imgIdx];
+      ctx.save();
+      if(!a.active) ctx.globalAlpha=0.4;
+      if(aImg.complete&&aImg.naturalWidth){ctx.drawImage(aImg,asx-48,asy-48,96,96);}
+      else{ctx.fillStyle=a.type==='lightning'?'#66aaff':'#ff6633';ctx.beginPath();ctx.arc(asx,asy,30,0,Math.PI*2);ctx.fill();}
+      ctx.restore();
+      // Altar name label
+      ctx.fillStyle=a.active?(a.type==='lightning'?'#66aaff':'#ff6633'):'#666';
+      ctx.font='bold 10px Courier New';ctx.textAlign='center';
+      ctx.fillText(a.type==='lightning'?'闪电祭坛':'天火祭坛',asx,asy+56);
+    }
+    // Attack effect animations (always render, effects may be far from altar)
     if(a.effects){
       const eImgs=a.type==='lightning'?imgLightningAttack:imgFireAttack;
       for(const ef of a.effects){
