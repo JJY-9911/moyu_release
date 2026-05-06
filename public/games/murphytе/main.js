@@ -15,6 +15,8 @@ const FOUNTAIN_RADIUS=130;
 const BUFF_RADIUS=60;
 const BOSS_SPAWN_RADIUS=140;
 const OBSTACLE_COUNT=18;
+const PLAYER_OBSTACLE_R=22; // circle vs obstacle hitbox (fits ~40px minion touch radius)
+const OBSTACLE_DAMAGE_KB=30; // px knockback away from obstacle center on hit
 
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
@@ -86,9 +88,8 @@ const barrierHitboxes=[
 // Original pixel sizes for proper scaling (display at 2x)
 const barrierSrcSizes=[128,256,128,64,128,64,64,64,64,64,128,128,128,128];
 
-// Tree images for border decoration
-const imgTrees=[];
-for(let i=1;i<=6;i++) imgTrees.push(loadImg('trees/'+i+'.webp'));
+// Map edge bush strip (world-fixed tiling along playable left & bottom legs)
+const imgEdgeDecor=loadImg('5.webp');
 
 // Defense/altar images
 const imgLightningAltar=[loadImg('defense/Dark_totem_dark_shadow2.webp'),loadImg('defense/white_crystal_light_shadow3.webp')];
@@ -102,7 +103,11 @@ const bossFiles=['boss/centipede_dark_shadow1.webp','boss/Dark_totem_dark_shadow
 const imgBosses=bossFiles.map(loadImg);
 
 // Ground fog/texture images
-const fogFiles=['fog/Fog_01.webp','fog/Fog_02.webp','fog/Fog_03.webp','fog/Fog_04.webp','fog/Fog_05.webp','fog/Fog_07.webp','fog/Fog_08.webp','fog/Fog_09.webp','fog/Fog_10.webp','fog/Fog_11.webp','fog/Fog_13.webp','fog/Fog_14.webp'];
+const fogFiles=[
+  'fog/Tile_01.webp','fog/Tile_02.webp','fog/Tile_03.webp',
+  'fog/Tile_09.webp','fog/Tile_10.webp','fog/Tile_11.webp',
+  'fog/Tile_17.webp','fog/Tile_18.webp','fog/Tile_19.webp',
+];
 const imgFogs=fogFiles.map(loadImg);
 
 // ── Sprite sheet helper ────────────────────────────────────────────────────
@@ -197,7 +202,7 @@ function getPrice(key){
 }
 
 const upgrades={
-  hero:{count:0,max:36,name:'供奉英雄',getDesc(){const n=this.count+1;return '子弹数量→'+(1+n)+' ('+this.count+'/'+this.max+')';}},
+  hero:{count:0,max:999,name:'供奉英雄',getDesc(){const n=this.count+1;return '子弹数量→'+(1+n)+' (已供奉'+this.count+'次)';}},
   blood:{count:0,max:999,name:'供奉血魔',bleedRate:1,getDesc(){const nr=(1*Math.pow(1.5,this.count+1)).toFixed(2);return '流血: 每秒-'+nr;}},
   shadow:{count:0,max:999,name:'供奉影刃',getDesc(){return '移速→+'+(( this.count+1)*10)+'%';}},
   hunter:{count:0,max:999,name:'供奉猎手',getDesc(){return '对boss伤害→+'+(this.count+1)*5;}},
@@ -339,24 +344,6 @@ function generateGroundMap(){
 generateGroundMap();
 
 // ── Tree border ────────────────────────────────────────────────────────────
-let treeBorder=[];
-function generateTreeBorder(){
-  treeBorder=[];
-  const treeSize=64;
-  const spacing=50;
-  // Left edge
-  for(let y=RIVER_HALF+100;y<WORLD_H;y+=spacing+Math.random()*30){
-    const xOff=-10+Math.random()*40;
-    treeBorder.push({x:xOff,y,imgIdx:Math.floor(Math.random()*imgTrees.length),sz:treeSize+Math.random()*20});
-  }
-  // Bottom edge
-  for(let x=0;x<WORLD_W-RIVER_HALF;x+=spacing+Math.random()*30){
-    const yOff=WORLD_H-10-Math.random()*40;
-    treeBorder.push({x,y:yOff,imgIdx:Math.floor(Math.random()*imgTrees.length),sz:treeSize+Math.random()*20});
-  }
-}
-generateTreeBorder();
-
 // ── Ground fog textures ─────────────────────────────────────────────────────
 let fogDecals=[];
 const FOG_TILE_SIZE=64;
@@ -533,7 +520,33 @@ function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);}
 function inPlayable(x,y){return inPlayableRaw(x,y);}
 function inFountain(x,y){return (x-FOUNTAIN_POS.x)**2+(y-FOUNTAIN_POS.y)**2<FOUNTAIN_RADIUS*FOUNTAIN_RADIUS;}
 function rectContains(o,x,y,r){return x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&y+r>o.y-o.h/2&&y-r<o.y+o.h/2;}
-function collidesObstacle(x,y,r){return false;} // obstacles are passable
+// Hitbox aligned with barrier art (barrierHitboxes), same scale as drawImage(o.w x o.h)
+function obstacleHitboxWorld(o){
+  const hb=barrierHitboxes[o.imgIdx];
+  const hw=o.w*hb.hw, hh=o.h*hb.hh;
+  const cx=o.x+o.w*hb.cx, cy=o.y+o.h*hb.cy;
+  return{cx,cy,hw,hh,left:cx-hw,right:cx+hw,top:cy-hh,bottom:cy+hh};
+}
+function circleRectOverlap(px,py,pr,left,top,right,bottom){
+  const qx=Math.max(left,Math.min(px,right)), qy=Math.max(top,Math.min(py,bottom));
+  const dx=px-qx,dy=py-qy;
+  return dx*dx+dy*dy<=pr*pr+1e-6;
+}
+function collidesObstacle(x,y,r){
+  for(const o of OBSTACLES){
+    const b=obstacleHitboxWorld(o);
+    if(circleRectOverlap(x,y,r,b.left,b.top,b.right,b.bottom)) return true;
+  }
+  return false;
+}
+function playerPassesObstacles(){
+  if(heroChoice<0) return false;
+  const h=HEROES[heroChoice];
+  if(h.passiveType==='stealth') return true;
+  if(phaseActive) return true;
+  if(ult.active) return true; // jump arc passes through obstacles
+  return false;
+}
 
 function getAttackRange(){
   let range=ATTACK_RANGE;
@@ -542,14 +555,10 @@ function getAttackRange(){
   return range;
 }
 
-function playerOnObstacle(){
+function playerOverlapsObstacleHitbox(){
   for(const o of OBSTACLES){
-    const hb=barrierHitboxes[o.imgIdx];
-    // Shrink hitbox to 70% of visible content so damage only triggers on clear overlap
-    const hw=o.w*hb.hw*0.7, hh=o.w*hb.hh*0.7;
-    const cx=o.x+o.w*hb.cx, cy=o.y+o.w*hb.cy;
-    const dx=Math.abs(player.x-cx), dy=Math.abs(player.y-cy);
-    if(dx<hw&&dy<hh) return true;
+    const b=obstacleHitboxWorld(o);
+    if(circleRectOverlap(player.x,player.y,PLAYER_OBSTACLE_R,b.left,b.top,b.right,b.bottom)) return true;
   }
   return false;
 }
@@ -676,12 +685,26 @@ function updatePlayer(){
 
   if(player.moving){
     const dx=player.targetX-player.x,dy=player.targetY-player.y,d=Math.sqrt(dx*dx+dy*dy);
-    if(d<curSpeed){player.x=player.targetX;player.y=player.targetY;player.moving=false;}
-    else{
+    const pr=PLAYER_OBSTACLE_R;
+    const passObs=playerPassesObstacles();
+    if(d<curSpeed){
+      const tx=player.targetX,ty=player.targetY;
+      if(inPlayable(tx,ty)&&(passObs||!collidesObstacle(tx,ty,pr))){
+        player.x=tx;player.y=ty;player.moving=false;
+      } else player.moving=false;
+    } else{
       const nx=player.x+dx/d*curSpeed,ny=player.y+dy/d*curSpeed;
-      if(inPlayable(nx,ny)){
+      if(!inPlayable(nx,ny)){}
+      else if(passObs||!collidesObstacle(nx,ny,pr)){
         player.x=nx;player.y=ny;
         player.dir=dirFromDxDy(dx,dy);
+      } else{
+        const mx=player.x+dx/d*curSpeed,my=player.y;
+        if(inPlayable(mx,my)&&!collidesObstacle(mx,my,pr)){player.x=mx;player.dir=dirFromDxDy(dx,dy);}
+        else{
+          const mx2=player.x,my2=player.y+dy/d*curSpeed;
+          if(inPlayable(mx2,my2)&&!collidesObstacle(mx2,my2,pr)){player.y=my2;player.dir=dirFromDxDy(dx,dy);}
+        }
       }
     }
   }
@@ -713,11 +736,20 @@ function updatePlayer(){
   wasInFountain=nowInFountain;
   if(fountainShieldTimer>0) fountainShieldTimer--;
 
-  // Damage from standing on obstacles (stealth passive = immune)
-  const h=HEROES[heroChoice];
-  if(h.passiveType!=='stealth'&&player.invincibleTimer===0&&!phaseActive&&playerOnObstacle()){
-    player.hp--;player.invincibleTimer=120;
-    if(player.hp<=0){triggerGameOver();return;}
+  // Obstacle touch: 1 HP + knockback (潜行 / 虚化 / 大招跳跃中穿过且不受伤; 泉水内不伤)
+  if(!playerPassesObstacles()&&player.invincibleTimer===0&&!nowInFountain&&playerOverlapsObstacleHitbox()){
+    for(const o of OBSTACLES){
+      const b=obstacleHitboxWorld(o);
+      if(!circleRectOverlap(player.x,player.y,PLAYER_OBSTACLE_R,b.left,b.top,b.right,b.bottom)) continue;
+      player.hp--;player.invincibleTimer=120;
+      let vx=player.x-b.cx,vy=player.y-b.cy;
+      let vlen=Math.sqrt(vx*vx+vy*vy);
+      if(vlen<1e-3){vx=0;vy=-1;vlen=1;}
+      let kx=player.x+vx/vlen*OBSTACLE_DAMAGE_KB,ky=player.y+vy/vlen*OBSTACLE_DAMAGE_KB;
+      if(inPlayable(kx,ky)){player.x=kx;player.y=ky;}
+      if(player.hp<=0){triggerGameOver();return;}
+      break;
+    }
   }
 
   player.attackTimer++;
@@ -1012,6 +1044,15 @@ function updateUlt(){
   if(ult.progress>=1){
     ult.progress=1;player.x=ult.tx;player.y=ult.ty;
     ult.active=false;ult.immunityTimer=60;
+    // If landing inside a solid obstacle, slide back along jump vector until clear
+    if(heroChoice>=0&&HEROES[heroChoice].passiveType!=='stealth'&&!phaseActive){
+      const pr=PLAYER_OBSTACLE_R;
+      const jx=ult.tx-ult.sx,jy=ult.ty-ult.sy;
+      const jlen=Math.sqrt(jx*jx+jy*jy)||1;
+      const ux=-jx/jlen,uy=-jy/jlen;
+      let g=0;
+      while(collidesObstacle(player.x,player.y,pr)&&g++<120){player.x+=ux*5;player.y+=uy*5;}
+    }
     for(let i=minions.length-1;i>=0;i--){
       if(dist({x:ult.tx,y:ult.ty},minions[i])<ult.landRadius){
         addDeathEffect(minions[i].x,minions[i].y,72,minions[i].dir);
@@ -1048,7 +1089,6 @@ function restartGame(){
   minions.length=0;bullets.length=0;deathEffects.length=0;
   OBSTACLES=generateObstacles();
   generateGroundMap();
-  generateTreeBorder();
   generateWavePositions();
   generateFogDecals();
   generateAllBuffPos();
@@ -1127,6 +1167,47 @@ function updateAltars(){
   }
 }
 
+// 5.webp 贴在地图左缘、底缘(y=WORLD_H)，首尾衔接（世界坐标）。左侧整体略向右偏以免大部挤出视野。
+function drawTriangleEdgeDecor(){
+  const img=imgEdgeDecor;
+  if(!img.complete||!img.naturalWidth) return;
+  const nw=img.naturalWidth, nh=img.naturalHeight;
+  const hb=VIEW_W*nh/nw;
+  const bandW=nh*VIEW_H/nw;
+  const tileW=nw*hb/nh;
+  const tileH=nw*bandW/nh;
+  const bottomXMax=WORLD_W-RIVER_HALF;
+
+  let xw=0;
+  while(xw<bottomXMax){
+    const dw=Math.min(tileW,bottomXMax-xw);
+    const sw=nw*dw/tileW;
+    const sx=wx(xw);
+    const syTop=wy(WORLD_H)-hb;
+    if(sx<VIEW_W+dw&&sx+dw>0&&syTop<VIEW_H+hb&&syTop+hb>0){
+      ctx.drawImage(img,0,0,sw,nh,sx,syTop,dw,hb);
+    }
+    xw+=dw;
+  }
+
+  const leftEdgeNudge=56;
+  let yw=RIVER_HALF;
+  while(yw<WORLD_H){
+    const dh=Math.min(tileH,WORLD_H-yw);
+    const sh=nw*dh/tileH;
+    const xOuter=wx(-bandW)+leftEdgeNudge;
+    const oy=wy(yw);
+    if(xOuter<VIEW_W+bandW&&xOuter+bandW>0&&oy<VIEW_H+dh&&oy+dh>0){
+      ctx.save();
+      ctx.translate(xOuter,oy);
+      ctx.rotate(Math.PI/2);
+      ctx.drawImage(img,0,0,sh,nh,0,-dh,dh,bandW);
+      ctx.restore();
+    }
+    yw+=dh;
+  }
+}
+
 // ── Draw ───────────────────────────────────────────────────────────────────
 function drawMap(){
   ctx.fillStyle='#4B573E';ctx.fillRect(0,0,VIEW_W,VIEW_H);
@@ -1183,17 +1264,7 @@ function drawMap(){
     }
   }
 
-  // Tree border (left and bottom edges)
-  for(const t of treeBorder){
-    const sx=wx(t.x),sy=wy(t.y);
-    if(sx<-100||sx>VIEW_W+100||sy<-100||sy>VIEW_H+100) continue;
-    const img=imgTrees[t.imgIdx];
-    if(img.complete&&img.naturalWidth){
-      const aspect=img.naturalHeight/img.naturalWidth;
-      const tw=t.sz, th=t.sz*aspect;
-      ctx.drawImage(img,sx-tw/2,sy-th,tw,th);
-    }
-  }
+  drawTriangleEdgeDecor();
 
   // Fountain with magic circle
   const fx=wx(FOUNTAIN_POS.x),fy=wy(FOUNTAIN_POS.y);
