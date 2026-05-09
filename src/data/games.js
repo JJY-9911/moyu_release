@@ -48,6 +48,15 @@ export const games = [
     hot: true,
     desc: '选择神力，击退小兵浪潮，挑战boss，升级祭坛守卫领地',
   },
+  {
+    id: 'demon-invasion',
+    name: '异魔入侵',
+    icon: '👹',
+    category: 'tower',
+    categoryLabel: '塔防',
+    hot: true,
+    desc: '选择士兵上阵，点击召唤气势，抵御异魔浪潮守卫阵营',
+  },
 ];
 
 export const categories = [

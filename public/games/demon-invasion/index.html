@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>异魔入侵 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 启动页遮罩 -->
+  <div id="splashScreen" class="splash-screen">
+    <img src="assets/cover.webp" alt="加载中" class="splash-img" draggable="false">
+    <div class="splash-bottom">
+      <div class="splash-progress-bar"><div id="splashProgress" class="splash-progress-fill"></div></div>
+      <div class="splash-loading" id="splashText">加载中… 0%</div>
+    </div>
+  </div>
+
+  <a href="../../index.html" class="top-btn back-btn">← 返回</a>
+  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+
+  <!-- 游戏主容器 -->
+  <div id="gameContainer" class="game-container" style="visibility:hidden">
+    <!-- canvas 包裹层，所有覆盖 UI 相对于此定位 -->
+    <div id="canvasWrapper" class="canvas-wrapper">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- HUD 层 -->
+      <div id="hud" class="hud">
+        <!-- 底部操作栏：固定三个按钮 + 点击区 -->
+        <div id="actionBar" class="action-bar">
+          <button id="upgradeBtn" class="action-btn upgrade-btn">
+            <span class="btn-label">气势+1</span>
+            <span id="upgradeCost" class="btn-cost">0/40</span>
+          </button>
+          <div id="clickBtn" class="click-btn">
+            <canvas id="portalCanvas" width="80" height="80"></canvas>
+          </div>
+          <div class="action-btn-group">
+            <button id="deployBtn" class="action-btn deploy-btn">
+              <span class="btn-label">派遣</span>
+              <span id="deployCost" class="btn-cost">消耗气势</span>
+            </button>
+            <button id="recruitBtn" class="action-btn recruit-btn">
+              <span class="btn-label">招募</span>
+              <span id="recruitCost" class="btn-cost">0/40</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 气势显示 -->
+        <div id="moraleDisplay" class="morale-display">
+          <span class="morale-label">气势</span>
+          <span id="moraleValue" class="morale-value">0</span>
+        </div>
+
+        <!-- 阵营血量 -->
+        <div id="campHpBar" class="camp-hp-bar">
+          <div class="camp-hp-label">阵营</div>
+          <div class="camp-hp-track">
+            <div id="campHpFill" class="camp-hp-fill"></div>
+          </div>
+          <span id="campHpText" class="camp-hp-text">500/500</span>
+        </div>
+
+        <!-- 游戏时间 -->
+        <div id="gameTimer" class="game-timer">00:00</div>
+      </div>
+
+      <!-- 选兵前置界面 -->
+      <div id="prepScreen" class="prep-screen">
+        <div class="prep-panel">
+          <h2 class="prep-title">选择出战士兵</h2>
+          <p class="prep-subtitle">从下方选择6名士兵上阵（已选 <span id="selectedCount">0</span>/6）</p>
+          <div id="unitPool" class="unit-pool"></div>
+          <div id="selectedSlots" class="selected-slots"></div>
+          <button id="startGameBtn" class="start-game-btn" disabled>开始战斗</button>
+        </div>
+      </div>
+
+      <!-- 招募界面 -->
+      <div id="recruitScreen" class="recruit-screen" style="display:none">
+        <div class="recruit-panel">
+          <h2 class="recruit-title">招募士兵 <span class="recruit-cost">（消耗40气势）</span></h2>
+          <p class="recruit-subtitle">选择一名新士兵，替换已上阵的士兵</p>
+          <div id="recruitPool" class="recruit-pool"></div>
+          <div class="recruit-actions">
+            <button id="cancelRecruitBtn" class="cancel-recruit-btn">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 游戏结束界面 -->
+      <div id="gameOverScreen" class="game-over-screen" style="display:none">
+        <div class="game-over-panel">
+          <h2 id="gameOverTitle" class="game-over-title">游戏结束</h2>
+          <p id="gameOverMsg" class="game-over-msg"></p>
+          <button id="restartBtn" class="restart-btn">重新开始</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var splash = document.getElementById('splashScreen');
+      var splashText = document.getElementById('splashText');
+      var progressFill = document.getElementById('splashProgress');
+      var gameContainer = document.getElementById('gameContainer');
+      var done = false;
+
+      var allImages = [
+        'assets/cover.webp',
+        'assets/map.png',
+        'assets/Portal1_Idle.webp',
+        'assets/land/road.webp',
+        'assets/land/Beige_green_mushroom3.webp',
+        'assets/land/Blue-green_balls_tree3.webp',
+        'assets/land/Chanterelles1.webp',
+        'assets/land/Chanterelles2.webp',
+        'assets/monster/Icon39.webp',
+        'assets/monster/guard/Icon9.webp',
+        'assets/monster/guard/Icon15.webp',
+        'assets/monster/guard/Icon19.webp',
+        'assets/monster/guard/Icon20.webp',
+        'assets/monster/rush/Icon26.webp',
+        'assets/monster/rush/Icon27.webp',
+        'assets/monster/rush/Icon31.webp',
+        'assets/monster/rush/Icon33.webp',
+        'assets/monster/range/Icon4.webp',
+        'assets/monster/range/Icon5.webp',
+        'assets/monster/range/Icon17.webp',
+        'assets/monster/range/Icon22.webp',
+        'assets/monster/caster/Icon34.webp',
+        'assets/monster/swarm/Icon44.webp',
+        'assets/monster/swarm/Icon42.webp',
+        'assets/monster/siege/Icon3.webp',
+        'assets/monster/siege/Icon8.webp',
+        'assets/monster/siege/Icon13.webp',
+        'assets/fire/Fire Spell_Frame_01.webp',
+        'assets/fire/Fire Spell_Frame_02.webp',
+        'assets/fire/Fire Spell_Frame_03.webp',
+        'assets/fire/Fire Spell_Frame_04.webp',
+        'assets/fire/Fire Spell_Frame_05.webp',
+        'assets/fire/Fire Spell_Frame_06.webp',
+        'assets/fire/Fire Spell_Frame_07.webp',
+        'assets/fire/Fire Spell_Frame_08.webp',
+        'assets/monster/caster/attack/Explosion_1.webp',
+        'assets/monster/caster/attack/Explosion_2.webp',
+        'assets/monster/caster/attack/Explosion_3.webp',
+        'assets/monster/caster/attack/Explosion_4.webp',
+        'assets/monster/caster/attack/Explosion_5.webp',
+        'assets/monster/caster/attack/Explosion_6.webp',
+        'assets/monster/caster/attack/Explosion_7.webp',
+        'assets/monster/caster/attack/Explosion_8.webp',
+        'assets/monster/caster/attack/Explosion_9.webp',
+        'assets/monster/caster/attack/Explosion_10.webp'
+      ];
+
+      var total = allImages.length;
+      var loaded = 0;
+      window.__imageCache = {};
+
+      function updateProgress(pct) {
+        progressFill.style.width = pct + '%';
+        splashText.textContent = '加载中… ' + Math.round(pct) + '%';
+      }
+
+      function fetchImage(src) {
+        return fetch(src)
+          .then(function(r) { if (!r.ok) throw 0; return r.blob(); })
+          .then(function(b) { window.__imageCache[src] = URL.createObjectURL(b); })
+          .catch(function() { window.__imageCache[src] = src; })
+          .then(function() {
+            loaded++;
+            updateProgress((loaded / total) * 80);
+          });
+      }
+
+      function fadeOut() {
+        if (done) return;
+        done = true;
+        gameContainer.style.visibility = 'visible';
+        splash.classList.add('splash-fade');
+        splash.addEventListener('transitionend', function() { splash.remove(); });
+      }
+
+      updateProgress(0);
+      Promise.all(allImages.map(fetchImage)).then(function() {
+        updateProgress(85);
+        return new Promise(function(resolve) {
+          window.__onGameReady = resolve;
+          var s = document.createElement('script');
+          s.src = 'main.js';
+          s.type = 'module';
+          s.onerror = resolve;
+          document.body.appendChild(s);
+        });
+      }).then(function() {
+        updateProgress(100);
+        setTimeout(fadeOut, 200);
+      });
+
+      setTimeout(function() { if (!done) { updateProgress(100); fadeOut(); } }, 20000);
+    })();
+  </script>
+</body>
+</html>
