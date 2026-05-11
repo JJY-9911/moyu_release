@@ -23,10 +23,10 @@ const UNIT_DEFS = [
   { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,
     summonCount:2, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:5,
     summonIcon:'assets/monster/swarm/Icon42.webp' },
-  // Turret - 无法移动，远程攻击
-  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:1,  speed:0.2,   dmg:10, atkInterval:5,   range:20,  cost:7  },
-  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:1,  speed:0.2,   dmg:20, atkInterval:6,   range:20,  cost:9  },
-  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:1,  speed:0.2,   dmg:10, atkInterval:8,   range:20,  cost:9  },
+  // Turret - 穿透远程攻击
+  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:20, speed:0.2, dmg:5, atkInterval:8,   range:5,  cost:7  },
+  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:20, speed:0.2, dmg:10, atkInterval:10,   range:5,  cost:9  },
+  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:20, speed:0.2, dmg:5, atkInterval:12,   range:7,  cost:9  },
 ];
 
 const TYPE_LABELS = { guard:'前排', rush:'突击', range:'远程', caster:'法术', swarm:'召唤', turret:'炮塔' };
@@ -346,17 +346,17 @@ class Unit {
 
   _updateMelee(dt, game) {
     if (this.side === 'ally') {
-      // 停止行：射程末端恰好在中线
-      const stopRow = MIDLINE_ROW + Math.max(this.range, 1);
-      if (this.row > stopRow) {
-        this.row -= this.speed * dt;
-        if (this.row < stopRow) this.row = stopRow;
-      }
-      // 攻击射程内最近的敌人
       const target = this._findNearest(game.enemies);
       const meleeRange = this.rangeInPixels() * Math.max(this.range, 1.5);
       if (target && this.distTo(target) <= meleeRange) {
+        // 射程内有敌人，停下攻击
         this._meleeAttack(dt, target, game);
+      } else {
+        // 没有射程内敌人，继续前进，但不超过中线
+        if (this.row > MIDLINE_ROW) {
+          this.row -= this.speed * dt;
+          if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
+        }
       }
     } else {
       // 敌军：向下移动，攻击阵营
@@ -381,18 +381,20 @@ class Unit {
 
   _updateRange(dt, game) {
     if (this.side === 'ally') {
-      // 停止行：射程末端恰好在中线
-      const stopRow = MIDLINE_ROW + this.range;
-      if (this.row > stopRow) {
-        this.row -= this.speed * dt;
-        if (this.row < stopRow) this.row = stopRow;
-      }
       const target = this._findNearest(game.enemies);
-      if (target && this.distTo(target) <= this.rangeInPixels() * this.range) {
+      const attackRange = this.rangeInPixels() * this.range;
+      if (target && this.distTo(target) <= attackRange) {
+        // 射程内有敌人，停下射击
         this.atkTimer += dt;
         if (this.atkTimer >= this.atkInterval) {
           this.atkTimer = 0;
           fireProjectile(this.px(), this.py(), gridCellWidth(this.row) * 0.6, this.dmg, false, game);
+        }
+      } else {
+        // 没有射程内敌人，继续前进，但不超过中线
+        if (this.row > MIDLINE_ROW) {
+          this.row -= this.speed * dt;
+          if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
         }
       }
     } else {
@@ -423,14 +425,10 @@ class Unit {
 
   _updateCaster(dt, game) {
     if (this.side === 'ally') {
-      // 停止行：射程末端恰好在中线
-      const stopRow = MIDLINE_ROW + this.range;
-      if (this.row > stopRow) {
-        this.row -= this.speed * dt;
-        if (this.row < stopRow) this.row = stopRow;
-      }
       const target = this._findNearest(game.enemies);
-      if (target && this.distTo(target) <= this.rangeInPixels() * this.range) {
+      const attackRange = this.rangeInPixels() * this.range;
+      if (target && this.distTo(target) <= attackRange) {
+        // 射程内有敌人，停下施法
         this.atkTimer += dt;
         if (this.atkTimer >= this.atkInterval) {
           this.atkTimer = 0;
@@ -442,6 +440,12 @@ class Unit {
             }
           }
           addExplosionEffect(target.px(), target.py(), gridCellWidth(target.row) * 2);
+        }
+      } else {
+        // 没有射程内敌人，继续前进，但不超过中线
+        if (this.row > MIDLINE_ROW) {
+          this.row -= this.speed * dt;
+          if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
         }
       }
     }
@@ -479,18 +483,21 @@ class Unit {
 
   _updateTurret(dt, game) {
     if (this.side !== 'ally') return;
-    // 炮塔类：移动到中线停止，驻守射击
-    if (this.row > MIDLINE_ROW) {
-      this.row -= this.speed * dt;
-      if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
-    }
-    const enemies = game.enemies;
-    const target = this._findNearest(enemies);
-    if (target && this.distTo(target) <= this.rangeInPixels() * this.range) {
+    const target = this._findNearest(game.enemies);
+    // 攻城类射程：固定为道路高度的 range/10 比例，不随透视缩放
+    const attackRange = (ROAD_BOT_Y - ROAD_TOP_Y) * (this.range / 10);
+    if (target && this.distTo(target) <= attackRange) {
+      // 射程内有敌人，停下射击
       this.atkTimer += dt;
       if (this.atkTimer >= this.atkInterval) {
         this.atkTimer = 0;
         fireProjectile(this.px(), this.py(), gridCellWidth(this.row) * 0.7, this.dmg, true, game);
+      }
+    } else {
+      // 没有射程内敌人，前进到中线
+      if (this.row > MIDLINE_ROW) {
+        this.row -= this.speed * dt;
+        if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
       }
     }
   }
@@ -532,13 +539,7 @@ class Unit {
     const img = getImg(this.icon);
     if (img.complete && img.naturalWidth) {
       ctx.save();
-      if (this.side === 'enemy') {
-        ctx.translate(x, y);
-        ctx.scale(1, -1);
-        ctx.drawImage(img, -size/2, -size/2, size, size);
-      } else {
-        ctx.drawImage(img, x - size/2, y - size/2, size, size);
-      }
+      ctx.drawImage(img, x - size/2, y - size/2, size, size);
       ctx.restore();
     } else {
       ctx.fillStyle = this.side === 'ally' ? '#3498db' : '#e74c3c';
@@ -597,10 +598,10 @@ class MoraleSystem {
     if (this.value >= n) { this.value -= n; this._updateUI(); return true; }
     return false;
   }
-  // 升级：消耗所有气势，clickGain+1，upgradeCost *= 1.5
+  // 升级：消耗 upgradeCost 气势，clickGain+1，upgradeCost *= 1.5
   upgrade() {
     if (this.value < this.upgradeCost) return false;
-    this.value = 0;
+    this.value -= this.upgradeCost;
     this.clickGain += 1;
     this.upgradeCost = Math.ceil(this.upgradeCost * 1.5);
     this._updateUI();
@@ -641,39 +642,51 @@ const ENEMY_DEFS = {
   minion: {
     id: 'minion', name: '小兵', type: 'rush',
     icon: 'assets/monster/Icon39.webp',
-    hp: 3, speed: 0.5, dmg: 1, atkInterval: 1, range: 1, cost: 1,
+    hp: 3, speed: 0.2, dmg: 1, atkInterval: 1, range: 1, cost: 1,
     sizeScale: 1,
   },
   fast: {
     id: 'fast', name: '快速兵', type: 'rush',
-    icon: 'assets/monster/Icon6.png',
-    hp: 2, speed: 1, dmg: 1, atkInterval: 1, range: 1, cost: 2,
+    icon: 'assets/monster/Icon6.webp',
+    hp: 2, speed: 0.7, dmg: 0.5, atkInterval: 1, range: 1, cost: 2,
     sizeScale: 1,
   },
   shield: {
     id: 'shield', name: '盾兵', type: 'guard',
-    icon: 'assets/monster/Icon30.png',
-    hp: 10, speed: 0.5, dmg: 2, atkInterval: 1.5, range: 1, cost: 4,
+    icon: 'assets/monster/Icon30.webp',
+    hp: 20, speed: 0.2, dmg: 2, atkInterval: 1.5, range: 1, cost: 4,
     sizeScale: 2,
   },
   elite: {
     id: 'elite', name: '精英兵', type: 'rush',
-    icon: 'assets/monster/Icon38.png',
-    hp: 5, speed: 1, dmg: 3, atkInterval: 1, range: 1, cost: 8,
+    icon: 'assets/monster/Icon38.webp',
+    hp: 15, speed: 0.5, dmg: 3, atkInterval: 1, range: 1, cost: 8,
     sizeScale: 2,
   },
   boss1: {
     id: 'boss1', name: 'Boss', type: 'guard',
-    icon: 'assets/monster/Icon24.png',
-    hp: 50, speed: 0.2, dmg: 10, atkInterval: 2, range: 1, cost: 20,
+    icon: 'assets/monster/Icon24.webp',
+    hp: 150, speed: 0.1, dmg: 10, atkInterval: 2, range: 1, cost: 20,
     sizeScale: 4,
   },
   boss2: {
     id: 'boss2', name: 'Boss2', type: 'guard',
-    icon: 'assets/monster/Icon12.png',
-    hp: 80, speed: 0.2, dmg: 5, atkInterval: 2, range: 1, cost: 20,
+    icon: 'assets/monster/Icon12.webp',
+    hp: 200, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
     sizeScale: 4,
   },
+    boss3: {
+    id: 'boss3', name: 'Boss3', type: 'guard',
+    icon: 'assets/monster/Icon7.webp',
+    hp: 500, speed: 0.1, dmg: 5, atkInterval: 1, range: 1, cost: 20,
+    sizeScale: 8,
+  },
+    boss4: {
+    id: 'boss4', name: 'Boss4', type: 'guard',
+    icon: 'assets/monster/Icon45.webp',
+    hp: 1000, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
+    sizeScale: 8,
+  }
 };
 
 // 阶段权重表
@@ -696,8 +709,10 @@ function getEnemyWeights(elapsed) {
       { def: ENEMY_DEFS.fast,   w: 30 },
       { def: ENEMY_DEFS.shield, w: 20 },
       { def: ENEMY_DEFS.elite,  w: 20 },
-      { def: ENEMY_DEFS.boss1,  w:  3 },
-      { def: ENEMY_DEFS.boss2,  w:  2 },
+      { def: ENEMY_DEFS.boss1,  w:  2 },
+      { def: ENEMY_DEFS.boss2,  w:  1 },
+      { def: ENEMY_DEFS.boss3,  w:  1 },
+      { def: ENEMY_DEFS.boss4,  w:  1 },
     ];
   }
 }
@@ -799,8 +814,8 @@ class Game {
   }
 
   _spawnEnemies(dt) {
-    // 每秒压力 = 1 + 0.03 × 游戏时间
-    const basePressure = 1 + 0.02 * this.elapsed;
+    // 每秒压力 = 1 + 0.02 × 游戏时间
+    const basePressure = 1 + 0.01 * this.elapsed;
     // 玩家战力 = 点击收益 × 0.6 + 场上友军数 × 0.4
     const playerPower = this.morale.clickGain * 0.6 + this.allies.length * 0.4;
     // 最终压力（每秒）
@@ -808,27 +823,10 @@ class Game {
     // 本帧累积压力
     this.pressureAccum += finalPressure * dt;
 
-    // 消耗压力生成敌人：压力够1就生成，兵种由权重随机决定
+    // 每积累1点压力生成一个敌人，兵种完全由权重随机决定
     while (this.pressureAccum >= 1) {
-      const def = pickEnemyDef(this.elapsed);
-      if (this.pressureAccum >= def.cost) {
-        this.pressureAccum -= def.cost;
-        this._spawnOneEnemy(def);
-      } else {
-        // 随机到了贵的兵种但压力不够，找一个当前压力能负担的最贵兵种
-        const weights = getEnemyWeights(this.elapsed);
-        const affordable = weights
-          .map(e => e.def)
-          .filter(d => d.cost <= this.pressureAccum)
-          .sort((a, b) => b.cost - a.cost);
-        if (affordable.length > 0) {
-          const chosen = affordable[0];
-          this.pressureAccum -= chosen.cost;
-          this._spawnOneEnemy(chosen);
-        } else {
-          break;
-        }
-      }
+      this.pressureAccum -= 1;
+      this._spawnOneEnemy(pickEnemyDef(this.elapsed));
     }
   }
 
