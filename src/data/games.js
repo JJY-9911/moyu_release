@@ -57,6 +57,16 @@ export const games = [
     hot: true,
     desc: '选择士兵上阵，点击召唤气势，抵御异魔浪潮守卫阵营',
   },
+  {
+    id: 'eternal-night',
+    name: 'Eternal Night',
+    icon: '🌙',
+    category: 'casual',
+    categoryLabel: '休闲',
+    hot: false,
+    desc: '永恒之夜',
+
+  },
 ];
 
 export const categories = [

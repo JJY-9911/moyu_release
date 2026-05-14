@@ -14,7 +14,7 @@
 
   // Scene layout (in origbig pixel coords, 576×324)
   var GROUND_TOP = 292;       // 324 - 32 = 画面底部一格
-  var WATER_TOP = 292;        // same Y as ground so they align horizontally
+  var WATER_TOP = 284;        // water surface, slightly above ground level
   var GROUND_LEFT = -200;
   var GROUND_RIGHT = 310;     // x where shoreline ends, water begins
   var DOCK_Y = 280;           // 码头面板在地面上方一点
@@ -115,6 +115,7 @@
     loadImage('fish',      base + 'Fisherman_fish.webp');
     loadImage('row',       base + 'Fisherman_row.webp');
     loadImage('water',     base + 'Water.webp');
+    loadImage('foreground', base + 'foreground_.webp');
     loadImage('hut',       base + 'Fishing_hut.webp');
     loadImage('boat',      base + 'Boat.webp');
     loadImage('barrel1',   base + 'Fishbarrel1.webp');
@@ -239,17 +240,45 @@
   }
 
   function drawWaterTiles() {
-    var waterImg = assets.water;
-    if (!waterImg) return;
-    var ts = 32;
-    // Water.png 是 96×96 = 3×3 的 32×32 帧，用时间切换帧实现动画
-    var frameCol = Math.floor(Date.now() / 300) % 3; // 每300ms切换一帧
-    var frameRow = 0;
-    var srcX = frameCol * ts;
-    var srcY = frameRow * ts;
-    for (var wx = GROUND_RIGHT; wx < GROUND_RIGHT + 400; wx += ts) {
-      var screenX = Math.round((wx - state.cameraX) * SCALE);
-      ctx.drawImage(waterImg, srcX, srcY, ts, ts, screenX, WATER_TOP * SCALE, ts * SCALE + 1, ts * SCALE);
+    var fgImg = assets.foreground;
+    var ts = 16; // tile size in source
+    var dispTs = ts * SCALE; // display size
+
+    if (fgImg) {
+      ctx.imageSmoothingEnabled = false;
+
+      // Fill below wave row with solid blue block (srcX:0, srcY:112)
+      var fillY = WATER_TOP * SCALE + dispTs;
+      var fillH = canvas.height - fillY;
+      if (fillH > 0) {
+        for (var wy = 0; wy < fillH; wy += dispTs) {
+          for (var wx2 = GROUND_RIGHT; wx2 < GROUND_RIGHT + 400; wx2 += ts) {
+            var screenX2 = Math.round((wx2 - state.cameraX) * SCALE);
+            if (screenX2 > canvas.width + dispTs || screenX2 < -dispTs) continue;
+            ctx.drawImage(fgImg, 0, 112, ts, ts, screenX2, fillY + wy, dispTs + 1, dispTs + 1);
+          }
+        }
+      }
+
+      // Wave animation on top row
+      var WAVE_FRAMES = [16,0,32,64,48,80,96,112];
+      var waveFrame = Math.floor(Date.now() / 150) % WAVE_FRAMES.length;
+      var srcX = WAVE_FRAMES[waveFrame];
+      for (var wx = GROUND_RIGHT; wx < GROUND_RIGHT + 400; wx += ts) {
+        var screenX = Math.round((wx - state.cameraX) * SCALE);
+        if (screenX > canvas.width + dispTs || screenX < -dispTs) continue;
+        ctx.drawImage(fgImg, srcX, 0, ts, ts, screenX, WATER_TOP * SCALE, dispTs + 1, dispTs);
+      }
+    } else {
+      // Fallback to old Water.webp
+      var waterImg = assets.water;
+      if (!waterImg) return;
+      var oldTs = 32;
+      var frameCol = Math.floor(Date.now() / 300) % 3;
+      for (var wx3 = GROUND_RIGHT; wx3 < GROUND_RIGHT + 400; wx3 += oldTs) {
+        var screenX3 = Math.round((wx3 - state.cameraX) * SCALE);
+        ctx.drawImage(waterImg, frameCol * oldTs, 0, oldTs, oldTs, screenX3, WATER_TOP * SCALE, oldTs * SCALE + 1, oldTs * SCALE);
+      }
     }
   }
 
@@ -515,7 +544,6 @@
 
   // ===================== CAMERA =====================
   function updateCamera() {
-    // 用精灵实际视觉宽度的中心来跟随
     var spriteWorldW = FRAME_W * CHAR_SCALE / SCALE;
     var targetX = state.playerX + spriteWorldW / 2 - CANVAS_W / 2;
     targetX = Math.max(WORLD_LEFT, Math.min(targetX, WORLD_RIGHT - CANVAS_W));
