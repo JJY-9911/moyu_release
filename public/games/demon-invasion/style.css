@@ -98,6 +98,19 @@ html, body {
   width: auto;
 }
 
+/* 底部操作栏高度（阵营条需叠在其上方，避免与按钮挤在一起） */
+:root {
+  --hud-action-button-height: clamp(40px, 5.4vh, 48px);
+  --hud-action-row-gap: clamp(8px, 1.25vh, 12px);
+  --hud-action-button-gap: clamp(8px, 2.2vw, 12px);
+  --hud-action-half-width: calc(var(--hud-action-button-height) + var(--hud-action-button-height));
+  --hud-action-deploy-width: calc(var(--hud-action-half-width) + var(--hud-action-half-width));
+  --hud-action-left-width: calc(var(--hud-action-deploy-width) + var(--hud-action-button-gap));
+  --hud-action-two-row-height: calc(var(--hud-action-button-height) + var(--hud-action-button-height) + var(--hud-action-row-gap));
+  --hud-action-click-size: var(--hud-action-two-row-height);
+  --hud-action-dock-height: calc(var(--hud-action-click-size) + 10px + max(10px, env(safe-area-inset-bottom)));
+}
+
 /* ===== HUD ===== */
 .hud {
   position: absolute;
@@ -105,141 +118,334 @@ html, body {
   pointer-events: none;
 }
 
-/* 底部操作栏 */
+/* 底部操作栏：左 2/3（上派遣全宽、下招募+气势+1），右 1/3 圆形点击区 */
 .action-bar {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 100px;
-  background: rgba(0,0,0,0.75);
-  border-top: 1px solid #333;
+  height: var(--hud-action-dock-height);
+  border-top: none;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  justify-content: flex-end;
+  padding: 10px 8px max(10px, env(safe-area-inset-bottom));
   pointer-events: all;
-  gap: 8px;
+  gap: clamp(6px, 1.6vw, 10px);
+  background: transparent;
 }
 
-/* 点击按钮（portal） */
+.action-bar-left {
+  flex: 0 0 var(--hud-action-left-width);
+  min-width: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hud-action-row-gap);
+  justify-content: center;
+  align-items: center;
+}
+
+.action-bar-row {
+  flex: 0 0 auto;
+  display: flex;
+  height: var(--hud-action-button-height);
+  min-height: 0;
+  gap: var(--hud-action-button-gap);
+  justify-content: center;
+}
+
+.action-bar-row-top {
+  min-height: 0;
+}
+
+.action-bar-row-bottom {
+  min-height: 0;
+}
+
+.action-bar-cell-wide {
+  flex: 0 0 var(--hud-action-deploy-width);
+  width: var(--hud-action-deploy-width);
+  min-height: 0;
+}
+
+.action-bar-cell-half {
+  flex: 0 0 var(--hud-action-half-width);
+  width: var(--hud-action-half-width);
+  min-width: 0;
+  min-height: 0;
+}
+
+.action-bar-right {
+  flex: 0 0 var(--hud-action-click-size);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-bar-click-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.click-zone-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.75), 0 1px 3px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* 点击区（传送门） */
 .click-btn {
   cursor: pointer;
   border-radius: 50%;
   overflow: hidden;
-  width: 80px;
-  height: 80px;
+  width: var(--hud-action-click-size);
+  height: var(--hud-action-click-size);
   flex-shrink: 0;
-  box-shadow: 0 0 16px rgba(255,150,50,0.6);
-  transition: transform 0.05s;
+  box-shadow: 0 0 18px rgba(255, 150, 50, 0.55);
+  touch-action: manipulation;
+  transition: transform 0.12s ease-out, filter 0.12s ease-out, box-shadow 0.15s ease;
 }
-.click-btn:active { transform: scale(0.92); }
 
-/* 通用操作按钮 */
-.action-btn {
+.click-btn > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.click-btn:active,
+.click-btn.is-pressing {
+  transform: scale(0.88);
+  filter: brightness(1.12) saturate(1.08);
+  box-shadow: 0 0 26px rgba(255, 200, 80, 0.85);
+}
+
+/* 固定 72×72 叠放层：图铺满底层，文案在上层，避免网格/按钮被拉高后字落到图外 */
+.hud-icon-btn {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  border: 2px solid #444;
-  border-radius: 10px;
-  padding: 8px 10px;
-  min-width: 64px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  pointer-events: all;
-  transition: all 0.15s;
-  opacity: 0.45;
-  background: rgba(255,255,255,0.05);
-}
-.action-btn.active {
-  opacity: 1;
-  animation: btn-pulse 0.8s infinite;
-}
-.action-btn:active { transform: scale(0.94); }
-
-.btn-label {
-  color: #fff;
-  font-size: 13px;
-  font-weight: bold;
-  white-space: nowrap;
-}
-.btn-cost {
-  color: #aaa;
-  font-size: 11px;
-  white-space: nowrap;
+  line-height: 0;
+  flex-shrink: 0;
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  opacity: 0.52;
+  touch-action: manipulation;
+  transition: opacity 0.15s ease, transform 0.12s ease-out, filter 0.12s ease-out;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 升级按钮高亮色 */
-.upgrade-btn { border-color: #8e44ad; }
-.upgrade-btn.active {
-  border-color: #a855f7;
-  background: rgba(142,68,173,0.25);
-  box-shadow: 0 0 10px rgba(168,85,247,0.5);
+/* 操作栏内按钮需压过 .hud-icon-btn 的 fit-content / align-self:center；素材即整块可点区域 */
+.action-bar-left .hud-icon-btn.action-bar-cell-wide,
+.action-bar-left .hud-icon-btn.action-bar-cell-half {
+  align-self: stretch;
+  align-items: stretch;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
 }
-.upgrade-btn.active .btn-label { color: #d8b4fe; }
 
-/* 派遣按钮高亮色 */
-.deploy-btn { border-color: #27ae60; }
-.deploy-btn.active {
-  border-color: #2ecc71;
-  background: rgba(39,174,96,0.25);
-  box-shadow: 0 0 10px rgba(46,204,113,0.5);
+.action-bar-left .hud-icon-btn.action-bar-cell-wide {
+  width: var(--hud-action-deploy-width);
 }
-.deploy-btn.active .btn-label { color: #86efac; }
 
-/* 招募按钮高亮色 */
-.recruit-btn { border-color: #e74c3c; }
-.recruit-btn.active {
-  border-color: #ff6b6b;
-  background: rgba(231,76,60,0.25);
-  box-shadow: 0 0 10px rgba(255,107,107,0.5);
+.action-bar-left .hud-icon-btn.action-bar-cell-half {
+  width: var(--hud-action-half-width);
 }
-.recruit-btn.active .btn-label { color: #fca5a5; }
 
-.action-btn-group {
+.hud-icon-stack {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.hud-icon-stack > img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+/* 操作栏：按钮图是带透明留白的方图，放大后裁掉留白让胶囊本体填满格子 */
+.action-bar-left .hud-icon-btn .hud-icon-stack {
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.action-bar-left .hud-icon-btn .hud-icon-stack > img {
+  left: 50%;
+  top: 50%;
+  width: 120%;
+  height: 285%;
+  object-fit: fill;
+  transform: translate(-50%, -50%);
+}
+
+.action-bar-left .recruit-btn .hud-icon-stack > img {
+  height: 305%;
+}
+
+/* 操作栏只显示按钮文案，消耗数字仍在素材上隐藏 */
+.action-bar-left .hud-icon-stack .btn-cost {
+  display: none;
+}
+
+.action-bar-left .hud-icon-stack .btn-label {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  padding: 0 8px;
+  font-size: clamp(12px, 2.8vh, 16px);
+  line-height: 1;
+  letter-spacing: 0.04em;
 }
 
-@keyframes btn-pulse {
+.hud-icon-btn.active {
+  opacity: 1;
+  animation: hud-icon-pulse 0.85s ease-in-out infinite;
+}
+.hud-icon-btn:active,
+.hud-icon-btn.is-pressing {
+  animation: none !important;
+  transform: scale(0.9);
+  opacity: 1;
+}
+
+.hud-icon-stack .btn-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5px;
+  z-index: 2;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 4px;
+  text-align: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1.15;
+  text-shadow: 0 0 4px #000, 0 1px 3px #000, 0 0 12px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+}
+.hud-icon-stack .btn-cost {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  z-index: 2;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 4px;
+  text-align: center;
+  color: #f5f5f5;
+  font-size: 8px;
+  line-height: 1.15;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upgrade-btn.active { filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.9)); }
+.deploy-btn.active { filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.9)); }
+.recruit-btn.active { filter: drop-shadow(0 0 12px rgba(251, 146, 60, 0.9)); }
+
+@keyframes hud-icon-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+  50% { transform: scale(1.03); }
 }
 
 /* 气势显示 */
 .morale-display {
   position: absolute;
-  top: 8px;
+  top: auto;
+  bottom: max(10px, env(safe-area-inset-bottom));
   left: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(0,0,0,0.7);
-  border: 1px solid #f39c12;
-  border-radius: 8px;
-  padding: 4px 10px;
-  min-width: 52px;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  width: var(--hud-action-two-row-height);
+  height: var(--hud-action-two-row-height);
+  min-width: 0;
+  overflow: hidden;
   pointer-events: none;
 }
+.morale-display::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120%;
+  height: 285%;
+  background: url('assets/14.webp') center / 100% 100% no-repeat;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
 .morale-label {
+  position: relative;
+  z-index: 1;
   color: #f39c12;
   font-size: 11px;
   font-weight: bold;
 }
 .morale-value {
+  position: relative;
+  z-index: 1;
   color: #fff;
   font-size: 20px;
   font-weight: bold;
   line-height: 1.2;
 }
 
-/* Camp HP Bar */
+/* Camp HP：叠在操作栏上方，不与底栏抢位置 */
 .camp-hp-bar {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
+  bottom: calc(var(--hud-action-dock-height) + 8px);
+  left: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -326,46 +532,111 @@ html, body {
 
 .unit-pool {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 8px;
 }
 
 .unit-card {
   background: rgba(255,255,255,0.05);
   border: 2px solid #333;
   border-radius: 10px;
-  padding: 8px 4px;
   cursor: pointer;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  padding: 12px 6px 20px;
+  margin-top: 20px;
   transition: all 0.15s;
 }
 .unit-card:hover { border-color: #e74c3c; background: rgba(231,76,60,0.1); }
 .unit-card.selected { border-color: #f39c12; background: rgba(243,156,18,0.15); }
 .unit-card.disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 左上：消耗气势 */
+.unit-card .card-cost {
+  position: absolute;
+  top: -18px;
+  left: -10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1a1a2e;
+  border: 2px solid #f39c12;
+  color: #f39c12;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+/* 右上：兵种 */
+.unit-card .card-type {
+  position: absolute;
+  top: -18px;
+  right: -10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  padding: 0;
+}
+
+/* 中间图片区 */
+.unit-card .card-img-wrap {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #444;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  margin-bottom: 8px;
+}
 .unit-card img {
-  width: 40px;
-  height: 40px;
+  width: 80%;
+  height: 80%;
   object-fit: contain;
   image-rendering: pixelated;
 }
+
+/* 底部：伤害 */
+.unit-card .card-dmg {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1a1a2e;
+  border: 2px solid #e74c3c;
+  color: #e74c3c;
+  font-size: 11px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+/* 卡牌名称（可选，放在图片下方） */
 .unit-card .card-name {
-  color: #fff;
+  color: #ccc;
   font-size: 10px;
   text-align: center;
   line-height: 1.2;
-}
-.unit-card .card-cost {
-  color: #f39c12;
-  font-size: 10px;
-}
-.unit-card .card-type {
-  font-size: 9px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-weight: bold;
+  margin-bottom: 4px;
 }
 .type-guard { background: #2980b9; color: #fff; }
 .type-rush { background: #e74c3c; color: #fff; }
@@ -465,8 +736,9 @@ html, body {
 }
 .recruit-pool {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 8px;
 }
 .recruit-actions {
   display: flex;

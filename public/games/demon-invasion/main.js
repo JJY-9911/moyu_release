@@ -2,31 +2,31 @@
 
 // ===== 兵种数据 =====
 const UNIT_DEFS = [
-  // Guard - 只攻击阵营
-  { id:'guard1', name:'前排卫士',   type:'guard',  icon:'assets/monster/guard/Icon9.webp',   hp:10, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:6  },
-  { id:'guard2', name:'铁甲卫士',   type:'guard',  icon:'assets/monster/guard/Icon15.webp',  hp:16, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:7  },
-  { id:'guard3', name:'突刺卫士',   type:'guard',  icon:'assets/monster/guard/Icon19.webp',  hp:8,  speed:0.8,   dmg:10, atkInterval:3,   range:0,   cost:6  },
-  { id:'guard4', name:'重装卫士',   type:'guard',  icon:'assets/monster/guard/Icon20.webp',  hp:20, speed:0.8, dmg:10, atkInterval:3,   range:0,   cost:9  },
-  // Rush - 攻击敌人和阵营
-  { id:'rush1',  name:'突击者',     type:'rush',   icon:'assets/monster/rush/Icon26.webp',   hp:5,  speed:1,   dmg:2,  atkInterval:1,   range:0,   cost:4  },
-  { id:'rush2',  name:'快速突击者', type:'rush',   icon:'assets/monster/rush/Icon27.webp',   hp:5,  speed:1,   dmg:1,  atkInterval:1,   range:0,   cost:3  },
-  { id:'rush3',  name:'猛烈突击者', type:'rush',   icon:'assets/monster/rush/Icon31.webp',   hp:4,  speed:1,   dmg:3,  atkInterval:1,   range:0,   cost:4  },
-  { id:'rush4',  name:'闪电突击者', type:'rush',   icon:'assets/monster/rush/Icon33.webp',   hp:2,  speed:1,   dmg:1,  atkInterval:0.5, range:0,   cost:2  },
-  // Range - 攻击敌人和阵营
-  { id:'range1', name:'远程射手',   type:'range',  icon:'assets/monster/range/Icon4.webp',   hp:1,  speed:0.3,   dmg:2,  atkInterval:4,   range:8,   cost:2  },
-  { id:'range2', name:'强力射手',   type:'range',  icon:'assets/monster/range/Icon5.webp',   hp:2,  speed:0.5,   dmg:3,  atkInterval:4,   range:12,  cost:4  },
-  { id:'range3', name:'精准射手',   type:'range',  icon:'assets/monster/range/Icon17.webp',  hp:4,  speed:0.7,   dmg:4,  atkInterval:4,   range:5,   cost:3  },
-  { id:'range4', name:'连射射手',   type:'range',  icon:'assets/monster/range/Icon22.webp',  hp:3,  speed:0.5, dmg:3,  atkInterval:3,   range:9,   cost:3  },
-  // Caster - 范围伤害
-  { id:'caster1',name:'法术师',     type:'caster', icon:'assets/monster/caster/Icon34.webp', hp:2,  speed:0.5, dmg:2,  atkInterval:1,   range:2,   cost:3, aoeW:2, aoeH:2 },
-  // Swarm - 召唤小兵
-  { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,
+  // Guard - 只攻击阵营（素材大小 3）
+  { id:'guard1', name:'前排卫士',   type:'guard',  icon:'assets/monster/guard/Icon9.webp',   hp:10, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:6,  sizeScale:2 },
+  { id:'guard2', name:'铁甲卫士',   type:'guard',  icon:'assets/monster/guard/Icon15.webp',  hp:16, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:7,  sizeScale:2 },
+  { id:'guard3', name:'突刺卫士',   type:'guard',  icon:'assets/monster/guard/Icon19.webp',  hp:8,  speed:0.8,   dmg:10, atkInterval:3,   range:0,   cost:6,  sizeScale:2 },
+  { id:'guard4', name:'重装卫士',   type:'guard',  icon:'assets/monster/guard/Icon20.webp',  hp:20, speed:0.8, dmg:10, atkInterval:3,   range:0,   cost:9,  sizeScale:3 },
+  // Rush - 攻击敌人和阵营（素材大小 1）
+  { id:'rush1',  name:'突击者',     type:'rush',   icon:'assets/monster/rush/Icon26.webp',   hp:5,  speed:1,   dmg:2,  atkInterval:1,   range:0,   cost:4,  sizeScale:1 },
+  { id:'rush2',  name:'快速突击者', type:'rush',   icon:'assets/monster/rush/Icon27.webp',   hp:5,  speed:1,   dmg:1,  atkInterval:1,   range:0,   cost:3,  sizeScale:1 },
+  { id:'rush3',  name:'猛烈突击者', type:'rush',   icon:'assets/monster/rush/Icon31.webp',   hp:4,  speed:1,   dmg:3,  atkInterval:1,   range:0,   cost:4,  sizeScale:1 },
+  { id:'rush4',  name:'闪电突击者', type:'rush',   icon:'assets/monster/rush/Icon33.webp',   hp:2,  speed:1,   dmg:1,  atkInterval:0.5, range:0,   cost:2,  sizeScale:1 },
+  // Range - 攻击敌人和阵营（素材大小 2）
+  { id:'range1', name:'远程射手',   type:'range',  icon:'assets/monster/range/Icon4.webp',   hp:1,  speed:0.3,   dmg:2,  atkInterval:4,   range:8,   cost:2,  sizeScale:1 },
+  { id:'range2', name:'强力射手',   type:'range',  icon:'assets/monster/range/Icon5.webp',   hp:2,  speed:0.5,   dmg:3,  atkInterval:4,   range:12,  cost:4,  sizeScale:1 },
+  { id:'range3', name:'精准射手',   type:'range',  icon:'assets/monster/range/Icon17.webp',  hp:4,  speed:0.7,   dmg:4,  atkInterval:4,   range:5,   cost:3,  sizeScale:1 },
+  { id:'range4', name:'连射射手',   type:'range',  icon:'assets/monster/range/Icon22.webp',  hp:3,  speed:0.5, dmg:3,  atkInterval:3,   range:9,   cost:3,  sizeScale:1 },
+  // Caster - 范围伤害（素材大小 2）
+  { id:'caster1',name:'法术师',     type:'caster', icon:'assets/monster/caster/Icon34.webp', hp:2,  speed:0.5, dmg:2,  atkInterval:1,   range:2,   cost:3, aoeW:2, aoeH:2, sizeScale:1 },
+  // Swarm - 召唤小兵（素材大小 1）
+  { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,  sizeScale:2,
     summonCount:2, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:5,
     summonIcon:'assets/monster/swarm/Icon42.webp' },
-  // Turret - 穿透远程攻击
-  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:20, speed:0.2, dmg:5, atkInterval:8,   range:5,  cost:7  },
-  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:20, speed:0.2, dmg:10, atkInterval:10,   range:5,  cost:9  },
-  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:20, speed:0.2, dmg:5, atkInterval:12,   range:7,  cost:9  },
+  // Turret - 穿透远程攻击（素材大小 2）
+  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:20, speed:0.2, dmg:5, atkInterval:8,   range:5,  cost:7,  sizeScale:2 },
+  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:20, speed:0.2, dmg:10, atkInterval:10,   range:5,  cost:9,  sizeScale:2 },
+  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:20, speed:0.2, dmg:5, atkInterval:12,   range:7,  cost:9,  sizeScale:2 },
 ];
 
 const TYPE_LABELS = { guard:'前排', rush:'突击', range:'远程', caster:'法术', swarm:'召唤', turret:'炮塔' };
@@ -111,18 +111,22 @@ function getImg(src) {
   return el;
 }
 
+const TURRET_LASER_IMG = 'assets/monster/siege/3_3.webp';
+const TURRET_LASER_FRAMES = 6; // 576×96 → 6×96 帧
+
 // 预加载
 [
+  'assets/bg.webp',
   'assets/land/road.webp',
-  'assets/land/Beige_green_mushroom3.webp',
-  'assets/land/Blue-green_balls_tree3.webp',
-  'assets/land/Chanterelles1.webp',
-  'assets/land/Chanterelles2.webp',
   'assets/monster/Icon39.webp','assets/Portal1_Idle.webp',
+  'assets/10.webp',
+  'assets/11.webp',
+  'assets/20.webp',
   ...Array.from({length:8},(_,i)=>`assets/fire/Fire Spell_Frame_0${i+1}.webp`),
   ...Array.from({length:10},(_,i)=>`assets/monster/caster/attack/Explosion_${i+1}.webp`),
   ...UNIT_DEFS.map(u=>u.icon),
   ...UNIT_DEFS.filter(u=>u.summonIcon).map(u=>u.summonIcon),
+  TURRET_LASER_IMG,
 ].forEach(getImg);
 
 // ===== Portal 点击区 =====
@@ -140,13 +144,16 @@ function drawPortal() {
   }
   const fw = pImg.naturalWidth / PORTAL_TOTAL_FRAMES; // 96px
   const fh = pImg.naturalHeight;                       // 96px
-  portalCtx.clearRect(0, 0, 80, 80);
-  portalCtx.drawImage(pImg, portalFrame * fw, 0, fw, fh, 0, 0, 80, 80);
+  const pw = portalCanvas.width;
+  const ph = portalCanvas.height;
+  portalCtx.clearRect(0, 0, pw, ph);
+  portalCtx.drawImage(pImg, portalFrame * fw, 0, fw, fh, 0, 0, pw, ph);
 }
 
 // ===== 特效系统 =====
 const effects = [];
-const projectiles = []; // 飞行火球
+const projectiles = []; // 飞行火球（远程兵）
+const laserBeams = [];  // 炮塔激光（仅表现 + 已在发射时结算伤害）
 
 function addFireEffect(x, y, size) {
   effects.push({ type:'fire', x, y, size: size||60, frame:0, maxFrames:8, timer:0, interval:0.06 });
@@ -229,6 +236,65 @@ function drawProjectiles() {
     ctx.translate(p.x, p.y);
     ctx.rotate(Math.PI / 2);
     ctx.drawImage(fireImg, -s/2, -s/2, s, s);
+    ctx.restore();
+  }
+}
+
+// 炮塔：从炮位垂直向上、长度 attackRange 的线段上瞬间结算伤害（穿透）
+function applyTurretLaserDamage(beamX, yBottom, turretRow, beamLen, dmg, gameRef) {
+  const yTop = yBottom - beamLen;
+  for (const e of gameRef.enemies) {
+    if (e.dead) continue;
+    const ex = e.px(), ey = e.py();
+    if (ey < yTop || ey > yBottom) continue;
+    const halfHit =
+      (gridCellWidth(turretRow) * 0.35 + gridCellWidth(e.row) * (e.sizeScale || 1) * 0.42);
+    if (Math.abs(ex - beamX) > halfHit) continue;
+    e.takeDamage(dmg);
+  }
+}
+
+function spawnTurretLaserVisual(beamX, yBottom, row, beamLen) {
+  laserBeams.push({
+    x: beamX,
+    yBottom,
+    row,
+    len: beamLen,
+    frame: 0,
+    frameTimer: 0,
+    frameInterval: 0.055,
+    maxFrames: TURRET_LASER_FRAMES,
+  });
+}
+
+function fireTurretLaser(fromX, fromY, row, attackRange, dmg, gameRef) {
+  applyTurretLaserDamage(fromX, fromY, row, attackRange, dmg, gameRef);
+  spawnTurretLaserVisual(fromX, fromY, row, attackRange);
+}
+
+function updateLaserBeams(dt) {
+  for (let i = laserBeams.length - 1; i >= 0; i--) {
+    const b = laserBeams[i];
+    b.frameTimer += dt;
+    if (b.frameTimer >= b.frameInterval) {
+      b.frameTimer -= b.frameInterval;
+      b.frame++;
+      if (b.frame >= b.maxFrames) laserBeams.splice(i, 1);
+    }
+  }
+}
+
+function drawLaserBeams() {
+  const img = getImg(TURRET_LASER_IMG);
+  if (!img.complete || !img.naturalWidth) return;
+  const fw = img.naturalWidth / TURRET_LASER_FRAMES;
+  const fh = img.naturalHeight;
+  for (const b of laserBeams) {
+    const drawW = gridCellWidth(b.row) * 0.55;
+    const top = b.yBottom - b.len;
+    ctx.save();
+    ctx.globalAlpha = 0.94;
+    ctx.drawImage(img, b.frame * fw, 0, fw, fh, b.x - drawW / 2, top, drawW, b.len);
     ctx.restore();
   }
 }
@@ -474,6 +540,7 @@ class Unit {
             dmg: this.def.summonDmg || 1,
             atkInterval: this.def.summonInterval || 1,
             range: 0, cost: 0,
+            sizeScale: 1,
           };
           game.allies.push(new Unit(summonDef, sc, sr, 'ally'));
         }
@@ -491,7 +558,7 @@ class Unit {
       this.atkTimer += dt;
       if (this.atkTimer >= this.atkInterval) {
         this.atkTimer = 0;
-        fireProjectile(this.px(), this.py(), gridCellWidth(this.row) * 0.7, this.dmg, true, game);
+        fireTurretLaser(this.px(), this.py(), this.row, attackRange, this.dmg, game);
       }
     } else {
       // 没有射程内敌人，前进到中线
@@ -667,7 +734,7 @@ const ENEMY_DEFS = {
     id: 'boss1', name: 'Boss', type: 'guard',
     icon: 'assets/monster/Icon24.webp',
     hp: 150, speed: 0.1, dmg: 10, atkInterval: 2, range: 1, cost: 20,
-    sizeScale: 4,
+    sizeScale: 3,
   },
   boss2: {
     id: 'boss2', name: 'Boss2', type: 'guard',
@@ -679,13 +746,13 @@ const ENEMY_DEFS = {
     id: 'boss3', name: 'Boss3', type: 'guard',
     icon: 'assets/monster/Icon7.webp',
     hp: 500, speed: 0.1, dmg: 5, atkInterval: 1, range: 1, cost: 20,
-    sizeScale: 8,
+    sizeScale: 5,
   },
     boss4: {
     id: 'boss4', name: 'Boss4', type: 'guard',
     icon: 'assets/monster/Icon45.webp',
     hp: 1000, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
-    sizeScale: 8,
+    sizeScale: 6,
   }
 };
 
@@ -806,6 +873,7 @@ class Game {
     // 更新特效
     updateEffects(dt);
     updateProjectiles(dt);
+    updateLaserBeams(dt);
 
     // 检查游戏结束
     if (this.camp.destroyed) {
@@ -861,6 +929,7 @@ class Game {
     for (const u of this.allies)  u.draw();
     for (const u of this.enemies) u.draw();
     drawProjectiles();
+    drawLaserBeams();
     drawEffects();
     this._drawCampZone();
   }
@@ -869,9 +938,21 @@ class Game {
     const W = canvas.width;
     const H = canvas.height;
 
-    // 1. 背景填充深绿色
-    ctx.fillStyle = '#2d5a27';
-    ctx.fillRect(0, 0, W, H);
+    // 1. 底层背景图（全画布 cover）
+    const bgImg = getImg('assets/bg.webp');
+    if (bgImg.complete && bgImg.naturalWidth) {
+      const iw = bgImg.naturalWidth;
+      const ih = bgImg.naturalHeight;
+      const scale = Math.max(W / iw, H / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const dx = (W - dw) / 2;
+      const dy = (H - dh) / 2;
+      ctx.drawImage(bgImg, 0, 0, iw, ih, dx, dy, dw, dh);
+    } else {
+      ctx.fillStyle = '#2d5a27';
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // 2. 道路梯形（用 road.webp 平铺填充）
     const roadImg = getImg('assets/land/road.webp');
@@ -913,16 +994,7 @@ class Game {
     ctx.stroke();
     ctx.restore();
 
-    // 4. 两侧三角形区域填树木素材
-    const treeImgs = [
-      getImg('assets/land/Beige_green_mushroom3.webp'),
-      getImg('assets/land/Blue-green_balls_tree3.webp'),
-      getImg('assets/land/Chanterelles1.webp'),
-      getImg('assets/land/Chanterelles2.webp'),
-    ];
-    this._drawSideTrees(treeImgs);
-
-    // 6. 中线指示（虚线）
+    // 4. 中线指示（虚线）
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,100,0.25)';
     ctx.lineWidth = 2;
@@ -935,42 +1007,6 @@ class Game {
     ctx.lineTo(midR, midY);
     ctx.stroke();
     ctx.restore();
-  }
-
-  _drawSideTrees(treeImgs) {
-    // 预定义左右两侧的树木位置（固定种子，避免每帧重绘闪烁）
-    if (!this._treePositions) {
-      this._treePositions = [];
-      const rng = (seed) => { let x = seed; return () => { x = (x * 1664525 + 1013904223) & 0xffffffff; return (x >>> 0) / 0xffffffff; }; };
-      const rand = rng(42);
-      // 左侧三角形：顶点(ROAD_TOP_LEFT,0)，左上(0,0)，左下(0,ROAD_BOT_Y)，右下(ROAD_BOT_LEFT,ROAD_BOT_Y)
-      // 右侧三角形：顶点(ROAD_TOP_RIGHT,0)，右上(W,0)，右下(W,ROAD_BOT_Y)，左下(ROAD_BOT_RIGHT,ROAD_BOT_Y)
-      for (let i = 0; i < 80; i++) {
-        const side = i < 40 ? 'left' : 'right';
-        const t = rand();
-        const y = ROAD_TOP_Y + t * (ROAD_BOT_Y - ROAD_TOP_Y);
-        const roadL = ROAD_TOP_LEFT + (ROAD_BOT_LEFT - ROAD_TOP_LEFT) * t;
-        const roadR = ROAD_TOP_RIGHT + (ROAD_BOT_RIGHT - ROAD_TOP_RIGHT) * t;
-        let x;
-        if (side === 'left') {
-          x = rand() * roadL;
-        } else {
-          x = roadR + rand() * (canvas.width - roadR);
-        }
-        const scale = 0.4 + t * 0.6; // 近处大，远处小
-        const imgIdx = Math.floor(rand() * treeImgs.length);
-        this._treePositions.push({ x, y, scale, imgIdx, side });
-      }
-      // 按 y 排序，近处（大 y）后画，遮住远处
-      this._treePositions.sort((a, b) => a.y - b.y);
-    }
-
-    for (const tp of this._treePositions) {
-      const img = treeImgs[tp.imgIdx];
-      if (!img.complete || !img.naturalWidth) continue;
-      const size = 160 * tp.scale;
-      ctx.drawImage(img, tp.x - size/2, tp.y - size, size, size);
-    }
   }
 
   _drawCampZone() {
@@ -1022,30 +1058,41 @@ function initPrepScreen() {
     card.className = 'unit-card';
     card.dataset.id = def.id;
 
-    const img = document.createElement('img');
-    img.width = 40;
-    img.height = 40;
-    img.alt = def.name;
-    const cache = window.__imageCache || {};
-    img.src = cache[def.icon] || def.icon;
-    img.onerror = () => { img.src = def.icon; };
-
-    const name = document.createElement('div');
-    name.className = 'card-name';
-    name.textContent = def.name;
-
+    // 左上圆：消耗气势
     const cost = document.createElement('div');
     cost.className = 'card-cost';
-    cost.textContent = '气势 ' + def.cost;
+    cost.textContent = def.cost;
 
+    // 右上圆：兵种
     const typeTag = document.createElement('div');
     typeTag.className = 'card-type type-' + def.type;
     typeTag.textContent = TYPE_LABELS[def.type] || def.type;
 
-    card.appendChild(img);
-    card.appendChild(name);
+    // 中间图片区
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'card-img-wrap';
+    const img = document.createElement('img');
+    img.alt = def.name;
+    const cache = window.__imageCache || {};
+    img.src = cache[def.icon] || def.icon;
+    img.onerror = () => { img.src = def.icon; };
+    imgWrap.appendChild(img);
+
+    // 名称
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.textContent = def.name;
+
+    // 底部圆：伤害
+    const dmg = document.createElement('div');
+    dmg.className = 'card-dmg';
+    dmg.textContent = def.dmg;
+
     card.appendChild(cost);
     card.appendChild(typeTag);
+    card.appendChild(imgWrap);
+    card.appendChild(name);
+    card.appendChild(dmg);
 
     card.addEventListener('click', () => {
       if (card.classList.contains('disabled')) return;
@@ -1124,26 +1171,35 @@ function openRecruitScreen() {
     const card = document.createElement('div');
     card.className = 'unit-card';
 
-    const img = document.createElement('img');
-    const cache = window.__imageCache || {};
-    img.src = cache[def.icon] || def.icon;
-
-    const name = document.createElement('div');
-    name.className = 'card-name';
-    name.textContent = def.name;
-
     const cost = document.createElement('div');
     cost.className = 'card-cost';
-    cost.textContent = '气势 ' + def.cost;
+    cost.textContent = def.cost;
 
     const typeTag = document.createElement('div');
     typeTag.className = 'card-type type-' + def.type;
     typeTag.textContent = TYPE_LABELS[def.type] || def.type;
 
-    card.appendChild(img);
-    card.appendChild(name);
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'card-img-wrap';
+    const img = document.createElement('img');
+    const cache = window.__imageCache || {};
+    img.src = cache[def.icon] || def.icon;
+    img.alt = def.name;
+    imgWrap.appendChild(img);
+
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.textContent = def.name;
+
+    const dmg = document.createElement('div');
+    dmg.className = 'card-dmg';
+    dmg.textContent = def.dmg;
+
     card.appendChild(cost);
     card.appendChild(typeTag);
+    card.appendChild(imgWrap);
+    card.appendChild(name);
+    card.appendChild(dmg);
 
     card.addEventListener('click', () => {
       pool.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
@@ -1197,15 +1253,36 @@ function closeRecruitScreen() {
   if (game) game.paused = false;
 }
 
+// ===== HUD 操作栏：按压反馈（pointer，兼容触摸） =====
+function bindHudPressFeedback(el) {
+  if (!el) return;
+  const cls = 'is-pressing';
+  const rm = () => el.classList.remove(cls);
+  const add = (e) => {
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    el.classList.add(cls);
+  };
+  el.addEventListener('pointerdown', add);
+  el.addEventListener('pointerup', rm);
+  el.addEventListener('pointercancel', rm);
+  el.addEventListener('lostpointercapture', rm);
+}
+
 // ===== 点击区 =====
 function initClickArea() {
   const clickBtn = document.getElementById('clickBtn');
+  bindHudPressFeedback(clickBtn);
   clickBtn.addEventListener('click', () => {
     if (!game || game.over) return;
     game.morale.add(game.morale.clickGain);
     portalFrame = (portalFrame + 1) % PORTAL_TOTAL_FRAMES;
     drawPortal();
   });
+
+  bindHudPressFeedback(document.getElementById('upgradeBtn'));
+  bindHudPressFeedback(document.getElementById('deployBtn'));
+  bindHudPressFeedback(document.getElementById('recruitBtn'));
 
   document.getElementById('upgradeBtn').addEventListener('click', () => {
     if (!game || game.over || game.paused) return;
@@ -1244,6 +1321,7 @@ function initClickArea() {
 // ===== 启动游戏 =====
 function startGame(selectedDefs) {
   if (game) game.stop();
+  laserBeams.length = 0;
   game = new Game(selectedDefs);
   updateCampHpUI();
   game.morale._updateUI();
