@@ -105,7 +105,7 @@ html, body {
   --hud-action-button-gap: clamp(8px, 2.2vw, 12px);
   --hud-action-half-width: calc(var(--hud-action-button-height) + var(--hud-action-button-height));
   --hud-action-deploy-width: calc(var(--hud-action-half-width) + var(--hud-action-half-width));
-  --hud-action-left-width: calc(var(--hud-action-deploy-width) + var(--hud-action-button-gap));
+  --hud-action-left-width: var(--hud-action-deploy-width);
   --hud-action-two-row-height: calc(var(--hud-action-button-height) + var(--hud-action-button-height) + var(--hud-action-row-gap));
   --hud-action-click-size: var(--hud-action-two-row-height);
   --hud-action-dock-height: calc(var(--hud-action-click-size) + 10px + max(10px, env(safe-area-inset-bottom)));
@@ -193,18 +193,38 @@ html, body {
   position: relative;
 }
 
-.click-zone-label {
+.click-guide-arrow {
   position: absolute;
-  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
+  left: 50%;
+  bottom: calc(100% + 1px);
+  min-width: 34px;
+  transform: translateX(-50%);
+  font-weight: 900;
   color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.75), 0 1px 3px rgba(0, 0, 0, 0.75);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.85), 0 2px 4px rgba(0, 0, 0, 0.85);
   pointer-events: none;
   line-height: 1;
+  z-index: 2;
+  animation: click-guide-bounce 0.8s ease-in-out infinite;
+}
+
+.click-guide-text {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  margin-bottom: -2px;
+}
+
+.click-guide-icon {
+  font-size: 24px;
+}
+
+@keyframes click-guide-bounce {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -8px); }
 }
 
 /* 点击区（传送门） */
@@ -315,10 +335,6 @@ html, body {
   transform: translate(-50%, -50%);
 }
 
-.action-bar-left .recruit-btn .hud-icon-stack > img {
-  height: 305%;
-}
-
 /* 操作栏只显示按钮文案，消耗数字仍在素材上隐藏 */
 .action-bar-left .hud-icon-stack .btn-cost {
   display: none;
@@ -387,7 +403,6 @@ html, body {
 
 .upgrade-btn.active { filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.9)); }
 .deploy-btn.active { filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.9)); }
-.recruit-btn.active { filter: drop-shadow(0 0 12px rgba(251, 146, 60, 0.9)); }
 
 @keyframes hud-icon-pulse {
   0%, 100% { transform: scale(1); }
@@ -701,8 +716,8 @@ html, body {
 .start-game-btn:hover:not(:disabled) { background: linear-gradient(135deg, #c0392b, #a93226); }
 .start-game-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ===== Recruit Screen ===== */
-.recruit-screen {
+/* ===== Random Choice Screen ===== */
+.choice-screen {
   position: absolute;
   inset: 0;
   background: rgba(0,0,0,0.85);
@@ -711,7 +726,7 @@ html, body {
   z-index: 200;
   pointer-events: all;
 }
-.recruit-panel {
+.choice-panel {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   border: 1px solid #f39c12;
   border-radius: 16px;
@@ -723,80 +738,21 @@ html, body {
   flex-direction: column;
   gap: 16px;
 }
-.recruit-title {
+.choice-title {
   color: #f39c12;
   font-size: 18px;
   text-align: center;
 }
-.recruit-cost { font-size: 13px; color: #aaa; }
-.recruit-subtitle {
+.choice-subtitle {
   color: #aaa;
   font-size: 12px;
   text-align: center;
 }
-.recruit-pool {
+.choice-pool {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   padding: 8px;
-}
-.recruit-actions {
-  display: flex;
-  justify-content: center;
-}
-.cancel-recruit-btn {
-  background: #555;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.cancel-recruit-btn:hover { background: #666; }
-
-/* Recruit step 2: replace selection */
-.replace-step {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.replace-step h3 {
-  color: #fff;
-  font-size: 14px;
-  text-align: center;
-}
-.replace-slots {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.replace-slot {
-  width: 64px;
-  height: 64px;
-  border: 2px solid #555;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: rgba(255,255,255,0.05);
-  transition: all 0.15s;
-  gap: 2px;
-}
-.replace-slot:hover { border-color: #e74c3c; background: rgba(231,76,60,0.15); }
-.replace-slot img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.replace-slot span {
-  color: #aaa;
-  font-size: 9px;
-  text-align: center;
 }
 
 /* ===== Game Over ===== */

@@ -6,7 +6,7 @@ const UNIT_DEFS = [
   { id:'guard1', name:'前排卫士',   type:'guard',  icon:'assets/monster/guard/Icon9.webp',   hp:10, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:6,  sizeScale:2 },
   { id:'guard2', name:'铁甲卫士',   type:'guard',  icon:'assets/monster/guard/Icon15.webp',  hp:16, speed:0.8, dmg:5,  atkInterval:3,   range:0,   cost:7,  sizeScale:2 },
   { id:'guard3', name:'突刺卫士',   type:'guard',  icon:'assets/monster/guard/Icon19.webp',  hp:8,  speed:0.8,   dmg:10, atkInterval:3,   range:0,   cost:6,  sizeScale:2 },
-  { id:'guard4', name:'重装卫士',   type:'guard',  icon:'assets/monster/guard/Icon20.webp',  hp:20, speed:0.8, dmg:10, atkInterval:3,   range:0,   cost:9,  sizeScale:3 },
+  { id:'guard4', name:'重装卫士',   type:'guard',  icon:'assets/monster/guard/Icon20.webp',  hp:20, speed:0.8, dmg:10, atkInterval:3,   range:0,   cost:9,  sizeScale:2.5 },
   // Rush - 攻击敌人和阵营（素材大小 1）
   { id:'rush1',  name:'突击者',     type:'rush',   icon:'assets/monster/rush/Icon26.webp',   hp:5,  speed:1,   dmg:2,  atkInterval:1,   range:0,   cost:4,  sizeScale:1 },
   { id:'rush2',  name:'快速突击者', type:'rush',   icon:'assets/monster/rush/Icon27.webp',   hp:5,  speed:1,   dmg:1,  atkInterval:1,   range:0,   cost:3,  sizeScale:1 },
@@ -20,7 +20,7 @@ const UNIT_DEFS = [
   // Caster - 范围伤害（素材大小 2）
   { id:'caster1',name:'法术师',     type:'caster', icon:'assets/monster/caster/Icon34.webp', hp:2,  speed:0.5, dmg:2,  atkInterval:1,   range:2,   cost:3, aoeW:2, aoeH:2, sizeScale:1 },
   // Swarm - 召唤小兵（素材大小 1）
-  { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,  sizeScale:2,
+  { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,  sizeScale:1.5,
     summonCount:2, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:5,
     summonIcon:'assets/monster/swarm/Icon42.webp' },
   // Turret - 穿透远程攻击（素材大小 2）
@@ -39,6 +39,8 @@ const ROAD_COL_END   = COLS - 1;
 const CAMP_ROW_START = 10; // 阵营/炮塔区起始行
 const ENEMY_SPAWN_ROW = 0;
 const MIDLINE_ROW = 5;    // 友军停止前进的行
+const ALLY_DEPLOY_ROW = CAMP_ROW_START + 1;
+const TURRET_DEPLOY_ROW = CAMP_ROW_START + 0.5;
 
 // ===== 透视地图参数（逻辑分辨率 755×1240）=====
 // 道路梯形：顶部窄（远处），底部宽（近处）
@@ -113,15 +115,61 @@ function getImg(src) {
 
 const TURRET_LASER_IMG = 'assets/monster/siege/3_3.webp';
 const TURRET_LASER_FRAMES = 6; // 576×96 → 6×96 帧
+const HIT_EFFECT_FRAMES = Array.from({ length: 10 }, (_, i) => `assets/attack/Explosion_${i + 1}.webp`);
+const LAND_DECOR_ASSETS = [
+  'assets/land/tree_1.webp',
+  'assets/land/tree_2.webp',
+  'assets/land/tree_3.webp',
+  'assets/land/tree_7.webp',
+  'assets/land/tree_8.webp',
+  'assets/land/greenery_1.webp',
+  'assets/land/greenery_2.webp',
+  'assets/land/greenery_3.webp',
+  'assets/land/greenery_4.webp',
+  'assets/land/greenery_9.webp',
+  'assets/land/decor_6.webp',
+  'assets/land/building_1.webp',
+  'assets/land/building_2.webp',
+  'assets/land/building_3.webp',
+  'assets/land/building_4.webp',
+  'assets/land/building_5.webp',
+];
+const LAND_DECORATIONS = [
+  { src:'assets/land/tree_2.webp', side:'left',  y:60,   w:84,  offset:18 },
+  { src:'assets/land/greenery_9.webp', side:'right', y:88,   w:56,  offset:12 },
+  { src:'assets/land/greenery_2.webp', side:'left',  y:135,  w:34,  offset:54 },
+  { src:'assets/land/building_3.webp', side:'right', y:170,  w:86,  offset:24 },
+  { src:'assets/land/greenery_1.webp', side:'left',  y:230,  w:42,  offset:18 },
+  { src:'assets/land/decor_6.webp', side:'right', y:258,  w:46,  offset:62 },
+  { src:'assets/land/tree_1.webp', side:'right', y:330,  w:92,  offset:8 },
+  { src:'assets/land/decor_6.webp', side:'left',  y:390,  w:54,  offset:28 },
+  { src:'assets/land/greenery_4.webp', side:'right', y:430,  w:44,  offset:46 },
+  { src:'assets/land/building_5.webp', side:'left',  y:510,  w:112, offset:22 },
+  { src:'assets/land/greenery_3.webp', side:'right', y:575,  w:50,  offset:16 },
+  { src:'assets/land/tree_3.webp', side:'left',  y:630,  w:66,  offset:58 },
+  { src:'assets/land/tree_7.webp', side:'right', y:720,  w:82,  offset:14 },
+  { src:'assets/land/greenery_4.webp', side:'left',  y:785,  w:50,  offset:20 },
+  { src:'assets/land/building_4.webp', side:'right', y:795,  w:88,  offset:72 },
+  { src:'assets/land/building_2.webp', side:'right', y:885,  w:130, offset:18 },
+  { src:'assets/land/tree_3.webp', side:'left',  y:980,  w:72,  offset:10 },
+  { src:'assets/land/greenery_9.webp', side:'left',  y:1045, w:58,  offset:72 },
+  { src:'assets/land/greenery_2.webp', side:'right', y:1100, w:38,  offset:24 },
+  { src:'assets/land/tree_8.webp', side:'left',  y:1125, w:96,  offset:0 },
+  { src:'assets/land/building_1.webp', side:'right', y:1128, w:118, offset:58 },
+];
 
 // 预加载
 [
-  'assets/bg.webp',
+  'assets/land/bg.webp',
   'assets/land/road.webp',
+  'assets/land/road_l.webp',
+  'assets/land/road_r.webp',
+  ...LAND_DECOR_ASSETS,
   'assets/monster/Icon39.webp','assets/Portal1_Idle.webp',
   'assets/10.webp',
   'assets/11.webp',
   'assets/20.webp',
+  ...HIT_EFFECT_FRAMES,
   ...Array.from({length:8},(_,i)=>`assets/fire/Fire Spell_Frame_0${i+1}.webp`),
   ...Array.from({length:10},(_,i)=>`assets/monster/caster/attack/Explosion_${i+1}.webp`),
   ...UNIT_DEFS.map(u=>u.icon),
@@ -358,8 +406,9 @@ class Unit {
     this.isSummon = def.isSummon || false;
     // 死亡标记
     this.dead = false;
-    // 闪烁（受伤）
-    this.hitFlash = 0;
+    // 受击特效
+    this.hitEffectFrame = -1;
+    this.hitEffectTimer = 0;
     // 尺寸倍数（boss/精英更大）
     this.sizeScale = def.sizeScale || 1;
   }
@@ -382,13 +431,14 @@ class Unit {
 
   takeDamage(dmg) {
     this.hp -= dmg;
-    this.hitFlash = 0.15;
+    this.hitEffectFrame = 0;
+    this.hitEffectTimer = 0;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
   }
 
   update(dt, game) {
     if (this.dead) return;
-    if (this.hitFlash > 0) this.hitFlash -= dt;
+    this._updateHitEffect(dt);
 
     if (this.type === 'turret') {
       this._updateTurret(dt, game);
@@ -425,16 +475,16 @@ class Unit {
         }
       }
     } else {
-      // 敌军：向下移动，攻击阵营
+      // 敌军：优先攻击士兵，没人拦截时才攻击阵营。
       const campRow = CAMP_ROW_START;
-      if (this.row < campRow - 1) {
-        const blocker = this._findNearest(game.allies);
-        const meleeRange = this.rangeInPixels() * 1.5;
-        if (blocker && this.distTo(blocker) <= meleeRange) {
-          this._meleeAttack(dt, blocker, game);
-        } else {
-          this.row += this.speed * dt;
-        }
+      const blocker = this._findNearest(game.allies);
+      const meleeRange = this.rangeInPixels() * 1.5;
+      if (blocker && this.distTo(blocker) <= meleeRange) {
+        this._meleeAttack(dt, blocker, game);
+      } else if (blocker && blocker.row >= this.row - 0.5 && this.row < Math.min(blocker.row, campRow + 1)) {
+        this.row += this.speed * dt;
+      } else if (this.row < campRow - 1) {
+        this.row += this.speed * dt;
       } else {
         this.atkTimer += dt;
         if (this.atkTimer >= this.atkInterval) {
@@ -447,6 +497,7 @@ class Unit {
 
   _updateRange(dt, game) {
     if (this.side === 'ally') {
+      if (this._moveIntoField(dt, ALLY_DEPLOY_ROW)) return;
       const target = this._findNearest(game.enemies);
       const attackRange = this.rangeInPixels() * this.range;
       if (target && this.distTo(target) <= attackRange) {
@@ -464,26 +515,26 @@ class Unit {
         }
       }
     } else {
-      // 敌军远程
+      // 敌军远程：优先攻击士兵，没人可打时才攻击阵营。
       const campRow = CAMP_ROW_START;
-      if (this.row < campRow - this.range) {
-        this.row += this.speed * dt;
-      }
       const target = this._findNearest(game.allies);
-      if (target && this.distTo(target) <= this.rangeInPixels() * this.range) {
+      const attackRange = this.rangeInPixels() * this.range;
+      if (target && this.distTo(target) <= attackRange) {
         this.atkTimer += dt;
         if (this.atkTimer >= this.atkInterval) {
           this.atkTimer = 0;
           target.takeDamage(this.dmg);
           addFireEffect(target.px(), target.py(), gridCellWidth(target.row));
         }
-      } else if (!target) {
-        if (this.distTo({row: campRow}) <= this.range) {
-          this.atkTimer += dt;
-          if (this.atkTimer >= this.atkInterval) {
-            this.atkTimer = 0;
-            game.camp.takeDamage(this.dmg);
-          }
+      } else if (target && target.row >= this.row - 0.5 && this.row < Math.min(target.row, campRow)) {
+        this.row += this.speed * dt;
+      } else if (this.row < campRow - this.range) {
+        this.row += this.speed * dt;
+      } else {
+        this.atkTimer += dt;
+        if (this.atkTimer >= this.atkInterval) {
+          this.atkTimer = 0;
+          game.camp.takeDamage(this.dmg);
         }
       }
     }
@@ -491,6 +542,7 @@ class Unit {
 
   _updateCaster(dt, game) {
     if (this.side === 'ally') {
+      if (this._moveIntoField(dt, ALLY_DEPLOY_ROW)) return;
       const target = this._findNearest(game.enemies);
       const attackRange = this.rangeInPixels() * this.range;
       if (target && this.distTo(target) <= attackRange) {
@@ -550,6 +602,7 @@ class Unit {
 
   _updateTurret(dt, game) {
     if (this.side !== 'ally') return;
+    if (this._moveIntoField(dt, TURRET_DEPLOY_ROW)) return;
     const target = this._findNearest(game.enemies);
     // 攻城类射程：固定为道路高度的 range/10 比例，不随透视缩放
     const attackRange = (ROAD_BOT_Y - ROAD_TOP_Y) * (this.range / 10);
@@ -569,6 +622,13 @@ class Unit {
     }
   }
 
+  _moveIntoField(dt, targetRow) {
+    if (this.side !== 'ally' || this.row <= targetRow) return false;
+    this.row -= this.speed * dt;
+    if (this.row < targetRow) this.row = targetRow;
+    return true;
+  }
+
   _findNearest(units) {
     let best = null, bestDist = Infinity;
     for (const u of units) {
@@ -577,6 +637,18 @@ class Unit {
       if (d < bestDist) { bestDist = d; best = u; }
     }
     return best;
+  }
+
+  _updateHitEffect(dt) {
+    if (this.hitEffectFrame < 0) return;
+    this.hitEffectTimer += dt;
+    if (this.hitEffectTimer < 0.045) return;
+    this.hitEffectTimer -= 0.045;
+    this.hitEffectFrame++;
+    if (this.hitEffectFrame >= HIT_EFFECT_FRAMES.length) {
+      this.hitEffectFrame = -1;
+      this.hitEffectTimer = 0;
+    }
   }
 
   _meleeAttack(dt, target, game) {
@@ -594,15 +666,6 @@ class Unit {
     const scale = this.sizeScale || 1;
     const size = cellW * 0.85 * scale;
 
-    // 受伤闪烁
-    if (this.hitFlash > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = '#ff4444';
-      ctx.fillRect(x - size/2, y - size/2, size, size);
-      ctx.restore();
-    }
-
     const img = getImg(this.icon);
     if (img.complete && img.naturalWidth) {
       ctx.save();
@@ -611,6 +674,14 @@ class Unit {
     } else {
       ctx.fillStyle = this.side === 'ally' ? '#3498db' : '#e74c3c';
       ctx.fillRect(x - size/2, y - size/2, size, size);
+    }
+
+    if (this.hitEffectFrame >= 0) {
+      const hitImg = getImg(HIT_EFFECT_FRAMES[this.hitEffectFrame]);
+      if (hitImg.complete && hitImg.naturalWidth) {
+        const effectSize = size * 1.35;
+        ctx.drawImage(hitImg, x - effectSize/2, y - effectSize/2, effectSize, effectSize);
+      }
     }
 
     // 血条
@@ -655,7 +726,6 @@ class MoraleSystem {
     this.value = 0;
     this.clickGain = 1;       // 每次点击获得的气势
     this.upgradeCost = 40;    // 当前升级所需气势
-    this.recruitCost = 40;    // 招募所需气势（固定）
   }
   add(n) {
     this.value += n;
@@ -685,21 +755,13 @@ class MoraleSystem {
       upgradeBtn.classList.toggle('active', this.value >= this.upgradeCost);
     }
 
-    // 招募按钮
-    const recruitBtn = document.getElementById('recruitBtn');
-    const recruitCostEl = document.getElementById('recruitCost');
-    if (recruitBtn) {
-      recruitCostEl.textContent = `${this.value}/${this.recruitCost}`;
-      recruitBtn.classList.toggle('active', this.value >= this.recruitCost);
-    }
-
     // 派遣按钮：有可负担的兵种时高亮
     const deployBtn = document.getElementById('deployBtn');
     if (deployBtn && game) {
       const canDeploy = game.selectedDefs.some(d => d.cost <= this.value);
       deployBtn.classList.toggle('active', canDeploy);
-      const minCost = Math.min(...game.selectedDefs.map(d => d.cost));
-      document.getElementById('deployCost').textContent = `消耗${minCost}+`;
+      const minCost = game.selectedDefs.length ? Math.min(...game.selectedDefs.map(d => d.cost)) : 0;
+      document.getElementById('deployCost').textContent = minCost ? `消耗${minCost}+` : '未选择';
     }
   }
 }
@@ -722,31 +784,31 @@ const ENEMY_DEFS = {
     id: 'shield', name: '盾兵', type: 'guard',
     icon: 'assets/monster/Icon30.webp',
     hp: 20, speed: 0.2, dmg: 2, atkInterval: 1.5, range: 1, cost: 4,
-    sizeScale: 2,
+    sizeScale: 1.5,
   },
   elite: {
     id: 'elite', name: '精英兵', type: 'rush',
     icon: 'assets/monster/Icon38.webp',
     hp: 15, speed: 0.5, dmg: 3, atkInterval: 1, range: 1, cost: 8,
-    sizeScale: 2,
+    sizeScale: 1.5,
   },
   boss1: {
     id: 'boss1', name: 'Boss', type: 'guard',
     icon: 'assets/monster/Icon24.webp',
     hp: 150, speed: 0.1, dmg: 10, atkInterval: 2, range: 1, cost: 20,
-    sizeScale: 3,
+    sizeScale: 2,
   },
   boss2: {
     id: 'boss2', name: 'Boss2', type: 'guard',
     icon: 'assets/monster/Icon12.webp',
     hp: 200, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
-    sizeScale: 4,
+    sizeScale: 2,
   },
     boss3: {
     id: 'boss3', name: 'Boss3', type: 'guard',
     icon: 'assets/monster/Icon7.webp',
     hp: 500, speed: 0.1, dmg: 5, atkInterval: 1, range: 1, cost: 20,
-    sizeScale: 5,
+    sizeScale: 3,
   },
     boss4: {
     id: 'boss4', name: 'Boss4', type: 'guard',
@@ -800,7 +862,7 @@ let game = null;
 
 class Game {
   constructor(selectedDefs) {
-    this.selectedDefs = selectedDefs; // 上阵兵种定义列表（6个）
+    this.selectedDefs = selectedDefs; // 当前已拥有的阵容，最多6个
     this.allies = [];
     this.enemies = [];
     this.camp = new Camp();
@@ -811,6 +873,7 @@ class Game {
     this.elapsed = 0; // 游戏时间（秒）
     this.pressureAccum = 0; // 压力值累积
     this.moraleSpawnTimer = 0; // 气势自动召唤计时（保留字段，已不使用）
+    this.nextChoiceMinute = 1; // 每存活1分钟触发一次3选1，最多到第5分钟
     this.lastTime = null;
     this.rafId = null;
 
@@ -858,6 +921,7 @@ class Game {
   _update(dt) {
     // 更新计时器UI
     this._updateTimerUI();
+    this._maybeOpenMinuteChoice();
 
     // 敌军生成
     this._spawnEnemies(dt);
@@ -909,9 +973,41 @@ class Game {
 
   _spawnAlly(def) {
     const col = ROAD_COL_START + 1 + Math.floor(Math.random() * (ROAD_COL_END - ROAD_COL_START - 1));
-    // 从画幅外下方入场
-    const row = ROWS + 1 + Math.random();
+    // 派遣单位从画面内的阵营区域出现，避免长射程单位停在屏幕外攻击。
+    const row = def.type === 'turret' ? TURRET_DEPLOY_ROW : ALLY_DEPLOY_ROW;
     this.allies.push(new Unit(def, col, row, 'ally'));
+  }
+
+  addUnitDef(def) {
+    if (this.selectedDefs.length >= 6) return false;
+    if (this.selectedDefs.some(d => d.id === def.id)) return false;
+    this.selectedDefs.push(def);
+    this.morale._updateUI();
+    return true;
+  }
+
+  _maybeOpenMinuteChoice() {
+    if (this.paused || this.over) return;
+    if (this.nextChoiceMinute >= 6 || this.selectedDefs.length >= 6) return;
+    if (this.elapsed < this.nextChoiceMinute * 60) return;
+
+    const minute = this.nextChoiceMinute;
+    this.nextChoiceMinute += 1;
+    this.paused = true;
+    openChoiceScreen({
+      title: `存活${minute}分钟`,
+      subtitle: `选择1名士兵加入阵容（${this.selectedDefs.length}/6）`,
+      excludeIds: this.selectedDefs.map(d => d.id),
+      onChoose: (def) => {
+        this.addUnitDef(def);
+        closeChoiceScreen();
+        this.paused = false;
+      },
+      onEmpty: () => {
+        closeChoiceScreen();
+        this.paused = false;
+      }
+    });
   }
 
   _updateTimerUI() {
@@ -938,63 +1034,137 @@ class Game {
     const W = canvas.width;
     const H = canvas.height;
 
-    // 1. 底层背景图（全画布 cover）
-    const bgImg = getImg('assets/bg.webp');
-    if (bgImg.complete && bgImg.naturalWidth) {
-      const iw = bgImg.naturalWidth;
-      const ih = bgImg.naturalHeight;
-      const scale = Math.max(W / iw, H / ih);
-      const dw = iw * scale;
-      const dh = ih * scale;
-      const dx = (W - dw) / 2;
-      const dy = (H - dh) / 2;
-      ctx.drawImage(bgImg, 0, 0, iw, ih, dx, dy, dw, dh);
-    } else {
-      ctx.fillStyle = '#2d5a27';
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    // 2. 道路梯形（用 road.webp 平铺填充）
-    const roadImg = getImg('assets/land/road.webp');
-    ctx.save();
-    // 裁剪为梯形
-    ctx.beginPath();
-    ctx.moveTo(ROAD_TOP_LEFT,  ROAD_TOP_Y);
-    ctx.lineTo(ROAD_TOP_RIGHT, ROAD_TOP_Y);
-    ctx.lineTo(ROAD_BOT_RIGHT, ROAD_BOT_Y);
-    ctx.lineTo(ROAD_BOT_LEFT,  ROAD_BOT_Y);
-    ctx.closePath();
-    ctx.clip();
-
-    if (roadImg.complete && roadImg.naturalWidth) {
-      // 用 road.webp 平铺填充梯形区域
-      const tileSize = 120;
-      for (let ty = ROAD_TOP_Y; ty < ROAD_BOT_Y; ty += tileSize) {
-        for (let tx = 0; tx < W; tx += tileSize) {
-          ctx.drawImage(roadImg, tx, ty, tileSize, tileSize);
+    const drawTiled = (img, tileSize, fallback) => {
+      if (img.complete && img.naturalWidth) {
+        for (let ty = 0; ty < H; ty += tileSize) {
+          for (let tx = 0; tx < W; tx += tileSize) {
+            ctx.drawImage(img, tx, ty, tileSize, tileSize);
+          }
         }
+      } else {
+        ctx.fillStyle = fallback;
+        ctx.fillRect(0, 0, W, H);
       }
-    } else {
-      ctx.fillStyle = '#c8a882';
-      ctx.fillRect(0, ROAD_TOP_Y, W, ROAD_BOT_Y - ROAD_TOP_Y);
-    }
-    ctx.restore();
+    };
 
-    // 3. 梯形边线（透视感）
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(ROAD_TOP_LEFT,  ROAD_TOP_Y);
-    ctx.lineTo(ROAD_BOT_LEFT,  ROAD_BOT_Y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(ROAD_TOP_RIGHT, ROAD_TOP_Y);
-    ctx.lineTo(ROAD_BOT_RIGHT, ROAD_BOT_Y);
-    ctx.stroke();
-    ctx.restore();
+    const drawTrapezoidTile = (img, topLeft, topRight, botRight, botLeft, fallback) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(topLeft, ROAD_TOP_Y);
+      ctx.lineTo(topRight, ROAD_TOP_Y);
+      ctx.lineTo(botRight, ROAD_BOT_Y);
+      ctx.lineTo(botLeft, ROAD_BOT_Y);
+      ctx.closePath();
+      ctx.clip();
+      drawTiled(img, 64, fallback);
+      ctx.restore();
+    };
 
-    // 4. 中线指示（虚线）
+    const drawEdgeTiles = (img, side, edgeW, fallback) => {
+      if (!img.complete || !img.naturalWidth) {
+        ctx.save();
+        ctx.beginPath();
+        if (side === 'left') {
+          ctx.moveTo(ROAD_TOP_LEFT, ROAD_TOP_Y);
+          ctx.lineTo(ROAD_TOP_LEFT + edgeW, ROAD_TOP_Y);
+          ctx.lineTo(ROAD_BOT_LEFT + edgeW, ROAD_BOT_Y);
+          ctx.lineTo(ROAD_BOT_LEFT, ROAD_BOT_Y);
+        } else {
+          ctx.moveTo(ROAD_TOP_RIGHT - edgeW, ROAD_TOP_Y);
+          ctx.lineTo(ROAD_TOP_RIGHT, ROAD_TOP_Y);
+          ctx.lineTo(ROAD_BOT_RIGHT, ROAD_BOT_Y);
+          ctx.lineTo(ROAD_BOT_RIGHT - edgeW, ROAD_BOT_Y);
+        }
+        ctx.closePath();
+        ctx.clip();
+        ctx.fillStyle = fallback;
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+        return;
+      }
+
+      // 边缘素材只能横向出现一次；按小横切片贴到斜边，避免底部宽时重复出多条边。
+      const sliceH = 8;
+      for (let y = ROAD_TOP_Y; y < ROAD_BOT_Y; y += sliceH) {
+        const h = Math.min(sliceH, ROAD_BOT_Y - y);
+        const t0 = (y - ROAD_TOP_Y) / (ROAD_BOT_Y - ROAD_TOP_Y);
+        const t1 = (y + h - ROAD_TOP_Y) / (ROAD_BOT_Y - ROAD_TOP_Y);
+        const left0 = ROAD_TOP_LEFT + (ROAD_BOT_LEFT - ROAD_TOP_LEFT) * t0;
+        const left1 = ROAD_TOP_LEFT + (ROAD_BOT_LEFT - ROAD_TOP_LEFT) * t1;
+        const right0 = ROAD_TOP_RIGHT + (ROAD_BOT_RIGHT - ROAD_TOP_RIGHT) * t0;
+        const right1 = ROAD_TOP_RIGHT + (ROAD_BOT_RIGHT - ROAD_TOP_RIGHT) * t1;
+        const sx = 0;
+        const sy = y % img.naturalHeight;
+        const sw = img.naturalWidth;
+        const sh = Math.min(h, img.naturalHeight - sy);
+        const x0 = side === 'left' ? left0 : right0 - edgeW;
+        const x1 = side === 'left' ? left1 : right1 - edgeW;
+        const dx = Math.min(x0, x1);
+        const dw = Math.max(x0, x1) - dx + edgeW;
+
+        ctx.save();
+        ctx.beginPath();
+        if (side === 'left') {
+          ctx.moveTo(left0, y);
+          ctx.lineTo(left0 + edgeW, y);
+          ctx.lineTo(left1 + edgeW, y + h);
+          ctx.lineTo(left1, y + h);
+        } else {
+          ctx.moveTo(right0 - edgeW, y);
+          ctx.lineTo(right0, y);
+          ctx.lineTo(right1, y + h);
+          ctx.lineTo(right1 - edgeW, y + h);
+        }
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, sx, sy, sw, sh, dx, y, dw, h);
+        ctx.restore();
+      }
+    };
+
+    const drawLandDecorations = () => {
+      for (const decor of LAND_DECORATIONS) {
+        const img = getImg(decor.src);
+        if (!img.complete || !img.naturalWidth) continue;
+
+        const boundary =
+          decor.side === 'left'
+            ? ROAD_TOP_LEFT + (ROAD_BOT_LEFT - ROAD_TOP_LEFT) * (decor.y / ROAD_BOT_Y)
+            : ROAD_TOP_RIGHT + (ROAD_BOT_RIGHT - ROAD_TOP_RIGHT) * (decor.y / ROAD_BOT_Y);
+        const w = decor.w;
+        const h = w * (img.naturalHeight / img.naturalWidth);
+        const x =
+          decor.side === 'left'
+            ? boundary - decor.offset - w
+            : boundary + decor.offset;
+
+        ctx.drawImage(img, x, decor.y, w, h);
+      }
+    };
+
+    // 1. 道路外区域使用 land/bg.webp
+    drawTiled(getImg('assets/land/bg.webp'), 128, '#2d5a27');
+    drawLandDecorations();
+
+    // 2. 道路拆为左边缘 / 中间 / 右边缘三段
+    const edgeW = 64;
+    const topInnerLeft = ROAD_TOP_LEFT + edgeW;
+    const topInnerRight = ROAD_TOP_RIGHT - edgeW;
+    const botInnerLeft = ROAD_BOT_LEFT + edgeW;
+    const botInnerRight = ROAD_BOT_RIGHT - edgeW;
+
+    drawTrapezoidTile(
+      getImg('assets/land/road.webp'),
+      topInnerLeft,
+      topInnerRight,
+      botInnerRight,
+      botInnerLeft,
+      '#c8a882'
+    );
+    drawEdgeTiles(getImg('assets/land/road_l.webp'), 'left', edgeW, '#8b6b4c');
+    drawEdgeTiles(getImg('assets/land/road_r.webp'), 'right', edgeW, '#8b6b4c');
+
+    // 3. 中线指示（虚线）
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,100,0.25)';
     ctx.lineWidth = 2;
@@ -1031,226 +1201,94 @@ class Game {
 
 // ===== UI 系统 =====
 
-// 选兵前置界面
-let prepSelectedDefs = [];
+function pickRandomDefs(defs, count) {
+  const shuffled = defs.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, count);
+}
 
+function createUnitChoiceCard(def, onChoose) {
+  const card = document.createElement('div');
+  card.className = 'unit-card';
+  card.dataset.id = def.id;
+
+  const cost = document.createElement('div');
+  cost.className = 'card-cost';
+  cost.textContent = def.cost;
+
+  const typeTag = document.createElement('div');
+  typeTag.className = 'card-type type-' + def.type;
+  typeTag.textContent = TYPE_LABELS[def.type] || def.type;
+
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'card-img-wrap';
+  const img = document.createElement('img');
+  img.alt = def.name;
+  const cache = window.__imageCache || {};
+  img.src = cache[def.icon] || def.icon;
+  img.onerror = () => { img.src = def.icon; };
+  imgWrap.appendChild(img);
+
+  const name = document.createElement('div');
+  name.className = 'card-name';
+  name.textContent = def.name;
+
+  const dmg = document.createElement('div');
+  dmg.className = 'card-dmg';
+  dmg.textContent = def.dmg;
+
+  card.appendChild(cost);
+  card.appendChild(typeTag);
+  card.appendChild(imgWrap);
+  card.appendChild(name);
+  card.appendChild(dmg);
+  card.addEventListener('click', () => onChoose(def));
+  return card;
+}
+
+// 选兵前置界面：开局随机3选1
 function initPrepScreen() {
-  prepSelectedDefs = [];
   const pool = document.getElementById('unitPool');
-  const slots = document.getElementById('selectedSlots');
-  const countEl = document.getElementById('selectedCount');
-  const startBtn = document.getElementById('startGameBtn');
-
   pool.innerHTML = '';
-  slots.innerHTML = '';
 
-  // 渲染6个选中槽
-  for (let i = 0; i < 6; i++) {
-    const slot = document.createElement('div');
-    slot.className = 'selected-slot';
-    slot.dataset.idx = i;
-    slots.appendChild(slot);
+  const choices = pickRandomDefs(UNIT_DEFS, 3);
+  for (const def of choices) {
+    pool.appendChild(createUnitChoiceCard(def, (chosenDef) => {
+      document.getElementById('prepScreen').style.display = 'none';
+      startGame([chosenDef]);
+    }));
   }
-
-  // 渲染所有兵种卡牌
-  for (const def of UNIT_DEFS) {
-    const card = document.createElement('div');
-    card.className = 'unit-card';
-    card.dataset.id = def.id;
-
-    // 左上圆：消耗气势
-    const cost = document.createElement('div');
-    cost.className = 'card-cost';
-    cost.textContent = def.cost;
-
-    // 右上圆：兵种
-    const typeTag = document.createElement('div');
-    typeTag.className = 'card-type type-' + def.type;
-    typeTag.textContent = TYPE_LABELS[def.type] || def.type;
-
-    // 中间图片区
-    const imgWrap = document.createElement('div');
-    imgWrap.className = 'card-img-wrap';
-    const img = document.createElement('img');
-    img.alt = def.name;
-    const cache = window.__imageCache || {};
-    img.src = cache[def.icon] || def.icon;
-    img.onerror = () => { img.src = def.icon; };
-    imgWrap.appendChild(img);
-
-    // 名称
-    const name = document.createElement('div');
-    name.className = 'card-name';
-    name.textContent = def.name;
-
-    // 底部圆：伤害
-    const dmg = document.createElement('div');
-    dmg.className = 'card-dmg';
-    dmg.textContent = def.dmg;
-
-    card.appendChild(cost);
-    card.appendChild(typeTag);
-    card.appendChild(imgWrap);
-    card.appendChild(name);
-    card.appendChild(dmg);
-
-    card.addEventListener('click', () => {
-      if (card.classList.contains('disabled')) return;
-      if (prepSelectedDefs.length >= 6) return;
-      prepSelectedDefs.push(def);
-      card.classList.add('selected', 'disabled');
-      updatePrepSlots();
-      countEl.textContent = prepSelectedDefs.length;
-      startBtn.disabled = prepSelectedDefs.length < 6;
-    });
-
-    pool.appendChild(card);
-  }
-
-  function updatePrepSlots() {
-    const slotEls = slots.querySelectorAll('.selected-slot');
-    slotEls.forEach((slot, i) => {
-      slot.innerHTML = '';
-      slot.className = 'selected-slot';
-      if (prepSelectedDefs[i]) {
-        slot.classList.add('filled');
-        const img = document.createElement('img');
-        const cache = window.__imageCache || {};
-        img.src = cache[prepSelectedDefs[i].icon] || prepSelectedDefs[i].icon;
-        slot.appendChild(img);
-
-        const rmBtn = document.createElement('button');
-        rmBtn.className = 'remove-btn';
-        rmBtn.textContent = '×';
-        rmBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const removed = prepSelectedDefs.splice(i, 1)[0];
-          // 取消对应卡牌的选中状态
-          const cardEl = pool.querySelector(`[data-id="${removed.id}"]`);
-          if (cardEl) cardEl.classList.remove('selected', 'disabled');
-          updatePrepSlots();
-          countEl.textContent = prepSelectedDefs.length;
-          startBtn.disabled = prepSelectedDefs.length < 6;
-        });
-        slot.appendChild(rmBtn);
-      }
-    });
-  }
-
-  startBtn.addEventListener('click', () => {
-    if (prepSelectedDefs.length < 6) return;
-    document.getElementById('prepScreen').style.display = 'none';
-    startGame(prepSelectedDefs);
-  }, { once: true });
 }
 
-// 招募界面
-let recruitNewDef = null;
+function openChoiceScreen({ title, subtitle, excludeIds = [], onChoose, onEmpty }) {
+  const screen = document.getElementById('choiceScreen');
+  const pool = document.getElementById('choicePool');
+  const titleEl = document.getElementById('choiceTitle');
+  const subtitleEl = document.getElementById('choiceSubtitle');
+  const excluded = new Set(excludeIds);
+  const available = UNIT_DEFS.filter(d => !excluded.has(d.id));
+  const choices = pickRandomDefs(available, 3);
 
-function openRecruitScreen() {
-  if (!game || game.paused) return;
-  if (!game.morale.spend(game.morale.recruitCost)) return;
-  game.paused = true;
+  pool.innerHTML = '';
+  titleEl.textContent = title;
+  subtitleEl.textContent = subtitle;
 
-  recruitNewDef = null;
-  const screen = document.getElementById('recruitScreen');
+  if (choices.length === 0) {
+    if (onEmpty) onEmpty();
+    return;
+  }
+
+  for (const def of choices) {
+    pool.appendChild(createUnitChoiceCard(def, onChoose));
+  }
   screen.style.display = 'flex';
-
-  const pool = document.getElementById('recruitPool');
-  pool.innerHTML = '';
-
-  // 显示未拥有的兵种
-  const ownedIds = new Set(game.selectedDefs.map(d => d.id));
-  const available = UNIT_DEFS.filter(d => !ownedIds.has(d.id));
-
-  if (available.length === 0) {
-    pool.innerHTML = '<p style="color:#aaa;text-align:center;grid-column:1/-1">已拥有所有兵种</p>';
-  }
-
-  for (const def of available) {
-    const card = document.createElement('div');
-    card.className = 'unit-card';
-
-    const cost = document.createElement('div');
-    cost.className = 'card-cost';
-    cost.textContent = def.cost;
-
-    const typeTag = document.createElement('div');
-    typeTag.className = 'card-type type-' + def.type;
-    typeTag.textContent = TYPE_LABELS[def.type] || def.type;
-
-    const imgWrap = document.createElement('div');
-    imgWrap.className = 'card-img-wrap';
-    const img = document.createElement('img');
-    const cache = window.__imageCache || {};
-    img.src = cache[def.icon] || def.icon;
-    img.alt = def.name;
-    imgWrap.appendChild(img);
-
-    const name = document.createElement('div');
-    name.className = 'card-name';
-    name.textContent = def.name;
-
-    const dmg = document.createElement('div');
-    dmg.className = 'card-dmg';
-    dmg.textContent = def.dmg;
-
-    card.appendChild(cost);
-    card.appendChild(typeTag);
-    card.appendChild(imgWrap);
-    card.appendChild(name);
-    card.appendChild(dmg);
-
-    card.addEventListener('click', () => {
-      pool.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      recruitNewDef = def;
-      showReplaceStep(def);
-    });
-
-    pool.appendChild(card);
-  }
 }
 
-function showReplaceStep(newDef) {
-  const pool = document.getElementById('recruitPool');
-  pool.innerHTML = '';
-
-  const title = document.createElement('h3');
-  title.style.color = '#fff';
-  title.style.textAlign = 'center';
-  title.style.gridColumn = '1/-1';
-  title.textContent = `选择要替换的士兵（新：${newDef.name}）`;
-  pool.appendChild(title);
-
-  for (let i = 0; i < game.selectedDefs.length; i++) {
-    const def = game.selectedDefs[i];
-    const slot = document.createElement('div');
-    slot.className = 'replace-slot';
-
-    const img = document.createElement('img');
-    const cache = window.__imageCache || {};
-    img.src = cache[def.icon] || def.icon;
-
-    const name = document.createElement('span');
-    name.textContent = def.name;
-
-    slot.appendChild(img);
-    slot.appendChild(name);
-
-    slot.addEventListener('click', () => {
-      // 替换
-      game.selectedDefs[i] = newDef;
-      closeRecruitScreen();
-    });
-
-    pool.appendChild(slot);
-  }
-}
-
-function closeRecruitScreen() {
-  document.getElementById('recruitScreen').style.display = 'none';
-  if (game) game.paused = false;
+function closeChoiceScreen() {
+  document.getElementById('choiceScreen').style.display = 'none';
 }
 
 // ===== HUD 操作栏：按压反馈（pointer，兼容触摸） =====
@@ -1282,7 +1320,6 @@ function initClickArea() {
 
   bindHudPressFeedback(document.getElementById('upgradeBtn'));
   bindHudPressFeedback(document.getElementById('deployBtn'));
-  bindHudPressFeedback(document.getElementById('recruitBtn'));
 
   document.getElementById('upgradeBtn').addEventListener('click', () => {
     if (!game || game.over || game.paused) return;
@@ -1299,21 +1336,11 @@ function initClickArea() {
     }
   });
 
-  document.getElementById('recruitBtn').addEventListener('click', () => {
-    if (!game || game.over) return;
-    openRecruitScreen();
-  });
-
-  document.getElementById('cancelRecruitBtn').addEventListener('click', () => {
-    if (game) game.morale.add(game.morale.recruitCost);
-    closeRecruitScreen();
-  });
-
   document.getElementById('restartBtn').addEventListener('click', () => {
     document.getElementById('gameOverScreen').style.display = 'none';
     if (game) game.stop();
     game = null;
-    document.getElementById('prepScreen').style.display = 'flex';
+    document.getElementById('prepScreen').style.display = 'block';
     initPrepScreen();
   });
 }
