@@ -18,15 +18,26 @@ const UNIT_DEFS = [
   { id:'range3', name:'精准射手',   type:'range',  icon:'assets/monster/range/Icon17.webp',  hp:4,  speed:0.7,   dmg:4,  atkInterval:4,   range:5,   cost:3,  sizeScale:1 },
   { id:'range4', name:'连射射手',   type:'range',  icon:'assets/monster/range/Icon22.webp',  hp:3,  speed:0.5, dmg:3,  atkInterval:3,   range:9,   cost:3,  sizeScale:1 },
   // Caster - 范围伤害（素材大小 2）
-  { id:'caster1',name:'法术师',     type:'caster', icon:'assets/monster/caster/Icon34.webp', hp:2,  speed:0.5, dmg:2,  atkInterval:1,   range:2,   cost:3, aoeW:2, aoeH:2, sizeScale:1 },
+  { id:'caster1',name:'毒液',     type:'caster', icon:'assets/monster/caster/Icon34.webp', hp:2,  speed:0.5, dmg:2,  atkInterval:1,   range:2,   cost:3, aoeW:2, aoeH:2, sizeScale:1 },
+  { id:'caster2',name:'火蜥',     type:'caster', icon:'assets/monster/caster/Icon28.webp', hp:3,  speed:0.5, dmg:4,  atkInterval:1,   range:4,   cost:5, aoeW:3, aoeH:3, sizeScale:1 },
   // Swarm - 召唤小兵（素材大小 1）
-  { id:'swarm1', name:'召唤者',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.5,   dmg:0,  atkInterval:5,   range:0,   cost:5,  sizeScale:1.5,
-    summonCount:2, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:5,
-    summonIcon:'assets/monster/swarm/Icon42.webp' },
+  { id:'swarm1', name:'祭司',     type:'swarm',  icon:'assets/monster/swarm/Icon44.webp',  hp:3,  speed:0.2,   dmg:0,  atkInterval:5,   range:0,   cost:5,  sizeScale:1.5,
+    summonCount:2, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:1,
+    summonIcon:'assets/monster/swarm/Icon2.webp' },
+  { id:'swarm2', name:'虫师',     type:'swarm',  icon:'assets/monster/swarm/Icon29.webp',  hp:3,  speed:0.2,   dmg:0,  atkInterval:10,   range:0,   cost:7,  sizeScale:1.5,
+      summonCount:5, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:1,
+      summonIcon:'assets/monster/swarm/Icon42.webp' },
+  { id:'swarm3', name:'圣鹿',     type:'swarm',  icon:'assets/monster/swarm/Icon32.webp',  hp:5,  speed:0.2,   dmg:0,  atkInterval:10,   range:0,   cost:8,  sizeScale:1.5,
+        summonCount:3, summonHp:5, summonSpeed:1, summonDmg:2, summonInterval:1,
+        summonIcon:'assets/monster/swarm/Icon18.webp' },
+  { id:'swarm4', name:'地狱犬',     type:'swarm',  icon:'assets/monster/swarm/Icon35.webp',  hp:4,  speed:0.2,   dmg:0,  atkInterval:10,   range:0,   cost:7,  sizeScale:1.5,
+          summonCount:3, summonHp:5, summonSpeed:2, summonDmg:4, summonInterval:1,
+          summonIcon:'assets/monster/swarm/Icon36.webp' },
   // Turret - 穿透远程攻击（素材大小 2）
-  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:20, speed:0.2, dmg:5, atkInterval:8,   range:5,  cost:7,  sizeScale:2 },
-  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:20, speed:0.2, dmg:10, atkInterval:10,   range:5,  cost:9,  sizeScale:2 },
-  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:20, speed:0.2, dmg:5, atkInterval:12,   range:7,  cost:9,  sizeScale:2 },
+  { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:10, speed:0.2, dmg:10, atkInterval:8,   range:12,  cost:7,  sizeScale:2 },
+  { id:'turret2',name:'强力攻城器', type:'turret', icon:'assets/monster/siege/Icon8.webp',   hp:10, speed:0.2, dmg:20, atkInterval:10,   range:12,  cost:9,  sizeScale:2 },
+  { id:'turret3',name:'摧毁者',     type:'turret', icon:'assets/monster/siege/Icon13.webp',  hp:10, speed:0.2, dmg:50, atkInterval:12,   range:12,  cost:9,  sizeScale:2 },
+  { id:'turret4',name:'毁灭者',     type:'turret', icon:'assets/monster/siege/Icon14.webp',  hp:20, speed:0.2, dmg:100, atkInterval:18,   range:12,  cost:14,  sizeScale:2 },
 ];
 
 const TYPE_LABELS = { guard:'前排', rush:'突击', range:'远程', caster:'法术', swarm:'召唤', turret:'炮塔' };
@@ -468,10 +479,11 @@ class Unit {
         // 射程内有敌人，停下攻击
         this._meleeAttack(dt, target, game);
       } else {
-        // 没有射程内敌人，继续前进，但不超过中线
-        if (this.row > MIDLINE_ROW) {
+        // 召唤物继续向前推进；普通友军不超过中线。
+        const stopRow = this.isSummon ? ENEMY_SPAWN_ROW : MIDLINE_ROW;
+        if (this.row > stopRow) {
           this.row -= this.speed * dt;
-          if (this.row < MIDLINE_ROW) this.row = MIDLINE_ROW;
+          if (this.row < stopRow) this.row = stopRow;
         }
       }
     } else {
@@ -814,7 +826,7 @@ const ENEMY_DEFS = {
     id: 'boss4', name: 'Boss4', type: 'guard',
     icon: 'assets/monster/Icon45.webp',
     hp: 1000, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
-    sizeScale: 6,
+    sizeScale:8,
   }
 };
 
