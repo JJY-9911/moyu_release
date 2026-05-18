@@ -58,6 +58,15 @@ export const games = [
     desc: '选择士兵上阵，点击召唤气势，抵御异魔浪潮守卫阵营',
   },
   {
+    id: 'peekaboo',
+    name: '躲猫猫高手',
+    icon: '🐾',
+    category: 'casual',
+    categoryLabel: '休闲',
+    hot: true,
+    desc: '在俯视户型图里轮流扮演猫和狗，伪装成家具或查验可疑物品找出对手',
+  },
+  {
     id: 'eternal-night',
     name: 'Eternal Night',
     icon: '🌙',
@@ -90,6 +99,10 @@ export function getGameById(id) {
  */
 export function getCoverPath(id) {
   return `/games/${id}/assets/cover.webp`;
+}
+
+export function getDisplayCoverPath(game) {
+  return game.cover || getCoverPath(game.id);
 }
 
 /**

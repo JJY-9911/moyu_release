@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useRef, useCallback, useState } from 'react';
 import { Button, Tag, Result } from 'antd';
 import { FullscreenOutlined } from '@ant-design/icons';
-import { getGameById, getCoverPath, games } from '../data/games';
+import { getGameById, getDisplayCoverPath, games } from '../data/games';
 import RecList from '../components/RecList';
 import styles from './GamePage.module.css';
 
@@ -87,7 +87,7 @@ function GamePage() {
             <div className={styles.infoHeader}>
               <img
                 className={styles.infoCover}
-                src={getCoverPath(id)}
+                src={getDisplayCoverPath(game)}
                 alt={game.name}
               />
               <div className={styles.infoTitle}>

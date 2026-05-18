@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peekaboo 素材碰撞校准</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #11131c;
+      color: #f8f1df;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 14px 18px;
+      background: rgba(17, 19, 28, 0.94);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { margin: 0; color: #cfc2aa; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 18px;
+      padding: 18px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      align-content: start;
+    }
+    .card {
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      color: #f8f1df;
+      font-weight: 700;
+    }
+    .meta { color: #a99e8d; font-size: 12px; font-weight: 400; }
+    canvas {
+      width: 100%;
+      height: 260px;
+      border-radius: 10px;
+      background:
+        linear-gradient(45deg, #252833 25%, transparent 25%),
+        linear-gradient(-45deg, #252833 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #252833 75%),
+        linear-gradient(-45deg, transparent 75%, #252833 75%);
+      background-color: #1b1e28;
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    }
+    label {
+      display: grid;
+      grid-template-columns: 70px 1fr 56px;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      color: #cfc2aa;
+      font-size: 12px;
+    }
+    input[type="range"] { width: 100%; }
+    input[type="number"] {
+      width: 56px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 6px;
+      color: #f8f1df;
+      background: rgba(0, 0, 0, 0.22);
+    }
+    aside {
+      position: sticky;
+      top: 82px;
+      height: calc(100vh - 100px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      color: #dfffe9;
+      background: #080a0f;
+      font: 12px/1.5 "SFMono-Regular", Consolas, monospace;
+      resize: none;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 18px;
+      color: #10131a;
+      background: linear-gradient(135deg, #2cd3a3, #ffbf8d);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; }
+      aside { position: static; height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Peekaboo 素材碰撞校准</h1>
+    <p>绿色框是绘制尺寸，黄色框是碰撞体积。调整后复制右侧 JSON，回填到 <code>main.js</code> 的 <code>spriteProfiles</code>。</p>
+  </header>
+  <main>
+    <section class="grid" id="grid"></section>
+    <aside>
+      <button id="copyBtn" type="button">复制 spriteProfiles</button>
+      <textarea id="output" spellcheck="false"></textarea>
+    </aside>
+  </main>
+  <script>
+    const assetPaths = {
+      bed1: 'assets/bed/objects_house_0034_Layer-35.webp',
+      bed2: 'assets/bed/objects_house_0035_Layer-36.webp',
+      bed3: 'assets/bed/objects_house_0037_Layer-38.webp',
+      sofa1: 'assets/sofa/objects_house_0000_Layer-1.webp',
+      sofa2: 'assets/sofa/objects_house_0008_Layer-9.webp',
+      sofa3: 'assets/sofa/objects_house_0029_Layer-30.webp',
+      table1: 'assets/table/objects_house_0048_Layer-49.webp',
+      table2: 'assets/table/objects_house_0050_Layer-51.webp',
+      table3: 'assets/table/objects_house_0052_Layer-53.webp',
+      table4: 'assets/table/objects_house_0059_Layer-60.webp',
+      chair1: 'assets/chair/objects_house_0023_Layer-24.webp',
+      chair2: 'assets/chair/objects_house_0029_Layer-30.webp',
+      bonsai1: 'assets/bonsai/objects_house_0055_Layer-56.webp',
+      bonsai2: 'assets/bonsai/objects_house_0056_Layer-57.webp',
+      cat: 'assets/cat.webp',
+      dog: 'assets/dog.webp',
+    };
+
+    const profiles = {
+      bed1: { width: 150, hitbox: { x: -66, y: -32, w: 132, h: 64 } },
+      bed2: { width: 150, hitbox: { x: -66, y: -32, w: 132, h: 64 } },
+      bed3: { width: 150, hitbox: { x: -66, y: -32, w: 132, h: 64 } },
+      sofa1: { width: 128, hitbox: { x: -56, y: -34, w: 112, h: 68 } },
+      sofa2: { width: 128, hitbox: { x: -56, y: -34, w: 112, h: 68 } },
+      sofa3: { width: 128, hitbox: { x: -56, y: -34, w: 112, h: 68 } },
+      table1: { width: 90, hitbox: { x: -38, y: -34, w: 76, h: 68 } },
+      table2: { width: 90, hitbox: { x: -38, y: -34, w: 76, h: 68 } },
+      table3: { width: 90, hitbox: { x: -38, y: -34, w: 76, h: 68 } },
+      table4: { width: 90, hitbox: { x: -38, y: -34, w: 76, h: 68 } },
+      chair1: { width: 62, hitbox: { x: -24, y: -26, w: 48, h: 52 } },
+      chair2: { width: 62, hitbox: { x: -24, y: -26, w: 48, h: 52 } },
+      bonsai1: { width: 62, hitbox: { x: -24, y: -32, w: 48, h: 64 } },
+      bonsai2: { width: 62, hitbox: { x: -24, y: -32, w: 48, h: 64 } },
+      cat: { width: 46, hitbox: { x: -13, y: -7, w: 26, h: 20 } },
+      dog: { width: 46, hitbox: { x: -13, y: -7, w: 26, h: 20 } },
+    };
+
+    const grid = document.getElementById('grid');
+    const output = document.getElementById('output');
+    const images = {};
+    const cards = [];
+
+    Object.entries(assetPaths).forEach(([key, src]) => {
+      const img = new Image();
+      img.onload = () => {
+        profiles[key].source = { w: img.width, h: img.height };
+        renderAll();
+      };
+      img.src = src;
+      images[key] = img;
+      cards.push(createCard(key, img));
+    });
+
+    function createCard(key, img) {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="title"><span>${key}</span><span class="meta"></span></div>
+        <canvas width="600" height="520"></canvas>
+        ${control(key, 'width', 20, 240, profiles[key].width)}
+        ${control(key, 'x', -160, 80, profiles[key].hitbox.x)}
+        ${control(key, 'y', -160, 80, profiles[key].hitbox.y)}
+        ${control(key, 'w', 1, 240, profiles[key].hitbox.w)}
+        ${control(key, 'h', 1, 240, profiles[key].hitbox.h)}
+      `;
+      grid.appendChild(card);
+      card.querySelectorAll('input').forEach((input) => {
+        input.addEventListener('input', () => {
+          const value = Number(input.value);
+          const prop = input.dataset.prop;
+          card.querySelector(`[data-number="${prop}"]`).value = value;
+          if (prop === 'width') profiles[key].width = value;
+          else profiles[key].hitbox[prop] = value;
+          renderAll();
+        });
+      });
+      card.querySelectorAll('input[type="number"]').forEach((input) => {
+        input.addEventListener('input', () => {
+          const prop = input.dataset.number;
+          const value = Number(input.value);
+          card.querySelector(`[data-prop="${prop}"]`).value = value;
+          if (prop === 'width') profiles[key].width = value;
+          else profiles[key].hitbox[prop] = value;
+          renderAll();
+        });
+      });
+      return { key, card, canvas: card.querySelector('canvas'), meta: card.querySelector('.meta') };
+    }
+
+    function control(key, prop, min, max, value) {
+      return `
+        <label>
+          ${prop}
+          <input data-key="${key}" data-prop="${prop}" type="range" min="${min}" max="${max}" value="${value}">
+          <input data-number="${prop}" type="number" min="${min}" max="${max}" value="${value}">
+        </label>
+      `;
+    }
+
+    function renderAll() {
+      cards.forEach(renderCard);
+      output.value = `const spriteProfiles = ${JSON.stringify(profiles, null, 2)};`;
+    }
+
+    function renderCard({ key, canvas, meta }) {
+      const img = images[key];
+      const profile = profiles[key];
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+
+      const sourceW = img.width || profile.source?.w || profile.width;
+      const sourceH = img.height || profile.source?.h || profile.width;
+      const drawW = profile.width;
+      const drawH = profile.width * (sourceH / sourceW);
+      meta.textContent = `${sourceW}x${sourceH} -> ${Math.round(drawW)}x${Math.round(drawH)}`;
+
+      ctx.scale(2, 2);
+      ctx.strokeStyle = '#2cd3a3';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
+      if (img.complete && img.width) ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+
+      ctx.strokeStyle = '#ffdf4d';
+      ctx.lineWidth = 2;
+      const hitbox = profile.hitbox;
+      ctx.strokeRect(hitbox.x, hitbox.y, hitbox.w, hitbox.h);
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(8, 0);
+      ctx.moveTo(0, -8);
+      ctx.lineTo(0, 8);
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(output.value);
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>

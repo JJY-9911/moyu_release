@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peekaboo 地图规划编辑器</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #11131c;
+      color: #f8f1df;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 14px 18px;
+      background: rgba(17, 19, 28, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { margin: 0; color: #cfc2aa; line-height: 1.5; }
+    code { color: #dfffe9; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(660px, 1fr) 420px;
+      gap: 18px;
+      padding: 18px;
+    }
+    .stage, .panel {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .stage {
+      min-width: 0;
+      padding: 14px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    button, select, input[type="number"] {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 9px 14px;
+      color: #f8f1df;
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 700;
+    }
+    button { cursor: pointer; }
+    button.primary {
+      color: #10131a;
+      border: 0;
+      background: linear-gradient(135deg, #2cd3a3, #ffbf8d);
+    }
+    button.danger {
+      color: #ffd9d9;
+      border-color: rgba(255, 107, 107, 0.5);
+      background: rgba(255, 107, 107, 0.14);
+    }
+    button.active {
+      color: #10131a;
+      background: #f8f1df;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      max-height: calc(100vh - 190px);
+      border-radius: 12px;
+      background: #1b1e28;
+      cursor: crosshair;
+    }
+    aside {
+      position: sticky;
+      top: 88px;
+      height: calc(100vh - 106px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel {
+      padding: 14px;
+    }
+    .editor {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .editor label {
+      color: #cfc2aa;
+      font-size: 12px;
+    }
+    .editor input, .editor select {
+      width: 100%;
+      border-radius: 8px;
+      padding: 8px;
+      font: 13px "SFMono-Regular", Consolas, monospace;
+      font-weight: 400;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      min-height: 260px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      color: #dfffe9;
+      background: #080a0f;
+      font: 12px/1.5 "SFMono-Regular", Consolas, monospace;
+      resize: none;
+    }
+    .hint {
+      color: #a99e8d;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    @media (max-width: 1100px) {
+      main { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      textarea { height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Peekaboo 地图规划编辑器</h1>
+      <p>直接放置墙壁素材、AI 导航路线和基础物品锚点。导出的地图代码粘到 <code>main.js</code>。</p>
+    </div>
+    <button id="copyBtn" class="primary" type="button">复制地图代码</button>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="toolbar">
+        <button id="wallModeBtn" class="active" type="button">墙壁模式</button>
+        <button id="navModeBtn" type="button">导航模式</button>
+        <button id="itemModeBtn" type="button">物品模式</button>
+        <select id="wallType" aria-label="新增墙壁类型">
+          <option value="wallStraight">直线墙 wallStraight</option>
+          <option value="wallCorner">转角墙 wallCorner</option>
+        </select>
+        <button id="addBtn" class="primary" type="button">放置墙壁</button>
+        <select id="itemType" aria-label="新增物品类型">
+          <option value="bed">床 bed</option>
+          <option value="sofa">沙发 sofa</option>
+          <option value="table">桌子 table</option>
+          <option value="chair">椅子 chair</option>
+          <option value="bonsai">盆栽 bonsai</option>
+        </select>
+        <select id="itemStyle" aria-label="新增物品素材样式"></select>
+        <select id="itemRotation" aria-label="新增物品方向">
+          <option value="0">0°</option>
+          <option value="90">90°</option>
+          <option value="180">180°</option>
+          <option value="270">270°</option>
+        </select>
+        <button id="addItemBtn" class="primary" type="button">放置物品</button>
+        <button id="duplicateBtn" type="button">复制选中</button>
+        <button id="rotateLeftBtn" type="button">左转 90°</button>
+        <button id="rotateRightBtn" type="button">右转 90°</button>
+        <button id="deleteBtn" class="danger" type="button">删除选中</button>
+        <button id="snapBtn" class="active" type="button">网格吸附 5px</button>
+        <button id="clearBtn" type="button">清空墙壁</button>
+        <button id="clearNavBtn" type="button">清空导航</button>
+        <button id="clearItemsBtn" type="button">清空物品</button>
+      </div>
+      <canvas id="map" width="1124" height="964"></canvas>
+    </section>
+    <aside>
+      <section class="panel">
+        <p class="hint">墙壁模式：拖动移动墙体。导航模式：空白处点击加点，点点连线，点线生成垂线。物品模式：先选类型、素材样式和方向，再点击放置；选中物品后也可在右侧改素材和旋转。Delete 删除选中对象。</p>
+      </section>
+      <section class="panel">
+        <div class="editor">
+          <label for="keyInput">素材</label>
+          <select id="keyInput">
+            <option value="wallStraight">wallStraight</option>
+            <option value="wallCorner">wallCorner</option>
+            <option value="bed1">bed1</option>
+            <option value="bed2">bed2</option>
+            <option value="bed3">bed3</option>
+            <option value="sofa1">sofa1</option>
+            <option value="sofa2">sofa2</option>
+            <option value="sofa3">sofa3</option>
+            <option value="table1">table1</option>
+            <option value="table2">table2</option>
+            <option value="table3">table3</option>
+            <option value="table4">table4</option>
+            <option value="chair1">chair1</option>
+            <option value="chair2">chair2</option>
+            <option value="bonsai1">bonsai1</option>
+            <option value="bonsai2">bonsai2</option>
+          </select>
+          <label for="xInput">x</label>
+          <input id="xInput" type="number" step="1">
+          <label for="yInput">y</label>
+          <input id="yInput" type="number" step="1">
+          <label for="wInput">w</label>
+          <input id="wInput" type="number" step="1" min="1">
+          <label for="hInput">h</label>
+          <input id="hInput" type="number" step="1" min="1">
+          <label for="rotationInput">旋转</label>
+          <input id="rotationInput" type="number" step="90">
+        </div>
+      </section>
+      <textarea id="output" spellcheck="false"></textarea>
+    </aside>
+  </main>
+  <script>
+    const SOURCE_W = 562;
+    const SOURCE_H = 482;
+    const SCALE = 2;
+    const GRID = 5;
+    const NAV_HIT = 8;
+
+    const defaultSizes = {
+      wallStraight: { w: 10, h: 36 },
+      wallCorner: { w: 20, h: 17 },
+    };
+
+    const itemLabels = {
+      bed: '床',
+      sofa: '沙发',
+      table: '桌',
+      chair: '椅',
+      bonsai: '盆',
+    };
+    const itemTypes = {
+      bed: { label: '床', keys: ['bed1', 'bed2', 'bed3'] },
+      sofa: { label: '沙发', keys: ['sofa1', 'sofa2', 'sofa3'] },
+      table: { label: '桌子', keys: ['table1', 'table2', 'table3', 'table4'] },
+      chair: { label: '椅子', keys: ['chair1', 'chair2'] },
+      bonsai: { label: '盆栽', keys: ['bonsai1', 'bonsai2'] },
+    };
+    const itemKeyToType = Object.fromEntries(
+      Object.entries(itemTypes).flatMap(([type, config]) => config.keys.map((key) => [key, type])),
+    );
+    const assetPaths = {
+      wallStraight: 'assets/wall/walls_0003_Layer-4.webp',
+      wallCorner: 'assets/wall/walls_0002_Layer-3.webp',
+      bed1: 'assets/bed/objects_house_0034_Layer-35.webp',
+      bed2: 'assets/bed/objects_house_0035_Layer-36.webp',
+      bed3: 'assets/bed/objects_house_0037_Layer-38.webp',
+      sofa1: 'assets/sofa/objects_house_0000_Layer-1.webp',
+      sofa2: 'assets/sofa/objects_house_0008_Layer-9.webp',
+      sofa3: 'assets/sofa/objects_house_0029_Layer-30.webp',
+      table1: 'assets/table/objects_house_0048_Layer-49.webp',
+      table2: 'assets/table/objects_house_0050_Layer-51.webp',
+      table3: 'assets/table/objects_house_0052_Layer-53.webp',
+      table4: 'assets/table/objects_house_0059_Layer-60.webp',
+      chair1: 'assets/chair/objects_house_0023_Layer-24.webp',
+      chair2: 'assets/chair/objects_house_0029_Layer-30.webp',
+      bonsai1: 'assets/bonsai/objects_house_0055_Layer-56.webp',
+      bonsai2: 'assets/bonsai/objects_house_0056_Layer-57.webp',
+    };
+    const itemPreviewSizes = {
+      bed: { w: 32, h: 46 },
+      sofa: { w: 34, h: 24 },
+      table: { w: 28, h: 22 },
+      chair: { w: 20, h: 20 },
+      bonsai: { w: 18, h: 24 },
+    };
+
+    const initialWalls = [
+      { key: 'wallStraight', x: 160, y: 0, w: 5, h: 100, rotation: 0 },
+      { key: 'wallStraight', x: 265, y: 0, w: 5, h: 100, rotation: 0 },
+      { key: 'wallStraight', x: 270, y: 60, w: 40, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 370, y: 170, w: 150, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 120, y: 100, w: 80, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 0, y: 240, w: 200, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 125, y: 150, w: 5, h: 90, rotation: 0 },
+      { key: 'wallStraight', x: 115, y: 315, w: 100, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 95, y: 0, w: 5, h: 100, rotation: 0 },
+      { key: 'wallStraight', x: 130, y: 150, w: 40, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 0, y: 365, w: 150, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 320, y: 380, w: 5, h: 100, rotation: 0 },
+      { key: 'wallStraight', x: 375, y: 380, w: 5, h: 100, rotation: 0 },
+      { key: 'wallStraight', x: 300, y: 305, w: 260, h: 5, rotation: 90 },
+      { key: 'wallStraight', x: 300, y: 215, w: 5, h: 90, rotation: 0 },
+      { key: 'wallStraight', x: 360, y: 215, w: 5, h: 90, rotation: 0 },
+      { key: 'wallStraight', x: 305, y: 255, w: 30, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 325, y: 0, w: 5, h: 60, rotation: 0 },
+      { key: 'wallStraight', x: 115, y: 370, w: 5, h: 30, rotation: 0 },
+      { key: 'wallStraight', x: 115, y: 450, w: 5, h: 30, rotation: 0 },
+      { key: 'wallStraight', x: 460, y: 380, w: 100, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 460, y: 420, w: 100, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 375, y: 310, w: 5, h: 30, rotation: 180 },
+      { key: 'wallStraight', x: 320, y: 145, w: 50, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 320, y: 150, w: 5, h: 30, rotation: 0 },
+      { key: 'wallStraight', x: 365, y: 150, w: 5, h: 30, rotation: 0 },
+      { key: 'wallStraight', x: 410, y: 110, w: 5, h: 60, rotation: 0 },
+      { key: 'wallStraight', x: 350, y: 110, w: 60, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 345, y: 110, w: 5, h: 20, rotation: 180 },
+      { key: 'wallStraight', x: 310, y: 85, w: 250, h: 5, rotation: 270 },
+      { key: 'wallStraight', x: 195, y: 150, w: 5, h: 90, rotation: 0 },
+      { key: 'wallStraight', x: 165, y: 245, w: 5, h: 70, rotation: 180 },
+    ];
+    const initialNavNodes = [];
+    const initialNavEdges = [];
+    const initialBaseItems = [];
+
+    const canvas = document.getElementById('map');
+    const ctx = canvas.getContext('2d');
+    const output = document.getElementById('output');
+    const mapImage = new Image();
+    const images = {};
+    const itemTypeInput = document.getElementById('itemType');
+    const itemStyleInput = document.getElementById('itemStyle');
+    const itemRotationInput = document.getElementById('itemRotation');
+    const inputs = {
+      key: document.getElementById('keyInput'),
+      x: document.getElementById('xInput'),
+      y: document.getElementById('yInput'),
+      w: document.getElementById('wInput'),
+      h: document.getElementById('hInput'),
+      rotation: document.getElementById('rotationInput'),
+    };
+
+    let walls = cloneWalls(initialWalls);
+    let navNodes = clonePoints(initialNavNodes);
+    let navEdges = initialNavEdges.map((edge) => [...edge]);
+    let baseItems = cloneItems(initialBaseItems);
+    let mode = 'wall';
+    let selectedIndex = -1;
+    let selectedNavIndex = -1;
+    let selectedEdgeIndex = -1;
+    let selectedItemIndex = -1;
+    let pendingNavNode = -1;
+    let drag = null;
+    let snapToGrid = true;
+
+    mapImage.onload = render;
+    mapImage.src = 'assets/map.png';
+    Object.entries(assetPaths).forEach(([key, src]) => {
+      const img = new Image();
+      img.onload = render;
+      img.src = src;
+      images[key] = img;
+    });
+    syncItemStyleOptions();
+
+    function cloneWalls(source) {
+      return source.map((wall) => ({ ...wall }));
+    }
+
+    function clonePoints(source) {
+      return source.map((point) => ({ ...point }));
+    }
+
+    function cloneItems(source) {
+      return source.map((item) => ({ ...item }));
+    }
+
+    function syncItemStyleOptions() {
+      const type = itemTypeInput.value;
+      const current = itemStyleInput.value;
+      itemStyleInput.innerHTML = itemTypes[type].keys
+        .map((key) => `<option value="${key}">${itemTypes[type].label} ${key}</option>`)
+        .join('');
+      itemStyleInput.value = itemTypes[type].keys.includes(current) ? current : itemTypes[type].keys[0];
+    }
+
+    function getItemTypeFromKey(imgKey) {
+      return itemKeyToType[imgKey] || itemTypeInput.value;
+    }
+
+    function syncItemToolbar(item) {
+      if (!item) return;
+      itemTypeInput.value = item.type;
+      syncItemStyleOptions();
+      itemStyleInput.value = item.imgKey;
+      itemRotationInput.value = String(normalizeRotation(item.rotation));
+    }
+
+    function setKeyInputOptions(keys) {
+      const labels = {
+        wallStraight: 'wallStraight',
+        wallCorner: 'wallCorner',
+        bed1: 'bed1',
+        bed2: 'bed2',
+        bed3: 'bed3',
+        sofa1: 'sofa1',
+        sofa2: 'sofa2',
+        sofa3: 'sofa3',
+        table1: 'table1',
+        table2: 'table2',
+        table3: 'table3',
+        table4: 'table4',
+        chair1: 'chair1',
+        chair2: 'chair2',
+        bonsai1: 'bonsai1',
+        bonsai2: 'bonsai2',
+      };
+      inputs.key.innerHTML = keys.map((key) => `<option value="${key}">${labels[key] || key}</option>`).join('');
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(SCALE, SCALE);
+      drawBackground();
+      drawGrid();
+      drawNavigation();
+      drawBaseItems();
+      drawWalls();
+      drawSelection();
+      ctx.restore();
+      syncInputs();
+      updateOutput();
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = '#d8b48f';
+      ctx.fillRect(0, 0, SOURCE_W, SOURCE_H);
+      if (mapImage.complete && mapImage.width) {
+        ctx.globalAlpha = 0.42;
+        ctx.drawImage(mapImage, 0, 0, SOURCE_W, SOURCE_H);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1 / SCALE;
+      for (let x = 0; x <= SOURCE_W; x += GRID) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, SOURCE_H);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= SOURCE_H; y += GRID) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(SOURCE_W, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawNavigation() {
+      ctx.save();
+      ctx.lineWidth = 2;
+      navEdges.forEach(([from, to], index) => {
+        const a = navNodes[from];
+        const b = navNodes[to];
+        if (!a || !b) return;
+        ctx.strokeStyle = index === selectedEdgeIndex ? '#ffdf4d' : 'rgba(80, 180, 255, 0.78)';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+
+      navNodes.forEach((node, index) => {
+        ctx.fillStyle = index === pendingNavNode ? '#ffdf4d' : (index === selectedNavIndex ? '#ff8d8d' : '#50b4ff');
+        ctx.strokeStyle = '#10131a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f8f1df';
+        ctx.font = '10px Arial';
+        ctx.fillText(String(index), node.x + 6, node.y - 6);
+      });
+      ctx.restore();
+    }
+
+    function drawBaseItems() {
+      ctx.save();
+      baseItems.forEach((item, index) => {
+        drawItemPreview(item);
+        ctx.fillStyle = index === selectedItemIndex ? '#ffdf4d' : '#ff8db7';
+        ctx.strokeStyle = '#10131a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(item.x - 6, item.y - 6, 12, 12);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#10131a';
+        ctx.font = 'bold 9px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(itemLabels[item.type] || item.type[0], item.x, item.y + 0.5);
+        ctx.fillStyle = '#f8f1df';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = '10px Arial';
+        ctx.fillText(`${index} ${item.imgKey || item.type}`, item.x + 12, item.y - 12);
+      });
+      ctx.restore();
+    }
+
+    function drawItemPreview(item) {
+      const imgKey = item.imgKey || itemTypes[item.type]?.keys[0];
+      const img = images[imgKey];
+      const size = getItemPreviewSize(item);
+      const rotation = normalizeRotation(item.rotation);
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      ctx.rotate(rotation * Math.PI / 180);
+      ctx.globalAlpha = 0.9;
+      if (img && img.complete && img.width) {
+        ctx.drawImage(img, -size.w / 2, -size.h / 2, size.w, size.h);
+      } else {
+        ctx.fillStyle = '#ff8db7';
+        ctx.fillRect(-size.w / 2, -size.h / 2, size.w, size.h);
+      }
+      ctx.restore();
+    }
+
+    function getItemPreviewSize(item) {
+      const fallback = itemPreviewSizes[item.type] || { w: 24, h: 24 };
+      const img = images[item.imgKey];
+      if (!img || !img.width || !img.height) return fallback;
+      const maxSide = Math.max(fallback.w, fallback.h);
+      const scale = maxSide / Math.max(img.width, img.height);
+      return { w: img.width * scale, h: img.height * scale };
+    }
+
+    function drawWalls() {
+      walls.forEach((wall, index) => {
+        drawWallImage(wall);
+        ctx.save();
+        const bounds = wallBounds(wall);
+        ctx.strokeStyle = index === selectedIndex ? '#ffdf4d' : 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = index === selectedIndex ? 2 : 1;
+        ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+        ctx.fillStyle = index === selectedIndex ? '#ffdf4d' : '#f8f1df';
+        ctx.font = '10px Arial';
+        ctx.fillText(`${index + 1} ${wall.key}`, bounds.x + 3, bounds.y + 11);
+        ctx.restore();
+      });
+    }
+
+    function drawWallImage(wall) {
+      const img = images[wall.key];
+      const rotation = normalizeRotation(wall.rotation);
+      const cx = wall.x + wall.w / 2;
+      const cy = wall.y + wall.h / 2;
+      const drawW = (rotation === 90 || rotation === 270) ? wall.h : wall.w;
+      const drawH = (rotation === 90 || rotation === 270) ? wall.w : wall.h;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation * Math.PI / 180);
+      if (img.complete && img.width) {
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+      } else {
+        ctx.fillStyle = wall.key === 'wallCorner' ? '#8a6a32' : '#6f5630';
+        ctx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
+      }
+      ctx.restore();
+    }
+
+    function drawSelection() {
+      const wall = walls[selectedIndex];
+      if (!wall) return;
+      const bounds = wallBounds(wall);
+      ctx.save();
+      ctx.strokeStyle = '#ffdf4d';
+      ctx.setLineDash([3, 2]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(bounds.x - 1, bounds.y - 1, bounds.w + 2, bounds.h + 2);
+      ctx.restore();
+    }
+
+    function wallBounds(wall) {
+      return { x: wall.x, y: wall.y, w: wall.w, h: wall.h };
+    }
+
+    function canvasPoint(event) {
+      const box = canvas.getBoundingClientRect();
+      return {
+        x: clamp((event.clientX - box.left) / box.width * SOURCE_W, 0, SOURCE_W),
+        y: clamp((event.clientY - box.top) / box.height * SOURCE_H, 0, SOURCE_H),
+      };
+    }
+
+    function hitWall(point) {
+      for (let i = walls.length - 1; i >= 0; i -= 1) {
+        if (pointInRect(point, wallBounds(walls[i]), 3)) return i;
+      }
+      return -1;
+    }
+
+    function hitNavNode(point) {
+      for (let i = navNodes.length - 1; i >= 0; i -= 1) {
+        if (distance(point, navNodes[i]) <= NAV_HIT) return i;
+      }
+      return -1;
+    }
+
+    function hitNavEdge(point) {
+      for (let i = navEdges.length - 1; i >= 0; i -= 1) {
+        const [from, to] = navEdges[i];
+        const a = navNodes[from];
+        const b = navNodes[to];
+        if (a && b && distanceToSegment(point, a, b) <= 5) return i;
+      }
+      return -1;
+    }
+
+    function hitBaseItem(point) {
+      for (let i = baseItems.length - 1; i >= 0; i -= 1) {
+        const size = getItemPreviewSize(baseItems[i]);
+        if (distance(point, baseItems[i]) <= Math.max(12, Math.max(size.w, size.h) / 2)) return i;
+      }
+      return -1;
+    }
+
+    function pointInRect(point, rect, pad = 0) {
+      return point.x >= rect.x - pad && point.x <= rect.x + rect.w + pad &&
+        point.y >= rect.y - pad && point.y <= rect.y + rect.h + pad;
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function distanceToSegment(point, a, b) {
+      const projection = projectPointToSegment(point, a, b);
+      return distance(point, projection);
+    }
+
+    function projectPointToSegment(point, a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lengthSq = dx * dx + dy * dy || 1;
+      const t = clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq, 0, 1);
+      return { x: a.x + dx * t, y: a.y + dy * t };
+    }
+
+    canvas.addEventListener('pointerdown', (event) => {
+      const point = canvasPoint(event);
+      if (mode === 'item') {
+        const itemIndex = hitBaseItem(point);
+        if (itemIndex >= 0) {
+          selectedItemIndex = itemIndex;
+          syncItemToolbar(baseItems[itemIndex]);
+          drag = {
+            kind: 'item',
+            start: point,
+            original: { ...baseItems[itemIndex] },
+            index: itemIndex,
+            moved: false,
+          };
+          canvas.setPointerCapture(event.pointerId);
+          render();
+          return;
+        }
+
+        addBaseItem(point);
+        render();
+        return;
+      }
+
+      if (mode === 'nav') {
+        const nodeIndex = hitNavNode(point);
+        if (nodeIndex >= 0) {
+          selectedNavIndex = nodeIndex;
+          selectedEdgeIndex = -1;
+          drag = {
+            kind: 'nav',
+            start: point,
+            original: { ...navNodes[nodeIndex] },
+            index: nodeIndex,
+            moved: false,
+          };
+          canvas.setPointerCapture(event.pointerId);
+          render();
+          return;
+        }
+
+        drag = { kind: 'navCanvas', start: point, moved: false };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      const index = hitWall(point);
+      if (index < 0) {
+        selectedIndex = -1;
+        render();
+        return;
+      }
+      selectedIndex = index;
+      selectedNavIndex = -1;
+      selectedEdgeIndex = -1;
+      selectedItemIndex = -1;
+      drag = {
+        kind: 'wall',
+        start: point,
+        original: { ...walls[selectedIndex] },
+      };
+      canvas.setPointerCapture(event.pointerId);
+      render();
+    });
+
+    canvas.addEventListener('pointermove', (event) => {
+      const point = canvasPoint(event);
+      if (!drag) return;
+      if (drag.kind === 'nav') {
+        const node = navNodes[drag.index];
+        if (!node) return;
+        const dx = point.x - drag.start.x;
+        const dy = point.y - drag.start.y;
+        drag.moved = drag.moved || Math.hypot(dx, dy) > 2;
+        node.x = drag.original.x + dx;
+        node.y = drag.original.y + dy;
+        normalizeNavNode(node);
+        render();
+        return;
+      }
+      if (drag.kind === 'navCanvas') {
+        drag.moved = drag.moved || distance(point, drag.start) > 2;
+        return;
+      }
+      if (drag.kind === 'item') {
+        const item = baseItems[drag.index];
+        if (!item) return;
+        const dx = point.x - drag.start.x;
+        const dy = point.y - drag.start.y;
+        drag.moved = drag.moved || Math.hypot(dx, dy) > 2;
+        item.x = drag.original.x + dx;
+        item.y = drag.original.y + dy;
+        normalizeItem(item);
+        render();
+        return;
+      }
+      if (selectedIndex < 0) return;
+      const wall = walls[selectedIndex];
+      wall.x = drag.original.x + (point.x - drag.start.x);
+      wall.y = drag.original.y + (point.y - drag.start.y);
+      normalizeWall(wall);
+      render();
+    });
+
+    canvas.addEventListener('pointerup', (event) => {
+      if (drag?.kind === 'nav') {
+        if (snapToGrid) snapNavNode(navNodes[drag.index]);
+        normalizeNavNode(navNodes[drag.index]);
+        if (!drag.moved) handleNavClick(canvasPoint(event), drag.index);
+        drag = null;
+        render();
+        return;
+      }
+      if (drag?.kind === 'navCanvas') {
+        if (!drag.moved) handleNavClick(canvasPoint(event), -1);
+        drag = null;
+        render();
+        return;
+      }
+      if (drag?.kind === 'item') {
+        if (snapToGrid) snapPoint(baseItems[drag.index]);
+        normalizeItem(baseItems[drag.index]);
+        drag = null;
+        render();
+        return;
+      }
+      if (drag && selectedIndex >= 0) {
+        snapWall(walls[selectedIndex]);
+        normalizeWall(walls[selectedIndex]);
+      }
+      drag = null;
+      render();
+    });
+
+    function normalizeWall(wall) {
+      wall.rotation = normalizeRotation(wall.rotation);
+      if (wall.w < 0) {
+        wall.x += wall.w;
+        wall.w = Math.abs(wall.w);
+      }
+      if (wall.h < 0) {
+        wall.y += wall.h;
+        wall.h = Math.abs(wall.h);
+      }
+      wall.w = Math.max(1, wall.w);
+      wall.h = Math.max(1, wall.h);
+      wall.x = clamp(wall.x, 0, SOURCE_W - wall.w);
+      wall.y = clamp(wall.y, 0, SOURCE_H - wall.h);
+    }
+
+    function normalizeNavNode(node) {
+      normalizePoint(node);
+    }
+
+    function normalizePoint(point) {
+      point.x = clamp(point.x, 0, SOURCE_W);
+      point.y = clamp(point.y, 0, SOURCE_H);
+    }
+
+    function normalizeItem(item) {
+      item.type = item.type || getItemTypeFromKey(item.imgKey);
+      if (!itemTypes[item.type]) item.type = getItemTypeFromKey(item.imgKey);
+      const validKeys = itemTypes[item.type]?.keys || [];
+      if (!validKeys.includes(item.imgKey)) item.imgKey = validKeys[0];
+      item.rotation = normalizeRotation(item.rotation);
+      normalizePoint(item);
+    }
+
+    function snapPoint(point) {
+      point.x = snap(point.x);
+      point.y = snap(point.y);
+    }
+
+    function snapNavNode(node) {
+      snapPoint(node);
+    }
+
+    function addNavNode(point) {
+      const node = { x: point.x, y: point.y };
+      if (snapToGrid) snapNavNode(node);
+      normalizeNavNode(node);
+      navNodes.push(node);
+      return navNodes.length - 1;
+    }
+
+    function addNavEdge(from, to) {
+      if (from === to || !navNodes[from] || !navNodes[to]) return;
+      const exists = navEdges.some(([a, b]) => (a === from && b === to) || (a === to && b === from));
+      if (!exists) navEdges.push([from, to]);
+    }
+
+    function handleNavClick(point, forcedNodeIndex) {
+      const nodeIndex = forcedNodeIndex >= 0 ? forcedNodeIndex : hitNavNode(point);
+      if (nodeIndex >= 0) {
+        if (selectedEdgeIndex >= 0) {
+          const projectedIndex = splitNavEdgeAtProjection(selectedEdgeIndex, nodeIndex);
+          pendingNavNode = projectedIndex;
+          selectedNavIndex = projectedIndex;
+          selectedEdgeIndex = -1;
+          selectedIndex = -1;
+          return;
+        }
+        selectedNavIndex = nodeIndex;
+        selectedEdgeIndex = -1;
+        selectedIndex = -1;
+        if (pendingNavNode >= 0 && pendingNavNode !== nodeIndex) addNavEdge(pendingNavNode, nodeIndex);
+        pendingNavNode = nodeIndex;
+        return;
+      }
+
+      const edgeIndex = hitNavEdge(point);
+      if (edgeIndex >= 0) {
+        selectedEdgeIndex = edgeIndex;
+        selectedNavIndex = -1;
+        selectedIndex = -1;
+        if (pendingNavNode >= 0) {
+          const projectedIndex = splitNavEdgeAtProjection(edgeIndex, pendingNavNode);
+          pendingNavNode = projectedIndex;
+          selectedNavIndex = projectedIndex;
+          selectedEdgeIndex = -1;
+        }
+        return;
+      }
+
+      const created = addNavNode(point);
+      selectedNavIndex = created;
+      selectedEdgeIndex = -1;
+      selectedIndex = -1;
+      if (pendingNavNode >= 0) addNavEdge(pendingNavNode, created);
+      pendingNavNode = created;
+    }
+
+    function splitNavEdgeAtProjection(edgeIndex, fromNodeIndex) {
+      const [aIndex, bIndex] = navEdges[edgeIndex];
+      const a = navNodes[aIndex];
+      const b = navNodes[bIndex];
+      const from = navNodes[fromNodeIndex];
+      const projectedIndex = addNavNode(projectPointToSegment(from, a, b));
+      navEdges.splice(edgeIndex, 1);
+      addNavEdge(aIndex, projectedIndex);
+      addNavEdge(projectedIndex, bIndex);
+      addNavEdge(fromNodeIndex, projectedIndex);
+      return projectedIndex;
+    }
+
+    function deleteNavNode(index) {
+      navNodes.splice(index, 1);
+      navEdges = navEdges
+        .filter(([from, to]) => from !== index && to !== index)
+        .map(([from, to]) => [
+          from > index ? from - 1 : from,
+          to > index ? to - 1 : to,
+        ]);
+      if (pendingNavNode === index) pendingNavNode = -1;
+      else if (pendingNavNode > index) pendingNavNode -= 1;
+      selectedNavIndex = -1;
+      selectedEdgeIndex = -1;
+    }
+
+    function addBaseItem(point) {
+      const imgKey = itemStyleInput.value;
+      const item = {
+        type: getItemTypeFromKey(imgKey),
+        imgKey,
+        x: point.x,
+        y: point.y,
+        rotation: Number(itemRotationInput.value),
+      };
+      if (snapToGrid) snapPoint(item);
+      normalizeItem(item);
+      baseItems.push(item);
+      selectedItemIndex = baseItems.length - 1;
+      syncItemToolbar(item);
+      selectedIndex = -1;
+      selectedNavIndex = -1;
+      selectedEdgeIndex = -1;
+    }
+
+    function snapWall(wall) {
+      if (!snapToGrid) return;
+      wall.x = snap(wall.x);
+      wall.y = snap(wall.y);
+    }
+
+    function snap(value) {
+      return Math.round(value / GRID) * GRID;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function normalizeRotation(rotation) {
+      return ((Math.round(Number(rotation || 0) / 90) * 90) % 360 + 360) % 360;
+    }
+
+    function syncInputs() {
+      const wall = walls[selectedIndex];
+      const item = baseItems[selectedItemIndex];
+      const disabled = !wall && !item;
+      Object.values(inputs).forEach((input) => {
+        input.disabled = disabled;
+      });
+      inputs.w.disabled = !wall;
+      inputs.h.disabled = !wall;
+      if (wall) {
+        setKeyInputOptions(['wallStraight', 'wallCorner']);
+        inputs.key.value = wall.key;
+        inputs.x.value = Math.round(wall.x);
+        inputs.y.value = Math.round(wall.y);
+        inputs.w.value = Math.round(wall.w);
+        inputs.h.value = Math.round(wall.h);
+        inputs.rotation.value = normalizeRotation(wall.rotation);
+        return;
+      }
+      if (!item) return;
+      setKeyInputOptions(Object.keys(itemKeyToType));
+      inputs.key.value = item.imgKey || itemTypes[item.type]?.keys[0];
+      inputs.x.value = Math.round(item.x);
+      inputs.y.value = Math.round(item.y);
+      inputs.w.value = '';
+      inputs.h.value = '';
+      inputs.rotation.value = normalizeRotation(item.rotation);
+    }
+
+    function updateOutput() {
+      output.value = `const manualWalls = ${formatWalls(walls)}.map(toWorldWall);
+
+const manualNavNodes = ${formatPoints(navNodes)}.map(toWorldPoint);
+
+const manualNavEdges = ${formatEdges(navEdges)};
+
+const manualBaseItems = ${formatBaseItems(baseItems)}.map(toWorldPoint);`;
+    }
+
+    function formatWalls(items) {
+      if (!items.length) return '[]';
+      const lines = items.map(({ key, x, y, w, h, rotation }) => (
+        `  { key: '${key}', x: ${Math.round(x)}, y: ${Math.round(y)}, w: ${Math.round(w)}, h: ${Math.round(h)}, rotation: ${normalizeRotation(rotation)} }`
+      ));
+      return `[\n${lines.join(',\n')},\n]`;
+    }
+
+    function formatPoints(items) {
+      if (!items.length) return '[]';
+      const lines = items.map(({ x, y }) => (
+        `  { x: ${Math.round(x)}, y: ${Math.round(y)} }`
+      ));
+      return `[\n${lines.join(',\n')},\n]`;
+    }
+
+    function formatEdges(items) {
+      if (!items.length) return '[]';
+      const lines = items.map(([from, to]) => `  [${from}, ${to}]`);
+      return `[\n${lines.join(',\n')},\n]`;
+    }
+
+    function formatBaseItems(items) {
+      if (!items.length) return '[]';
+      const lines = items.map((item) => (
+        `  { type: '${item.type}', imgKey: '${item.imgKey || itemTypes[item.type]?.keys[0]}', x: ${Math.round(item.x)}, y: ${Math.round(item.y)}, angle: ${formatAngle(item.rotation)} }`
+      ));
+      return `[\n${lines.join(',\n')},\n]`;
+    }
+
+    function formatAngle(rotation) {
+      const normalized = normalizeRotation(rotation);
+      if (normalized === 0) return '0';
+      if (normalized === 90) return 'Math.PI / 2';
+      if (normalized === 180) return 'Math.PI';
+      return 'Math.PI * 1.5';
+    }
+
+    Object.values(inputs).forEach((input) => {
+      input.addEventListener('input', () => {
+        const wall = walls[selectedIndex];
+        const item = baseItems[selectedItemIndex];
+        if (wall) {
+          wall.key = inputs.key.value;
+          wall.x = Number(inputs.x.value);
+          wall.y = Number(inputs.y.value);
+          wall.w = Number(inputs.w.value);
+          wall.h = Number(inputs.h.value);
+          wall.rotation = Number(inputs.rotation.value);
+          normalizeWall(wall);
+        } else if (item) {
+          item.imgKey = inputs.key.value;
+          item.type = getItemTypeFromKey(item.imgKey);
+          item.x = Number(inputs.x.value);
+          item.y = Number(inputs.y.value);
+          item.rotation = Number(inputs.rotation.value);
+          normalizeItem(item);
+          itemTypeInput.value = item.type;
+          syncItemStyleOptions();
+          itemStyleInput.value = item.imgKey;
+          itemRotationInput.value = String(normalizeRotation(item.rotation));
+        } else {
+          return;
+        }
+        render();
+      });
+    });
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      const key = document.getElementById('wallType').value;
+      setMode('wall');
+      walls.push({ key, x: 260, y: 220, ...defaultSizes[key], rotation: 0 });
+      selectedIndex = walls.length - 1;
+      render();
+    });
+
+    document.getElementById('wallModeBtn').addEventListener('click', () => setMode('wall'));
+    document.getElementById('navModeBtn').addEventListener('click', () => setMode('nav'));
+    document.getElementById('itemModeBtn').addEventListener('click', () => setMode('item'));
+    itemTypeInput.addEventListener('change', () => {
+      syncItemStyleOptions();
+      updateSelectedItemFromToolbar();
+    });
+    itemStyleInput.addEventListener('change', updateSelectedItemFromToolbar);
+    itemRotationInput.addEventListener('change', updateSelectedItemFromToolbar);
+
+    function updateSelectedItemFromToolbar() {
+      const item = baseItems[selectedItemIndex];
+      if (!item || mode !== 'item') {
+        render();
+        return;
+      }
+      item.imgKey = itemStyleInput.value;
+      item.type = getItemTypeFromKey(item.imgKey);
+      item.rotation = Number(itemRotationInput.value);
+      normalizeItem(item);
+      render();
+    }
+
+    function setMode(nextMode) {
+      mode = nextMode;
+      document.getElementById('wallModeBtn').classList.toggle('active', mode === 'wall');
+      document.getElementById('navModeBtn').classList.toggle('active', mode === 'nav');
+      document.getElementById('itemModeBtn').classList.toggle('active', mode === 'item');
+      if (mode === 'wall') {
+        selectedNavIndex = -1;
+        selectedEdgeIndex = -1;
+        selectedItemIndex = -1;
+        pendingNavNode = -1;
+      } else if (mode === 'nav') {
+        selectedIndex = -1;
+        selectedItemIndex = -1;
+      } else {
+        selectedIndex = -1;
+        selectedNavIndex = -1;
+        selectedEdgeIndex = -1;
+        pendingNavNode = -1;
+      }
+      render();
+    }
+
+    document.getElementById('addItemBtn').addEventListener('click', () => {
+      setMode('item');
+      addBaseItem({ x: SOURCE_W / 2, y: SOURCE_H / 2 });
+      render();
+    });
+
+    document.getElementById('duplicateBtn').addEventListener('click', () => {
+      if (mode === 'item') {
+        const item = baseItems[selectedItemIndex];
+        if (!item) return;
+        baseItems.push({ ...item, x: clamp(item.x + 10, 0, SOURCE_W), y: clamp(item.y + 10, 0, SOURCE_H) });
+        selectedItemIndex = baseItems.length - 1;
+        syncItemToolbar(baseItems[selectedItemIndex]);
+        render();
+        return;
+      }
+      const wall = walls[selectedIndex];
+      if (!wall) return;
+      walls.push({ ...wall, x: clamp(wall.x + 10, 0, SOURCE_W - wall.w), y: clamp(wall.y + 10, 0, SOURCE_H - wall.h) });
+      selectedIndex = walls.length - 1;
+      render();
+    });
+
+    document.getElementById('rotateLeftBtn').addEventListener('click', () => rotateSelected(-90));
+    document.getElementById('rotateRightBtn').addEventListener('click', () => rotateSelected(90));
+
+    function rotateSelected(delta) {
+      if (mode === 'item') {
+        const item = baseItems[selectedItemIndex];
+        if (!item) return;
+        item.rotation = normalizeRotation(item.rotation + delta);
+        itemRotationInput.value = String(item.rotation);
+        render();
+        return;
+      }
+      const wall = walls[selectedIndex];
+      if (!wall) return;
+      const steps = Math.abs(Math.round(delta / 90));
+      if (steps % 2 === 1) {
+        const cx = wall.x + wall.w / 2;
+        const cy = wall.y + wall.h / 2;
+        [wall.w, wall.h] = [wall.h, wall.w];
+        wall.x = cx - wall.w / 2;
+        wall.y = cy - wall.h / 2;
+      }
+      wall.rotation = normalizeRotation(wall.rotation + delta);
+      normalizeWall(wall);
+      render();
+    }
+
+    document.getElementById('deleteBtn').addEventListener('click', () => {
+      if (mode === 'item' && selectedItemIndex >= 0) {
+        baseItems.splice(selectedItemIndex, 1);
+        selectedItemIndex = Math.min(selectedItemIndex, baseItems.length - 1);
+        render();
+        return;
+      }
+      if (mode === 'nav' && selectedNavIndex >= 0) {
+        deleteNavNode(selectedNavIndex);
+        render();
+        return;
+      }
+      if (mode === 'nav' && selectedEdgeIndex >= 0) {
+        navEdges.splice(selectedEdgeIndex, 1);
+        selectedEdgeIndex = -1;
+        render();
+        return;
+      }
+      if (selectedIndex < 0) return;
+      walls.splice(selectedIndex, 1);
+      selectedIndex = Math.min(selectedIndex, walls.length - 1);
+      render();
+    });
+
+    document.getElementById('snapBtn').addEventListener('click', (event) => {
+      snapToGrid = !snapToGrid;
+      event.currentTarget.classList.toggle('active', snapToGrid);
+      event.currentTarget.textContent = snapToGrid ? '网格吸附 5px' : '网格吸附 关闭';
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      walls = [];
+      selectedIndex = -1;
+      render();
+    });
+
+    document.getElementById('clearNavBtn').addEventListener('click', () => {
+      navNodes = [];
+      navEdges = [];
+      selectedNavIndex = -1;
+      selectedEdgeIndex = -1;
+      pendingNavNode = -1;
+      render();
+    });
+
+    document.getElementById('clearItemsBtn').addEventListener('click', () => {
+      baseItems = [];
+      selectedItemIndex = -1;
+      render();
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(output.value);
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (mode === 'item') {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        const item = baseItems[selectedItemIndex];
+        const step = event.shiftKey ? GRID : 1;
+        if (item && event.key === 'ArrowLeft') item.x -= step;
+        else if (item && event.key === 'ArrowRight') item.x += step;
+        else if (item && event.key === 'ArrowUp') item.y -= step;
+        else if (item && event.key === 'ArrowDown') item.y += step;
+        else if ((event.key === 'Delete' || event.key === 'Backspace') && selectedItemIndex >= 0) {
+          baseItems.splice(selectedItemIndex, 1);
+          selectedItemIndex = Math.min(selectedItemIndex, baseItems.length - 1);
+          render();
+          return;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        normalizeItem(item);
+        render();
+        return;
+      }
+
+      if (mode === 'nav') {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        const node = navNodes[selectedNavIndex];
+        const step = event.shiftKey ? GRID : 1;
+        if (node && event.key === 'ArrowLeft') node.x -= step;
+        else if (node && event.key === 'ArrowRight') node.x += step;
+        else if (node && event.key === 'ArrowUp') node.y -= step;
+        else if (node && event.key === 'ArrowDown') node.y += step;
+        else if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNavIndex >= 0) {
+          deleteNavNode(selectedNavIndex);
+          render();
+          return;
+        } else if ((event.key === 'Delete' || event.key === 'Backspace') && selectedEdgeIndex >= 0) {
+          navEdges.splice(selectedEdgeIndex, 1);
+          selectedEdgeIndex = -1;
+          render();
+          return;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        normalizeNavNode(node);
+        render();
+        return;
+      }
+
+      const wall = walls[selectedIndex];
+      if (!wall || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      const step = event.shiftKey ? GRID : 1;
+      if (event.key === 'ArrowLeft') wall.x -= step;
+      else if (event.key === 'ArrowRight') wall.x += step;
+      else if (event.key === 'ArrowUp') wall.y -= step;
+      else if (event.key === 'ArrowDown') wall.y += step;
+      else if (event.key === 'Delete' || event.key === 'Backspace') {
+        walls.splice(selectedIndex, 1);
+        selectedIndex = Math.min(selectedIndex, walls.length - 1);
+        render();
+        return;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      normalizeWall(wall);
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>躲猫猫高手 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="../../index.html" class="back-btn">← 返回</a>
+  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+  <canvas id="game"></canvas>
+  <div id="overlay" class="overlay">
+    <div class="panel">
+      <div class="eyebrow">Peekaboo</div>
+      <h1>躲猫猫高手</h1>
+      <p>轮流扮演猫和狗：当猫时找家具伪装并躲过追捕，当狗时用有限查验次数找出电脑猫。</p>
+      <div class="keys">
+        <span>WASD / 方向键移动</span>
+        <span>Enter 伪装 / 查验</span>
+        <span>Q / E 旋转伪装物</span>
+      </div>
+      <div class="difficulty">
+        <div class="difficulty-title">电脑难度</div>
+        <div class="difficulty-options">
+          <button class="difficulty-btn" data-difficulty="easy" type="button">低</button>
+          <button class="difficulty-btn selected" data-difficulty="medium" type="button">中</button>
+          <button class="difficulty-btn" data-difficulty="hard" type="button">高</button>
+        </div>
+      </div>
+      <button id="startBtn">开始游戏</button>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

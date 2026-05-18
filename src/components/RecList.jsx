@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { getCoverPath } from '../data/games';
+import { getDisplayCoverPath } from '../data/games';
 import styles from './RecList.module.css';
 
 function RecList({ games }) {
@@ -9,7 +9,7 @@ function RecList({ games }) {
         <Link to={`/game/${g.id}`} key={g.id} className={styles.recCard}>
           <img
             className={styles.recCover}
-            src={getCoverPath(g.id)}
+            src={getDisplayCoverPath(g)}
             alt={g.name}
           />
           <div className={styles.recInfo}>
