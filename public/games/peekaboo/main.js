@@ -15,9 +15,22 @@ const DISGUISE_RADIUS = 96;
 const INSPECT_RADIUS = 90;
 const CATCH_RADIUS = 56;
 const DOG_VISION_RANGE = 360;
-const BASE_ITEM_MATCH_RADIUS = 70;
+const ITEM_SPAWN_MIN_RATIO = 1;
+const ITEM_SPAWN_MAX_RATIO = 1;
 const HIDE_SECONDS = 15;
-const SEEK_SECONDS = 100;
+const SEEK_SECONDS = 60;
+const DESTROY_GOALS = { easy: 6, medium: 12, hard: 20 };
+const DESTROY_RADIUS = DISGUISE_RADIUS;
+const DESTROY_HOLD_SECONDS = 3;
+const DESTROY_TAP_MAX_SECONDS = 0.35;
+const FOOTPRINT_TRIGGER_AT = 30;
+const FOOTPRINT_STEP = 0.5;
+const FOOTPRINT_BURST_DURATION = 4;
+const FOOTPRINT_LIFETIME = 4;
+const FOOTPRINT_MOVE_MIN = 12;
+const CAT_ALERT_DURATION = 1.6;
+const DISTANCE_ALERT_EPSILON = 3;
+const FOOTPRINT_ARRIVAL_RADIUS = 40;
 
 const keys = new Set();
 const justPressed = new Set();
@@ -25,6 +38,7 @@ let lastTime = performance.now();
 let gameStarted = false;
 let message = '按开始进入第一回合';
 let messageTimer = 0;
+let debugNavigation = true;
 let round = 'playerCatHide';
 let roundTime = HIDE_SECONDS;
 let inspectLeft = 5;
@@ -32,6 +46,14 @@ let aiCheckTimer = 0;
 let aiTarget = null;
 let aiDifficulty = 'medium';
 let outcome = null;
+let playerCatDestroyed = 0;
+let aiCatDestroyed = 0;
+let footprints = [];
+let destroyHold = { itemId: null, progress: 0, wasHolding: false };
+const catDistanceTracking = {
+  playerCat: { last: Infinity, alertUntil: 0 },
+  aiCat: { last: Infinity, alertUntil: 0 },
+};
 
 const images = {};
 const assetPaths = {
@@ -77,284 +99,214 @@ const toWorldPoint = (point) => ({
   y: point.y / SOURCE_H * MAP,
 });
 
-
 const manualWalls = [
   { key: 'wallStraight', x: 160, y: 0, w: 5, h: 100, rotation: 0 },
   { key: 'wallStraight', x: 265, y: 0, w: 5, h: 100, rotation: 0 },
-  { key: 'wallStraight', x: 270, y: 60, w: 40, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 370, y: 170, w: 150, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 120, y: 100, w: 80, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 0, y: 240, w: 200, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 125, y: 150, w: 5, h: 90, rotation: 0 },
-  { key: 'wallStraight', x: 115, y: 315, w: 100, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 270, y: 60, w: 40, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 370, y: 170, w: 150, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 120, y: 100, w: 80, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 0, y: 200, w: 200, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 125, y: 150, w: 5, h: 50, rotation: 0 },
+  { key: 'wallStraight', x: 105, y: 275, w: 100, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 95, y: 0, w: 5, h: 100, rotation: 0 },
-  { key: 'wallStraight', x: 130, y: 150, w: 40, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 0, y: 365, w: 150, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 130, y: 150, w: 40, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 0, y: 365, w: 150, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 320, y: 380, w: 5, h: 100, rotation: 0 },
   { key: 'wallStraight', x: 375, y: 380, w: 5, h: 100, rotation: 0 },
   { key: 'wallStraight', x: 300, y: 305, w: 260, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 300, y: 215, w: 5, h: 90, rotation: 0 },
   { key: 'wallStraight', x: 360, y: 215, w: 5, h: 90, rotation: 0 },
-  { key: 'wallStraight', x: 305, y: 255, w: 30, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 305, y: 255, w: 30, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 325, y: 0, w: 5, h: 60, rotation: 0 },
   { key: 'wallStraight', x: 115, y: 370, w: 5, h: 30, rotation: 0 },
   { key: 'wallStraight', x: 115, y: 450, w: 5, h: 30, rotation: 0 },
-  { key: 'wallStraight', x: 460, y: 380, w: 100, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 460, y: 420, w: 100, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 460, y: 380, w: 100, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 460, y: 420, w: 100, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 375, y: 310, w: 5, h: 30, rotation: 180 },
-  { key: 'wallStraight', x: 320, y: 145, w: 50, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 320, y: 145, w: 50, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 320, y: 150, w: 5, h: 30, rotation: 0 },
   { key: 'wallStraight', x: 365, y: 150, w: 5, h: 30, rotation: 0 },
   { key: 'wallStraight', x: 410, y: 110, w: 5, h: 60, rotation: 0 },
-  { key: 'wallStraight', x: 350, y: 110, w: 60, h: 5, rotation: 270 },
+  { key: 'wallStraight', x: 350, y: 110, w: 60, h: 5, rotation: 90 },
   { key: 'wallStraight', x: 345, y: 110, w: 5, h: 20, rotation: 180 },
-  { key: 'wallStraight', x: 310, y: 85, w: 250, h: 5, rotation: 270 },
-  { key: 'wallStraight', x: 195, y: 150, w: 5, h: 90, rotation: 0 },
-  { key: 'wallStraight', x: 165, y: 245, w: 5, h: 70, rotation: 180 },
+  { key: 'wallStraight', x: 310, y: 85, w: 250, h: 5, rotation: 90 },
+  { key: 'wallStraight', x: 200, y: 150, w: 5, h: 90, rotation: 0 },
+  { key: 'wallStraight', x: 160, y: 205, w: 5, h: 70, rotation: 180 },
 ].map(toWorldWall);
 
-
 const manualNavNodes = [
-  { x: 47, y: 46 },
-  { x: 44, y: 190 },
-  { x: 100, y: 189 },
-  { x: 100, y: 130 },
-  { x: 45, y: 129 },
-  { x: 232, y: 131 },
-  { x: 181, y: 199 },
-  { x: 181, y: 199 },
-  { x: 181, y: 199 },
-  { x: 181, y: 199 },
-  { x: 302, y: 133 },
-  { x: 235, y: 44 },
-  { x: 235, y: 44 },
-  { x: 235, y: 44 },
-  { x: 119, y: 66 },
-  { x: 258, y: 283 },
-  { x: 258, y: 283 },
-  { x: 262, y: 132 },
-  { x: 256, y: 426 },
-  { x: 42, y: 288 },
-  { x: 134, y: 285 },
-  { x: 44, y: 346 },
-  { x: 132, y: 352 },
-  { x: 132, y: 352 },
-  { x: 217, y: 368 },
-  { x: 256, y: 426 },
-  { x: 122, y: 424 },
-  { x: 52, y: 423 },
-  { x: 315, y: 348 },
-  { x: 377, y: 362 },
-  { x: 353, y: 434 },
-  { x: 485, y: 341 },
-  { x: 429, y: 406 },
-  { x: 429, y: 451 },
-  { x: 519, y: 454 },
-  { x: 513, y: 409 },
-  { x: 335, y: 201 },
-  { x: 348, y: 280 },
-  { x: 347, y: 167 },
-  { x: 415, y: 258 },
-  { x: 505, y: 230 },
-  { x: 542, y: 134 },
-  { x: 459, y: 133 },
-  { x: 425, y: 102 },
-  { x: 348, y: 99 },
-  { x: 386, y: 135 },
-  { x: 300, y: 77 },
-  { x: 454, y: 73 },
-  { x: 471, y: 54 },
-  { x: 321, y: 66 },
-  { x: 296, y: 29 },
-  { x: 485, y: 341 },
-  { x: 485, y: 341 },
-  { x: 235, y: 44 },
-  { x: 235, y: 44 },
-  { x: 235, y: 44 },
-  { x: 263, y: 191 },
-  { x: 199, y: 284 },
-  { x: 232, y: 131 },
-  { x: 181, y: 130 },
+  { x: 255, y: 135 },
+  { x: 160, y: 405 },
+  { x: 435, y: 365 },
+  { x: 535, y: 200 },
+  { x: 535, y: 105 },
+  { x: 285, y: 100 },
+  { x: 110, y: 135 },
+  { x: 345, y: 200 },
+  { x: 255, y: 200 },
+  { x: 255, y: 340 },
+  { x: 65, y: 435 },
+  { x: 75, y: 330 },
+  { x: 350, y: 350 },
+  { x: 300, y: 400 },
+  { x: 230, y: 440 },
+  { x: 195, y: 380 },
+  { x: 450, y: 460 },
+  { x: 495, y: 370 },
+  { x: 55, y: 140 },
+  { x: 75, y: 45 },
+  { x: 45, y: 190 },
+  { x: 105, y: 180 },
+  { x: 200, y: 80 },
+  { x: 315, y: 75 },
+  { x: 395, y: 75 },
+  { x: 315, y: 30 },
+  { x: 395, y: 30 },
+  { x: 520, y: 75 },
+  { x: 485, y: 30 },
+  { x: 110, y: 280 },
+  { x: 55, y: 290 },
+  { x: 185, y: 135 },
+  { x: 180, y: 200 },
+  { x: 115, y: 60 },
+  { x: 345, y: 285 },
+  { x: 400, y: 250 },
+  { x: 400, y: 200 },
+  { x: 505, y: 255 },
+  { x: 350, y: 440 },
 ].map(toWorldPoint);
 
-const manualNavEdges = [
-  [1, 2],
-  [2, 3],
-  [0, 4],
-  [4, 1],
+const manualNavMainEdges = [
+  [4, 5],
+  [0, 5],
+  [0, 8],
+  [7, 8],
   [3, 4],
-  [7, 6],
-  [8, 7],
   [9, 8],
-  [12, 11],
-  [13, 12],
-  [13, 5],
-  [14, 3],
-  [16, 15],
-  [17, 10],
-  [19, 20],
-  [19, 21],
-  [21, 20],
-  [23, 22],
-  [23, 21],
-  [24, 23],
-  [25, 18],
-  [24, 25],
-  [25, 26],
-  [26, 27],
-  [28, 25],
-  [16, 24],
-  [16, 28],
-  [16, 25],
-  [25, 29],
-  [29, 30],
-  [31, 32],
-  [32, 33],
-  [33, 34],
-  [36, 37],
-  [37, 38],
-  [38, 39],
-  [39, 40],
-  [40, 41],
-  [41, 42],
-  [42, 43],
-  [43, 44],
-  [46, 47],
-  [47, 48],
-  [48, 49],
-  [49, 50],
-  [29, 31],
-  [51, 31],
-  [52, 51],
-  [46, 49],
-  [53, 13],
-  [54, 53],
-  [55, 54],
-  [55, 17],
-  [1, 3],
-  [4, 2],
-  [56, 17],
-  [36, 56],
-  [56, 46],
-  [46, 10],
-  [10, 56],
-  [56, 24],
-  [24, 28],
-  [28, 26],
-  [26, 24],
-  [24, 29],
-  [29, 32],
-  [28, 29],
-  [30, 28],
-  [35, 32],
-  [35, 29],
-  [29, 52],
-  [52, 28],
-  [3, 0],
-  [57, 56],
-  [16, 57],
-  [16, 56],
-  [16, 10],
-  [16, 5],
-  [5, 56],
-  [56, 55],
-  [58, 5],
-  [3, 59],
-  [59, 58],
-  [9, 59],
-  [56, 59],
-  [58, 17],
-  [10, 44],
-  [10, 45],
+  [11, 9],
+  [12, 9],
+  [12, 2],
+  [9, 15],
+  [15, 1],
+  [6, 18],
+  [5, 23],
+  [23, 24],
+  [24, 27],
+  [31, 6],
+  [31, 0],
+  [7, 36],
+  [36, 3],
 ];
+
+const manualNavAuxEdges = [
+  [1, 10],
+  [13, 9],
+  [14, 15],
+  [16, 2],
+  [2, 17],
+  [18, 19],
+  [19, 20],
+  [21, 18],
+  [6, 21],
+  [0, 22],
+  [23, 25],
+  [27, 28],
+  [26, 24],
+  [29, 11],
+  [11, 30],
+  [31, 32],
+  [33, 6],
+  [34, 7],
+  [35, 36],
+  [37, 3],
+  [38, 12],
+];
+
+
+function forEachManualNavEdge(callback) {
+  manualNavMainEdges.forEach(([from, to]) => callback(from, to, 'main'));
+  manualNavAuxEdges.forEach(([from, to]) => callback(from, to, 'aux'));
+}
+
+
 const manualBaseItems = [
-  { type: 'bed', x: 45, y: 40 },
-  { type: 'bed', x: 160, y: 210 },
-  { type: 'bed', x: 220, y: 30 },
-  { type: 'bed', x: 55, y: 270 },
-  { type: 'bed', x: 470, y: 20 },
-  { type: 'bed', x: 470, y: 145 },
-  { type: 'sofa', x: 25, y: 215 },
-  { type: 'sofa', x: 515, y: 455 },
-  { type: 'sofa', x: 55, y: 455 },
-  { type: 'sofa', x: 145, y: 390 },
-  { type: 'sofa', x: 270, y: 395 },
-  { type: 'sofa', x: 155, y: 465 },
-  { type: 'sofa', x: 180, y: 465 },
-  { type: 'sofa', x: 205, y: 465 },
-  { type: 'sofa', x: 270, y: 465 },
-  { type: 'table', x: 70, y: 195 },
-  { type: 'table', x: 55, y: 350 },
-  { type: 'table', x: 55, y: 420 },
-  { type: 'table', x: 180, y: 420 },
-  { type: 'table', x: 200, y: 420 },
-  { type: 'table', x: 220, y: 420 },
-  { type: 'table', x: 330, y: 425 },
-  { type: 'table', x: 330, y: 450 },
-  { type: 'table', x: 275, y: 25 },
-  { type: 'table', x: 110, y: 35 },
-  { type: 'table', x: 180, y: 60 },
-  { type: 'table', x: 180, y: 75 },
-  { type: 'table', x: 430, y: 75 },
-  { type: 'table', x: 450, y: 75 },
-  { type: 'table', x: 465, y: 75 },
-  { type: 'table', x: 400, y: 130 },
-  { type: 'table', x: 345, y: 160 },
-  { type: 'table', x: 310, y: 280 },
-  { type: 'table', x: 180, y: 255 },
-  { type: 'table', x: 180, y: 270 },
-  { type: 'chair', x: 70, y: 170 },
-  { type: 'chair', x: 180, y: 395 },
-  { type: 'chair', x: 195, y: 395 },
-  { type: 'chair', x: 240, y: 420 },
-  { type: 'chair', x: 35, y: 420 },
-  { type: 'chair', x: 55, y: 335 },
-  { type: 'chair', x: 180, y: 290 },
-  { type: 'chair', x: 205, y: 270 },
-  { type: 'chair', x: 335, y: 280 },
-  { type: 'chair', x: 345, y: 180 },
-  { type: 'chair', x: 400, y: 155 },
-  { type: 'chair', x: 440, y: 55 },
-  { type: 'chair', x: 460, y: 55 },
-  { type: 'chair', x: 305, y: 25 },
-  { type: 'chair', x: 485, y: 455 },
-  { type: 'chair', x: 445, y: 320 },
-  { type: 'chair', x: 465, y: 320 },
-  { type: 'chair', x: 485, y: 320 },
-  { type: 'chair', x: 555, y: 335 },
-  { type: 'chair', x: 555, y: 360 },
-  { type: 'chair', x: 480, y: 375 },
-  { type: 'bonsai', x: 10, y: 125 },
-  { type: 'bonsai', x: 25, y: 125 },
-  { type: 'bonsai', x: 45, y: 125 },
-  { type: 'bonsai', x: 145, y: 260 },
-  { type: 'bonsai', x: 145, y: 280 },
-  { type: 'bonsai', x: 145, y: 300 },
-  { type: 'bonsai', x: 220, y: 300 },
-  { type: 'bonsai', x: 305, y: 385 },
-  { type: 'bonsai', x: 305, y: 405 },
-  { type: 'bonsai', x: 300, y: 425 },
-  { type: 'bonsai', x: 310, y: 455 },
-  { type: 'bonsai', x: 370, y: 370 },
-  { type: 'bonsai', x: 500, y: 395 },
-  { type: 'bonsai', x: 545, y: 410 },
-  { type: 'bonsai', x: 385, y: 445 },
-  { type: 'bonsai', x: 405, y: 465 },
-  { type: 'bonsai', x: 415, y: 220 },
-  { type: 'bonsai', x: 415, y: 245 },
-  { type: 'bonsai', x: 440, y: 265 },
-  { type: 'bonsai', x: 465, y: 270 },
-  { type: 'bonsai', x: 485, y: 250 },
-  { type: 'bonsai', x: 485, y: 225 },
-  { type: 'bonsai', x: 315, y: 240 },
-  { type: 'bonsai', x: 150, y: 145 },
-  { type: 'bonsai', x: 195, y: 115 },
-  { type: 'bonsai', x: 210, y: 230 },
-  { type: 'bonsai', x: 210, y: 190 },
-  { type: 'bonsai', x: 515, y: 155 },
-  { type: 'bonsai', x: 425, y: 125 },
-  { type: 'bonsai', x: 425, y: 155 },
+  { type: 'bed', imgKey: 'bed1', x: 45, y: 40, angle: 0 },
+  { type: 'bed', imgKey: 'bed3', x: 145, y: 40, angle: 0 },
+  { type: 'bed', imgKey: 'bed2', x: 440, y: 25, angle: 0 },
+  { type: 'bed', imgKey: 'bed1', x: 70, y: 215, angle: Math.PI },
+  { type: 'table', imgKey: 'table1', x: 465, y: 145, angle: Math.PI },
+  { type: 'table', imgKey: 'table2', x: 415, y: 410, angle: Math.PI },
+  { type: 'table', imgKey: 'table4', x: 170, y: 235, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 215, y: 365, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 250, y: 365, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 215, y: 400, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 250, y: 400, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 150, y: 450, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 170, y: 470, angle: Math.PI },
+  { type: 'table', imgKey: 'table4', x: 200, y: 470, angle: Math.PI },
+  { type: 'table', imgKey: 'table4', x: 330, y: 440, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table4', x: 370, y: 440, angle: Math.PI / 2 },
+  { type: 'table', imgKey: 'table4', x: 350, y: 470, angle: Math.PI },
+  { type: 'chair', imgKey: 'chair1', x: 70, y: 265, angle: Math.PI },
+  { type: 'table', imgKey: 'table3', x: 445, y: 255, angle: Math.PI },
+  { type: 'table', imgKey: 'table3', x: 145, y: 170, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table2', x: 285, y: 45, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 465, y: 60, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 35, y: 220, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 100, y: 220, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 15, y: 105, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 45, y: 105, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 75, y: 385, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 100, y: 385, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 45, y: 385, angle: Math.PI },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 15, y: 385, angle: Math.PI },
+  { type: 'chair', imgKey: 'chair2', x: 115, y: 15, angle: Math.PI * 1.5 },
+  { type: 'chair', imgKey: 'chair2', x: 20, y: 185, angle: Math.PI },
+  { type: 'chair', imgKey: 'chair2', x: 315, y: 240, angle: Math.PI * 1.5 },
+  { type: 'chair', imgKey: 'chair2', x: 345, y: 165, angle: 0 },
+  { type: 'chair', imgKey: 'chair2', x: 445, y: 220, angle: 0 },
+  { type: 'chair', imgKey: 'chair1', x: 445, y: 290, angle: Math.PI },
+  { type: 'chair', imgKey: 'chair1', x: 480, y: 255, angle: Math.PI / 2 },
+  { type: 'chair', imgKey: 'chair2', x: 415, y: 380, angle: 0 },
+  { type: 'chair', imgKey: 'chair2', x: 190, y: 400, angle: Math.PI * 1.5 },
+  { type: 'chair', imgKey: 'chair2', x: 275, y: 365, angle: Math.PI * 1.5 },
+  { type: 'chair', imgKey: 'chair1', x: 180, y: 445, angle: 0 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 215, y: 225, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 285, y: 240, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 285, y: 275, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 320, y: 285, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 545, y: 405, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 480, y: 405, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 545, y: 320, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 545, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 390, y: 320, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 415, y: 320, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 15, y: 415, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 15, y: 445, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 15, y: 470, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 50, y: 420, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 80, y: 420, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai1', x: 60, y: 455, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 20, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 45, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 70, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 95, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 120, y: 355, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 435, y: 155, angle: Math.PI * 1.5 },
+  { type: 'bonsai', imgKey: 'bonsai2', x: 495, y: 155, angle: Math.PI * 1.5 },
+  { type: 'table', imgKey: 'table1', x: 220, y: 15, angle: Math.PI / 2 },
+  { type: 'table', imgKey: 'table1', x: 220, y: 55, angle: Math.PI / 2 },
+  { type: 'sofa', imgKey: 'sofa1', x: 185, y: 35, angle: Math.PI * 1.5 },
+  { type: 'sofa', imgKey: 'sofa1', x: 345, y: 30, angle: Math.PI * 1.5 },
+  { type: 'sofa', imgKey: 'sofa2', x: 525, y: 25, angle: Math.PI / 2 },
+  { type: 'sofa', imgKey: 'sofa2', x: 385, y: 285, angle: Math.PI },
+  { type: 'sofa', imgKey: 'sofa3', x: 490, y: 340, angle: Math.PI / 2 },
+  { type: 'sofa', imgKey: 'sofa2', x: 30, y: 315, angle: Math.PI * 1.5 },
+  { type: 'sofa', imgKey: 'sofa1', x: 150, y: 290, angle: 0 },
+  { type: 'bed', imgKey: 'bed2', x: 510, y: 455, angle: Math.PI / 2 },
 ].map(toWorldPoint);
+
+
 const itemTypes = {
   bed: { label: '床', keys: ['bed1', 'bed2', 'bed3'] },
   sofa: { label: '沙发', keys: ['sofa1', 'sofa2', 'sofa3'] },
@@ -578,7 +530,7 @@ const WALL_STRAIGHT_NATIVE_W = 99;
 const WALL_STRAIGHT_NATIVE_H = 340;
 const WALL_CORNER_NATIVE_SIZE = 341;
 const WALL_TILE_OVERLAP = 3;
-const NAV_CLEARANCE = 18;
+const NAV_CLEARANCE = PLAYER_COLLISION_RADIUS + 2;
 
 let items = [];
 
@@ -603,11 +555,8 @@ const aiDogBrain = {
   mode: 'patrol',
   patrolTarget: null,
   inspectTarget: null,
-  inspectQueue: [],
-  dangerZone: null,
-  suspiciousZone: null,
-  inspectedIds: new Set(),
-  chaseDelay: 0,
+  clueTarget: null,
+  clueTimer: 0,
   navPath: [],
   navTargetKey: '',
   stuckTimer: 0,
@@ -615,15 +564,24 @@ const aiDogBrain = {
   lastDogY: aiDog.y,
   lastCatX: playerCat.x,
   lastCatY: playerCat.y,
+  footprintTarget: null,
 };
 
 const aiCatBrain = {
   hideTarget: null,
+  sabotageTarget: null,
+  destroyCooldown: 0,
+  destroyHold: 0,
+  destroyItemId: null,
   navPath: [],
   navTargetKey: '',
   stuckTimer: 0,
   lastX: aiCat.x,
   lastY: aiCat.y,
+  dogSenseTimer: 0,
+  pauseTimer: 0,
+  freezeAfterDisguise: false,
+  needsInitialDisguise: false,
 };
 
 function makeEntity(kind, x, y) {
@@ -639,7 +597,30 @@ function makeEntity(kind, x, y) {
     angle: 0,
     disguiseChance: true,
     canRestore: false,
+    footprintSpawned: false,
+    footprintBurstLeft: 0,
+    footprintStepTimer: 0,
+    footprintLastSpawnX: x,
+    footprintLastSpawnY: y,
   };
+}
+
+function resetCatFootprintState(cat) {
+  cat.footprintSpawned = false;
+  cat.footprintBurstLeft = 0;
+  cat.footprintStepTimer = 0;
+  cat.footprintLastSpawnX = cat.x;
+  cat.footprintLastSpawnY = cat.y;
+}
+
+function catMovedEnoughForFootprint(cat) {
+  return distance(cat, { x: cat.footprintLastSpawnX, y: cat.footprintLastSpawnY }) >= FOOTPRINT_MOVE_MIN;
+}
+
+function getRoundElapsed() {
+  if (round === 'playerCatHide' || round === 'playerDogWait') return HIDE_SECONDS - roundTime;
+  if (round === 'playerCatSeek' || round === 'playerDogSeek') return SEEK_SECONDS - roundTime;
+  return 0;
 }
 
 function resize() {
@@ -659,7 +640,13 @@ window.addEventListener('keydown', (event) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(event.key)) {
     event.preventDefault();
   }
-  if (!keys.has(key)) justPressed.add(key);
+  if (!keys.has(key)) {
+    justPressed.add(key);
+    if (key === 'n') {
+      debugNavigation = !debugNavigation;
+      showMessage(debugNavigation ? '导航调试：开' : '导航调试：关', 1.2);
+    }
+  }
   keys.add(key);
 });
 
@@ -690,25 +677,87 @@ function normalizeKey(key) {
 function resetGame() {
   gameStarted = true;
   outcome = null;
+  invalidateNavigationCache();
   pickManualSpawnPoints();
   items = generateItems();
   Object.assign(playerCat, makeEntity('cat', spawnPoints.playerCat.x, spawnPoints.playerCat.y));
   Object.assign(aiDog, makeEntity('dog', spawnPoints.aiDog.x, spawnPoints.aiDog.y));
   Object.assign(playerDog, makeEntity('dog', spawnPoints.playerDog.x, spawnPoints.playerDog.y));
   Object.assign(aiCat, makeEntity('cat', spawnPoints.aiCat.x, spawnPoints.aiCat.y));
+  [playerCat, aiDog, playerDog, aiCat].forEach((entity) => ensureEntityClear(entity));
   inspectLeft = 5;
+  playerCatDestroyed = 0;
+  aiCatDestroyed = 0;
+  footprints = [];
+  destroyHold = { itemId: null, progress: 0, wasHolding: false };
+  resetCatDistanceTracking();
   warmNavigationCache();
   resetAiDogBrain();
   resetAiCatBrain();
   startPlayerCatRound();
 }
 
+function isSpawnPointClear(x, y, navigationItems = items) {
+  const pad = PLAYER_COLLISION_RADIUS + 2;
+  const probe = { x: x - pad, y: y - pad, w: pad * 2, h: pad * 2 };
+  if (x <= pad || x >= MAP - pad || y <= pad || y >= MAP - pad) return false;
+  if (getWallCollisionRects().some((rect) => rectOverlap(probe, rect))) return false;
+  return !navigationItems.some((item) => rectOverlap(probe, itemHitRect(item)));
+}
+
+function resolveSpawnPoint(point, navigationItems = items) {
+  if (isSpawnPointClear(point.x, point.y, navigationItems)) {
+    return { x: point.x, y: point.y };
+  }
+  for (let radius = 24; radius <= 140; radius += 24) {
+    for (let step = 0; step < 8; step += 1) {
+      const angle = (Math.PI * 2 * step) / 8;
+      const x = clamp(point.x + Math.cos(angle) * radius, PLAYER_COLLISION_RADIUS, MAP - PLAYER_COLLISION_RADIUS);
+      const y = clamp(point.y + Math.sin(angle) * radius, PLAYER_COLLISION_RADIUS, MAP - PLAYER_COLLISION_RADIUS);
+      if (isSpawnPointClear(x, y, navigationItems)) return { x, y };
+    }
+  }
+  return getRandomPatrolPoint();
+}
+
+function ensureEntityClear(entity, preferred = entity) {
+  if (!collides(entity, entity)) return;
+  const point = resolveSpawnPoint(preferred, items);
+  entity.x = point.x;
+  entity.y = point.y;
+}
+
+function getSpawnNavNodePool() {
+  const spawnReady = manualNavNodes.filter((node) => isSpawnPointClear(node.x, node.y, []));
+  if (spawnReady.length >= spawnKeys.length) return spawnReady;
+  const navReady = manualNavNodes.filter((node) => isNavigationPointClear(node.x, node.y, []));
+  return navReady.length ? navReady : manualNavNodes;
+}
+
 function pickManualSpawnPoints() {
-  const shuffled = shuffle(manualNavNodes);
-  spawnKeys.forEach((key, i) => {
-    const pt = shuffled[i % shuffled.length] || { x: MAP / 2, y: MAP / 2 };
-    spawnPoints[key].x = pt.x;
-    spawnPoints[key].y = pt.y;
+  invalidateNavigationCache();
+  const shuffled = shuffle(getSpawnNavNodePool());
+  const used = [];
+  const minSpawnDist = 180;
+
+  spawnKeys.forEach((key) => {
+    let point = null;
+    for (const candidate of shuffled) {
+      const resolved = resolveSpawnPoint(candidate, []);
+      if (used.some((other) => distance(other, resolved) < minSpawnDist)) continue;
+      point = resolved;
+      used.push(resolved);
+      break;
+    }
+    if (!point) {
+      for (const candidate of shuffled) {
+        point = resolveSpawnPoint(candidate, []);
+        break;
+      }
+    }
+    if (!point) point = getRandomPatrolPoint();
+    spawnPoints[key].x = point.x;
+    spawnPoints[key].y = point.y;
   });
   spawnSafeZones = makeSpawnSafeZones();
 }
@@ -732,54 +781,51 @@ function shuffle(values) {
 }
 
 function generateItems() {
+  const pickedIndices = manualBaseItems.map((_, index) => index);
+  const spawnCount = Math.max(1, Math.round(manualBaseItems.length * random(ITEM_SPAWN_MIN_RATIO, ITEM_SPAWN_MAX_RATIO)));
+  const selected = pickedIndices.slice(0, Math.min(spawnCount, manualBaseItems.length));
   const created = [];
-  shuffle(manualBaseItems).forEach((base, index) => {
-    const item = placeItem(base, created, index);
+  selected.forEach((baseIndex) => {
+    const item = createPlannedBaseItem(manualBaseItems[baseIndex], baseIndex, created);
     if (item) created.push(item);
   });
-
   return created;
 }
 
-function placeItem(base, existing, index) {
-  const typeName = base.type;
-  const type = itemTypes[typeName];
+function createPlannedBaseItem(base, baseIndex, existing) {
+  const type = itemTypes[base.type];
   if (!type) return null;
+
+  const imgKey = type.keys.includes(base.imgKey) ? base.imgKey : choice(type.keys);
+  const size = getSpriteSize(imgKey);
+  const item = {
+    id: `base-${baseIndex}`,
+    type: base.type,
+    label: type.label,
+    imgKey,
+    x: base.x,
+    y: base.y,
+    w: size.w,
+    h: size.h,
+    scale: 1,
+    angle: Number.isFinite(base.angle) ? base.angle : 0,
+    region: 'planned',
+    baseIndex,
+  };
   const wallRects = getWallCollisionRects();
-  for (let attempt = 0; attempt < 160; attempt += 1) {
-    const imgKey = type.keys.includes(base.imgKey) ? base.imgKey : choice(type.keys);
-    const size = getSpriteSize(imgKey);
-    const variantScale = random(0.88, 1.16);
-    const w = size.w * variantScale;
-    const h = size.h * variantScale;
-    const radius = 150 + attempt * 1.5;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius;
-    const x = clamp(base.x + Math.cos(angle) * dist, w / 2 + 60, MAP - w / 2 - 60);
-    const y = clamp(base.y + Math.sin(angle) * dist, h / 2 + 60, MAP - h / 2 - 60);
-    const item = {
-      id: `${typeName}-${index}-${attempt}`,
-      type: typeName,
-      label: type.label,
-      imgKey,
-      x,
-      y,
-      w,
-      h,
-      scale: variantScale,
-      angle: Number.isFinite(base.angle) ? base.angle : (Math.random() < 0.5 ? 0 : Math.PI / 2),
-      region: 'manual',
-      baseIndex: index,
-      plannedX: base.x,
-      plannedY: base.y,
-    };
-    if (!spawnSafeZones.some((rect) => rectOverlap(itemRect(item, 18), rect)) &&
-        !existing.some((other) => rectOverlap(itemRect(item, 18), itemRect(other, 18))) &&
-        !wallRects.some((rect) => rectOverlap(itemRect(item), rect))) {
-      return item;
-    }
-  }
-  return null;
+  if (spawnSafeZones.some((rect) => rectOverlap(itemRect(item, 18), rect))) return null;
+  if (existing.some((other) => rectOverlap(itemRect(item, 18), itemRect(other, 18)))) return null;
+  if (wallRects.some((rect) => rectOverlap(itemRect(item), rect))) return null;
+  return item;
+}
+
+function navCorridorProbe(x, y, radius = NAV_CLEARANCE) {
+  return {
+    x: x - radius,
+    y: y - radius,
+    w: radius * 2,
+    h: radius * 2,
+  };
 }
 
 function update(dt) {
@@ -789,12 +835,17 @@ function update(dt) {
   messageTimer = Math.max(0, messageTimer - dt);
   const human = getHuman();
 
+  updateFootprints(dt);
+
   if (round === 'playerCatHide') {
     updateHuman(human, dt);
+    updateCatFootprints(playerCat, dt);
     updateAiDog(dt, playerCat);
     if (roundTime <= 0) startPlayerCatSeek();
   } else if (round === 'playerCatSeek') {
     updateHuman(human, dt);
+    updateCatFootprints(playerCat, dt);
+    updateCatDistanceAlert(aiDog, playerCat, dt);
     updateAiDog(dt, playerCat);
     if (catCaughtByDog(playerCat, aiDog, true)) endGame(false, '电脑狗找到了你，狗方获胜。');
     if (roundTime <= 0) startPlayerDogRound();
@@ -803,6 +854,9 @@ function update(dt) {
     if (roundTime <= 0) startPlayerDogSeek();
   } else if (round === 'playerDogSeek') {
     updateHuman(human, dt);
+    updateCatFootprints(aiCat, dt);
+    updateCatDistanceAlert(playerDog, aiCat, dt);
+    updateAiCatSeek(dt);
     if (catCaughtByDog(aiCat, playerDog, false)) endGame(true, '你撞到了没有伪装的电脑猫，玩家获胜。');
     if (roundTime <= 0) startPlayerCatRound();
   }
@@ -814,6 +868,7 @@ function updateHuman(entity, dt) {
   const speed = getSpeed(entity);
   moveEntity(entity, inputVector(), speed * dt);
   handleInteract(entity);
+  if (entity.kind === 'cat') handleDestroy(entity, true, dt);
   if (entity.disguised) {
     if (justPressed.has('q')) entity.angle -= Math.PI / 2;
     if (justPressed.has('e')) entity.angle += Math.PI / 2;
@@ -865,38 +920,36 @@ function handleInteract(entity) {
   }
 
   const target = nearestItem(entity, DISGUISE_RADIUS);
-  if (target && !entity.disguised && entity.disguiseChance) {
-    entity.disguised = true;
-    entity.disguiseItem = target;
-    entity.angle = target.angle;
-    entity.disguiseChance = false;
-    entity.canRestore = false;
-    showMessage(`你伪装成了${target.label}。`, 2);
+  const nearDestroyable = target && isDestroyableItem(target);
+  if (target && !entity.disguised && entity.disguiseChance && !nearDestroyable) {
+    applyDisguise(entity, target);
   }
 }
 
 function updateAiDog(dt, cat) {
   if (round === 'playerCatHide') return;
 
-  aiCheckTimer -= dt;
+  aiCheckTimer = Math.max(0, aiCheckTimer - dt);
   const dog = aiDog;
   const catMoved = distance({ x: aiDogBrain.lastCatX, y: aiDogBrain.lastCatY }, cat) > 4;
   const seesCat = dogCanCurrentlySeeCat(dog, cat);
 
-  if (seesCat && !cat.disguised) {
-    setAiMode('chase', cat);
-  } else if (seesCat && catMoved) {
-    if (aiDifficulty === 'easy') {
-      aiDogBrain.chaseDelay += dt;
-      if (aiDogBrain.chaseDelay >= 1) setAiMode('chase', cat);
-    } else {
-      setAiMode('chase', cat);
-    }
-  } else if (seesCat && cat.disguised) {
-    prepareAiInspection(dog, cat);
-  } else {
-    aiDogBrain.chaseDelay = 0;
+  if (seesCat && cat.disguised) {
+    const track = catDistanceTracking[getCatTrackingKey(cat)];
+    track.alertUntil = performance.now() / 1000 + CAT_ALERT_DURATION;
   }
+
+  if (seesCat && (!cat.disguised || catMoved)) {
+    setAiMode('chase', cat);
+  } else if (aiDifficulty === 'easy' && seesCat && cat.disguised) {
+    prepareAiRandomInspection(dog, cat);
+  } else if (aiDogBrain.mode === 'chase' || aiDogBrain.mode === 'inspect') {
+    aiDogBrain.mode = 'patrol';
+    aiDogBrain.inspectTarget = null;
+  }
+
+  updateAiDogClueIntent(dt, cat);
+  updateAiDogFootprintIntent(dog);
 
   if (aiDogBrain.mode === 'chase') {
     aiTarget = cat;
@@ -908,9 +961,20 @@ function updateAiDog(dt, cat) {
   } else if (aiDogBrain.mode === 'inspect' && aiDogBrain.inspectTarget) {
     aiTarget = aiDogBrain.inspectTarget;
     moveAiDogToward(aiDogBrain.inspectTarget, dt);
-    if (distance(dog, aiDogBrain.inspectTarget) < INSPECT_RADIUS && aiCheckTimer <= 0) {
-      resolveAiInspection(cat);
+    if (canInspectItem(dog, aiDogBrain.inspectTarget) && aiCheckTimer <= 0) {
+      resolveAiRandomInspection(cat);
     }
+  } else if (aiDogBrain.mode === 'clue' && aiDogBrain.clueTarget) {
+    aiTarget = aiDogBrain.clueTarget;
+    moveAiDogToward(aiDogBrain.clueTarget, dt);
+    if (distance(dog, aiDogBrain.clueTarget) <= 200) {
+      aiDogBrain.mode = 'patrol';
+      aiDogBrain.clueTarget = null;
+      aiDogBrain.patrolTarget = null;
+    }
+  } else if (aiDogBrain.mode === 'footprint' && aiDogBrain.footprintTarget) {
+    aiTarget = aiDogBrain.footprintTarget;
+    moveAiDogToward(aiDogBrain.footprintTarget, dt);
   } else {
     const patrolTarget = getAiPatrolTarget();
     aiTarget = patrolTarget;
@@ -928,11 +992,8 @@ function resetAiDogBrain() {
     mode: 'patrol',
     patrolTarget: null,
     inspectTarget: null,
-    inspectQueue: [],
-    dangerZone: null,
-    suspiciousZone: null,
-    inspectedIds: new Set(),
-    chaseDelay: 0,
+    clueTarget: null,
+    clueTimer: 0,
     navPath: [],
     navTargetKey: '',
     stuckTimer: 0,
@@ -940,18 +1001,81 @@ function resetAiDogBrain() {
     lastDogY: aiDog.y,
     lastCatX: playerCat.x,
     lastCatY: playerCat.y,
+    footprintTarget: null,
   });
 }
 
 function setAiMode(mode, target = null) {
   aiDogBrain.mode = mode;
-  if (mode === 'chase') aiDogBrain.inspectTarget = null;
+  if (mode === 'chase' || mode === 'footprint' || mode === 'clue') aiDogBrain.inspectTarget = null;
   if (target) aiTarget = target;
+}
+
+function getActiveFootprints() {
+  const now = performance.now() / 1000;
+  return footprints.filter((mark) => mark.until > now);
+}
+
+function getNearestActiveFootprint(from, marks = getActiveFootprints()) {
+  if (!marks.length) return null;
+  return marks.reduce((best, mark) => (distance(from, mark) < distance(from, best) ? mark : best), marks[0]);
+}
+
+function isSameFootprintMark(a, b) {
+  if (!a || !b) return false;
+  return Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2;
+}
+
+function isFootprintMarkActive(mark, marks = getActiveFootprints()) {
+  return marks.some((entry) => isSameFootprintMark(entry, mark));
+}
+
+function updateAiDogFootprintIntent(dog) {
+  if (aiDifficulty === 'easy' || round !== 'playerCatSeek') return;
+  if (aiDogBrain.mode === 'chase' || aiDogBrain.mode === 'inspect') return;
+
+  const active = getActiveFootprints();
+
+  if (!active.length) {
+    aiDogBrain.footprintTarget = null;
+    if (aiDogBrain.mode === 'footprint') {
+      aiDogBrain.mode = 'patrol';
+      aiDogBrain.patrolTarget = null;
+    }
+    return;
+  }
+
+  aiDogBrain.footprintTarget = getNearestActiveFootprint(dog, active);
+  if (!aiDogBrain.footprintTarget) return;
+
+  if (aiDifficulty === 'hard' && distance(dog, aiDogBrain.footprintTarget) <= 100) {
+    aiDogBrain.mode = 'patrol';
+    aiDogBrain.patrolTarget = null;
+    return;
+  }
+
+  aiDogBrain.mode = 'footprint';
+}
+
+function updateAiDogClueIntent(dt, cat) {
+  if (aiDifficulty === 'easy' || round !== 'playerCatSeek') return;
+  const interval = aiDifficulty === 'hard' ? 15 : 20;
+  aiDogBrain.clueTimer = Math.max(0, aiDogBrain.clueTimer - dt);
+
+  if (aiDogBrain.clueTimer <= 0) {
+    aiDogBrain.clueTimer = interval;
+    aiDogBrain.clueTarget = { x: cat.x, y: cat.y };
+    if (aiDogBrain.mode === 'patrol' || aiDogBrain.mode === 'clue') {
+      aiDogBrain.mode = 'clue';
+      aiDogBrain.patrolTarget = null;
+    }
+  }
 }
 
 function moveAiDogToward(target, dt) {
   if (!target) return;
-  const waypoint = getNavigationWaypoint(aiDog, target, aiDogBrain, aiDogBrain.mode);
+  const moveTarget = isNavigableItem(target) ? getItemApproachPoint(aiDog, target) : target;
+  const waypoint = getNavigationWaypoint(aiDog, moveTarget, aiDogBrain, aiDogBrain.mode);
   const desired = { x: waypoint.x - aiDog.x, y: waypoint.y - aiDog.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
   moveEntity(aiDog, { x: desired.x / len, y: desired.y / len }, getSpeed(aiDog) * dt);
@@ -968,8 +1092,39 @@ function moveAiDogToward(target, dt) {
     aiDogBrain.navPath = [];
     aiDogBrain.navTargetKey = '';
     aiDogBrain.patrolTarget = null;
+    if (aiDogBrain.mode === 'inspect') aiDogBrain.mode = 'patrol';
     aiDogBrain.stuckTimer = 0;
   }
+}
+
+function isNavigableItem(target) {
+  return Boolean(target && target.imgKey && Number.isFinite(target.x) && Number.isFinite(target.y));
+}
+
+function getItemApproachPoint(entity, item) {
+  const rect = itemHitRect(item, 6);
+  const nearestX = clamp(entity.x, rect.x, rect.x + rect.w);
+  const nearestY = clamp(entity.y, rect.y, rect.y + rect.h);
+  const dx = entity.x - nearestX;
+  const dy = entity.y - nearestY;
+  const len = Math.hypot(dx, dy) || 1;
+  const standOff = Math.max(24, INSPECT_RADIUS - entity.r - 10);
+  return {
+    x: clamp(nearestX + (dx / len) * standOff, entity.r, MAP - entity.r),
+    y: clamp(nearestY + (dy / len) * standOff, entity.r, MAP - entity.r),
+  };
+}
+
+function canInspectItem(entity, item) {
+  if (!item) return false;
+  if (distance(entity, item) < INSPECT_RADIUS) return true;
+  return distancePointToRect(entity, itemHitRect(item)) < INSPECT_RADIUS;
+}
+
+function distancePointToRect(point, rect) {
+  const nearestX = clamp(point.x, rect.x, rect.x + rect.w);
+  const nearestY = clamp(point.y, rect.y, rect.y + rect.h);
+  return Math.hypot(point.x - nearestX, point.y - nearestY);
 }
 
 function getNavigationWaypoint(entity, target, brain, modeKey) {
@@ -985,101 +1140,31 @@ function getNavigationWaypoint(entity, target, brain, modeKey) {
     brain.navTargetKey = targetKey;
   }
 
-  return brain.navPath[0] || target;
+  return brain.navPath[0] || getNearestReachableNavNode(entity, target) || target;
 }
 
-function prepareAiInspection(dog, cat) {
+function prepareAiRandomInspection(dog, cat) {
   if (aiDogBrain.mode === 'inspect' && aiDogBrain.inspectTarget) return;
   const visibleTargets = getInspectionTargetsAround(dog, DOG_VISION_RANGE, cat);
-  const candidates = getInspectionCandidates(visibleTargets, cat);
-  if (!candidates.length) return;
-  aiDogBrain.inspectQueue = candidates;
-  aiDogBrain.inspectTarget = candidates[0];
+  if (!visibleTargets.length) return;
+  aiDogBrain.inspectTarget = choice(visibleTargets);
   aiDogBrain.mode = 'inspect';
 }
 
-function getInspectionCandidates(visibleTargets, cat) {
-  if (aiDifficulty === 'hard') {
-    const abnormal = visibleTargets
-      .filter((item) => isAbnormalInspectionTarget(item))
-      .filter((item) => !aiDogBrain.inspectedIds.has(getInspectionMemoryKey(item)));
-    if (abnormal.length) return abnormal.sort((a, b) => distance(a, aiDog) - distance(b, aiDog));
-  }
-
-  const unfinished = aiDogBrain.inspectQueue
-    .filter((item) => visibleTargets.some((target) => sameInspectionTarget(target, item)));
-  if (unfinished.length && aiDifficulty !== 'easy') return unfinished;
-
-  const shuffled = visibleTargets
-    .filter((item) => aiDifficulty === 'easy' || !aiDogBrain.inspectedIds.has(getInspectionMemoryKey(item)))
-    .sort(() => Math.random() - 0.5);
-  const disguiseTarget = getCatDisguiseInspectionTarget(cat);
-  if (disguiseTarget && Math.random() < 0.24) shuffled.unshift(disguiseTarget);
-  return uniqueInspectionTargets(shuffled).slice(0, aiDifficulty === 'easy' ? 2 : 4);
-}
-
-function resolveAiInspection(cat) {
+function resolveAiRandomInspection(cat) {
   aiCheckTimer = 1.2;
   const checked = aiDogBrain.inspectTarget;
-  aiDogBrain.inspectedIds.add(getInspectionMemoryKey(checked));
   if (isCatDisguiseInspectionTarget(checked, cat)) {
     endGame(false, '电脑狗查验了你的伪装，狗方获胜。');
     return;
   }
-
-  rememberAiDangerZone(checked, cat);
-  aiDogBrain.inspectQueue = aiDogBrain.inspectQueue.filter((item) => !sameInspectionTarget(item, checked));
-  aiDogBrain.inspectTarget = aiDogBrain.inspectQueue[0] || null;
-  aiDogBrain.mode = aiDogBrain.inspectTarget ? 'inspect' : 'patrol';
-}
-
-function rememberAiDangerZone(checkedItem, cat) {
-  if (aiDifficulty === 'easy' || !checkedItem) return;
-  const targetsInVision = getInspectionTargetsAround(aiDog, DOG_VISION_RANGE, cat);
-  const remainingIds = targetsInVision
-    .filter((item) => !sameInspectionTarget(item, checkedItem))
-    .map(getInspectionMemoryKey);
-  const zone = {
-    x: aiDog.x,
-    y: aiDog.y,
-    itemCount: targetsInVision.length,
-    remainingIds: new Set(remainingIds),
-  };
-
-  aiDogBrain.dangerZone = zone;
+  aiDogBrain.inspectTarget = null;
+  aiDogBrain.mode = 'patrol';
 }
 
 function getAiPatrolTarget() {
   const target = aiDogBrain.patrolTarget;
-  if (target && distance(aiDog, target) > 70 && Math.random() > 0.01) return target;
-
-  if (aiDifficulty !== 'easy' && aiDogBrain.dangerZone) {
-    const currentCount = getInspectionTargetsAround(aiDogBrain.dangerZone, DOG_VISION_RANGE, playerCat).length;
-    if (currentCount === aiDogBrain.dangerZone.itemCount) {
-      if (resumeDangerZoneInspection(playerCat)) return aiDogBrain.inspectTarget;
-      aiDogBrain.patrolTarget = randomPointNear(aiDogBrain.dangerZone, 140);
-      return aiDogBrain.patrolTarget;
-    }
-    if (aiDifficulty === 'hard' && currentCount < aiDogBrain.dangerZone.itemCount) {
-      aiDogBrain.suspiciousZone = {
-        x: aiDogBrain.dangerZone.x,
-        y: aiDogBrain.dangerZone.y,
-        r: getSpeed({ disguised: true, kind: 'cat' }) * HIDE_SECONDS,
-      };
-    }
-    aiDogBrain.dangerZone = null;
-    aiDogBrain.inspectQueue = [];
-    aiDogBrain.inspectTarget = null;
-  }
-
-  if (aiDifficulty === 'hard') {
-    if (aiDogBrain.suspiciousZone) {
-      aiDogBrain.patrolTarget = randomPointNear(aiDogBrain.suspiciousZone, aiDogBrain.suspiciousZone.r);
-      return aiDogBrain.patrolTarget;
-    }
-    aiDogBrain.patrolTarget = getDenseItemAreaTarget();
-    return aiDogBrain.patrolTarget;
-  }
+  if (target && distance(aiDog, target) > 70) return target;
 
   aiDogBrain.patrolTarget = getRandomPatrolPoint();
   return aiDogBrain.patrolTarget;
@@ -1125,29 +1210,12 @@ function getInspectionMemoryKey(target) {
   return `item:${target.id}`;
 }
 
-function sameInspectionTarget(a, b) {
-  return getInspectionMemoryKey(a) === getInspectionMemoryKey(b);
-}
-
 function isCatDisguiseInspectionTarget(target, cat) {
   if (!target || !cat.disguised || !cat.disguiseItem) return false;
   if (target.id !== cat.disguiseItem.id) return false;
   return target.isDisguiseCandidate || distance(target, cat) < INSPECT_RADIUS;
 }
 
-function resumeDangerZoneInspection(cat) {
-  const zone = aiDogBrain.dangerZone;
-  if (!zone || !zone.remainingIds || !zone.remainingIds.size) return false;
-  const candidates = getInspectionTargetsAround(zone, DOG_VISION_RANGE, cat)
-    .filter((item) => zone.remainingIds.has(getInspectionMemoryKey(item)))
-    .filter((item) => !aiDogBrain.inspectedIds.has(getInspectionMemoryKey(item)))
-    .sort((a, b) => distance(a, aiDog) - distance(b, aiDog));
-  if (!candidates.length) return false;
-  aiDogBrain.inspectQueue = candidates;
-  aiDogBrain.inspectTarget = candidates[0];
-  aiDogBrain.mode = 'inspect';
-  return true;
-}
 
 function getRandomPatrolPoint() {
   for (let i = 0; i < 40; i += 1) {
@@ -1158,52 +1226,314 @@ function getRandomPatrolPoint() {
   return { x: MAP / 2, y: MAP / 2 };
 }
 
-function randomPointNear(center, radius) {
-  for (let i = 0; i < 24; i += 1) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius;
-    const point = {
-      x: clamp(center.x + Math.cos(angle) * dist, 40, MAP - 40),
-      y: clamp(center.y + Math.sin(angle) * dist, 40, MAP - 40),
-    };
-    if (isNavigationPointClear(point.x, point.y)) return point;
-  }
-  return getRandomPatrolPoint();
-}
-
-function getDenseItemAreaTarget() {
-  if (!items.length) return getRandomPatrolPoint();
-  return items
-    .map((item) => ({ x: item.x, y: item.y, count: items.filter((other) => distance(item, other) < 320).length }))
-    .sort((a, b) => b.count - a.count)[0];
-}
-
-function getAbnormalItems() {
-  return getInspectionTargetsAround(aiDog, DOG_VISION_RANGE, playerCat)
-    .filter((item) => isAbnormalInspectionTarget(item));
-}
-
-function isAbnormalInspectionTarget(item) {
-  if (!item) return false;
-  if (item.isDisguiseCandidate) return true;
-  return !isBasePlannedItem(item);
-}
-
-function isBasePlannedItem(item) {
-  return Number.isInteger(item.baseIndex) &&
-    item.type === manualBaseItems[item.baseIndex]?.type &&
-    distance(item, { x: item.plannedX, y: item.plannedY }) <= BASE_ITEM_MATCH_RADIUS;
-}
-
 function resetAiCatBrain() {
   Object.assign(aiCatBrain, {
     hideTarget: null,
+    sabotageTarget: null,
+    destroyCooldown: 0,
+    destroyHold: 0,
+    destroyItemId: null,
     navPath: [],
     navTargetKey: '',
     stuckTimer: 0,
     lastX: aiCat.x,
     lastY: aiCat.y,
+    dogSenseTimer: 0,
+    pauseTimer: 0,
+    freezeAfterDisguise: false,
+    needsInitialDisguise: aiDifficulty === 'easy',
   });
+}
+
+function getDestroyGoal() {
+  return DESTROY_GOALS[aiDifficulty] || DESTROY_GOALS.medium;
+}
+
+function resetCatDistanceTracking() {
+  catDistanceTracking.playerCat.last = Infinity;
+  catDistanceTracking.playerCat.alertUntil = 0;
+  catDistanceTracking.aiCat.last = Infinity;
+  catDistanceTracking.aiCat.alertUntil = 0;
+}
+
+function getCatTrackingKey(cat) {
+  return cat === playerCat ? 'playerCat' : 'aiCat';
+}
+
+function updateCatDistanceAlert(dog, cat, dt) {
+  const key = getCatTrackingKey(cat);
+  const track = catDistanceTracking[key];
+  const dist = distance(dog, cat);
+  if (dist < track.last - DISTANCE_ALERT_EPSILON) {
+    track.alertUntil = performance.now() / 1000 + CAT_ALERT_DURATION;
+  }
+  track.last = dist;
+}
+
+function isCatAlertActive(cat) {
+  const track = catDistanceTracking[getCatTrackingKey(cat)];
+  return performance.now() / 1000 < track.alertUntil;
+}
+
+function spawnFootprint(cat) {
+  footprints.push({
+    x: cat.x,
+    y: cat.y,
+    until: performance.now() / 1000 + FOOTPRINT_LIFETIME,
+  });
+}
+
+function updateCatFootprints(cat, dt) {
+  if (!cat.footprintSpawned) {
+    if (getRoundElapsed() < FOOTPRINT_TRIGGER_AT) return;
+    cat.footprintSpawned = true;
+    cat.footprintBurstLeft = FOOTPRINT_BURST_DURATION;
+    cat.footprintStepTimer = 0;
+    cat.footprintLastSpawnX = cat.x;
+    cat.footprintLastSpawnY = cat.y;
+  }
+
+  if (cat.footprintBurstLeft <= 0) return;
+
+  cat.footprintBurstLeft -= dt;
+  cat.footprintStepTimer -= dt;
+  while (cat.footprintBurstLeft > 0 && cat.footprintStepTimer <= 0) {
+    if (catMovedEnoughForFootprint(cat)) {
+      spawnFootprint(cat);
+      cat.footprintLastSpawnX = cat.x;
+      cat.footprintLastSpawnY = cat.y;
+    }
+    cat.footprintStepTimer += FOOTPRINT_STEP;
+  }
+}
+
+function updateFootprints(dt) {
+  const now = performance.now() / 1000;
+  footprints = footprints.filter((mark) => mark.until > now);
+}
+
+function applyDisguise(entity, target) {
+  entity.disguised = true;
+  entity.disguiseItem = target;
+  entity.angle = target.angle;
+  entity.disguiseChance = false;
+  entity.canRestore = false;
+  showMessage(`你伪装成了${target.label}。`, 2);
+}
+
+function tryDisguiseOnTap(entity) {
+  if (entity.disguised || !entity.disguiseChance) return;
+  const target = nearestItem(entity, DISGUISE_RADIUS);
+  if (!target) return;
+  applyDisguise(entity, target);
+}
+
+function completeDestroy(target, isPlayerCat) {
+  destroyMapItem(target);
+  if (!isPlayerCat) {
+    aiCatDestroyed += 1;
+    const goal = getDestroyGoal();
+    if (aiCatDestroyed >= goal) {
+      endGame(false, `电脑猫破坏了 ${goal} 件物品，猫方获胜。`);
+    }
+    return;
+  }
+  playerCatDestroyed += 1;
+  const goal = getDestroyGoal();
+  if (playerCatDestroyed >= goal) {
+    endGame(true, `你破坏了 ${goal} 件物品，猫方获胜！`);
+    return;
+  }
+  showMessage(`破坏了${target.label}（${playerCatDestroyed}/${goal}）`, 1.6);
+}
+
+function handleDestroy(entity, isPlayerCat, dt) {
+  if (!isPlayerCat || (round !== 'playerCatHide' && round !== 'playerCatSeek')) {
+    destroyHold = { itemId: null, progress: 0, wasHolding: false };
+    return;
+  }
+
+  const target = nearestItem(entity, DESTROY_RADIUS);
+  const canDestroy = target && isDestroyableItem(target);
+
+  if (!keys.has('enter')) {
+    if (destroyHold.wasHolding && destroyHold.progress > 0 && destroyHold.progress < DESTROY_TAP_MAX_SECONDS) {
+      tryDisguiseOnTap(entity);
+    }
+    destroyHold = { itemId: null, progress: 0, wasHolding: false };
+    return;
+  }
+
+  if (!canDestroy) {
+    destroyHold = { itemId: null, progress: 0, wasHolding: false };
+    return;
+  }
+
+  destroyHold.wasHolding = true;
+  if (destroyHold.itemId !== target.id) {
+    destroyHold.itemId = target.id;
+    destroyHold.progress = 0;
+  }
+
+  destroyHold.progress += dt;
+  if (destroyHold.progress >= DESTROY_HOLD_SECONDS) {
+    completeDestroy(target, true);
+    destroyHold = { itemId: null, progress: 0, wasHolding: false };
+  }
+}
+
+function getDestroyHoldVisual() {
+  if (destroyHold.itemId && destroyHold.progress > 0) {
+    const item = items.find((entry) => entry.id === destroyHold.itemId);
+    if (item) {
+      return { item, progress: Math.min(1, destroyHold.progress / DESTROY_HOLD_SECONDS) };
+    }
+  }
+  if (aiCatBrain.destroyItemId && aiCatBrain.destroyHold > 0) {
+    const item = items.find((entry) => entry.id === aiCatBrain.destroyItemId);
+    if (item) {
+      return { item, progress: Math.min(1, aiCatBrain.destroyHold / DESTROY_HOLD_SECONDS) };
+    }
+  }
+  return null;
+}
+
+function isDestroyableItem(item) {
+  return Boolean(item && itemTypes[item.type]);
+}
+
+function destroyMapItem(item) {
+  [playerCat, aiCat].forEach((cat) => {
+    if (cat.disguised && cat.disguiseItem && cat.disguiseItem.id === item.id) {
+      cat.disguised = false;
+      cat.disguiseItem = null;
+      cat.disguiseChance = true;
+    }
+  });
+  items = items.filter((other) => other.id !== item.id);
+  invalidateNavigationCache();
+}
+
+function pickAiSabotageTarget() {
+  return pickNearestItemBy(aiCat, isDestroyableItem);
+}
+
+function pickNearestItemBy(origin, predicate = () => true) {
+  const candidates = items.filter(predicate);
+  if (!candidates.length) return null;
+  return candidates.sort((a, b) => distance(origin, a) - distance(origin, b))[0] || null;
+}
+
+function pickAiDisguiseTargetAwayFromDog() {
+  if (!items.length) return null;
+  const currentDogDist = distance(aiCat, playerDog);
+  const safer = items
+    .filter((item) => distance(item, playerDog) > currentDogDist + 24)
+    .sort((a, b) => distance(aiCat, a) - distance(aiCat, b));
+  if (safer.length) return safer[0];
+
+  return items
+    .slice()
+    .sort((a, b) => distance(playerDog, b) - distance(playerDog, a))[0] || null;
+}
+
+function setAiCatDisguise(target) {
+  if (!target) return;
+  aiCat.disguised = true;
+  aiCat.disguiseItem = target;
+  aiCat.angle = target.angle;
+  aiCat.disguiseChance = false;
+  aiCat.canRestore = false;
+  aiCatBrain.hideTarget = null;
+  aiCatBrain.navPath = [];
+  aiCatBrain.navTargetKey = '';
+}
+
+function getAiCatThreatConfig() {
+  if (aiDifficulty === 'hard') return { interval: 5, dangerDistance: 200 };
+  if (aiDifficulty === 'medium') return { interval: 10, dangerDistance: 200 };
+  return null;
+}
+
+function updateAiCatSeek(dt) {
+  aiCatBrain.destroyCooldown = Math.max(0, aiCatBrain.destroyCooldown - dt);
+  aiCatBrain.pauseTimer = Math.max(0, aiCatBrain.pauseTimer - dt);
+
+  if (aiDifficulty === 'easy' && isCatAlertActive(aiCat)) {
+    aiCatBrain.pauseTimer = Math.max(aiCatBrain.pauseTimer, 1);
+  }
+
+  const threatConfig = getAiCatThreatConfig();
+  if (threatConfig) {
+    aiCatBrain.dogSenseTimer -= dt;
+    if (aiCatBrain.dogSenseTimer <= 0) {
+      aiCatBrain.dogSenseTimer = threatConfig.interval;
+      if (distance(aiCat, playerDog) < threatConfig.dangerDistance) {
+        const disguiseTarget = pickAiDisguiseTargetAwayFromDog();
+        if (disguiseTarget) {
+          aiCatBrain.hideTarget = disguiseTarget;
+          aiCatBrain.freezeAfterDisguise = true;
+          aiCat.disguised = false;
+          aiCat.disguiseItem = null;
+          aiCat.disguiseChance = true;
+          aiCatBrain.sabotageTarget = null;
+          aiCatBrain.navPath = [];
+          aiCatBrain.navTargetKey = '';
+        }
+      }
+    }
+  }
+
+  if (aiCatBrain.needsInitialDisguise && !aiCat.disguised) {
+    if (!aiCatBrain.hideTarget) aiCatBrain.hideTarget = pickNearestItemBy(aiCat);
+    updateAiCatHide(dt);
+    if (aiCat.disguised) aiCatBrain.needsInitialDisguise = false;
+    return;
+  }
+
+  if (aiCatBrain.hideTarget && !aiCat.disguised) {
+    updateAiCatHide(dt);
+    if (aiCatBrain.freezeAfterDisguise && aiCat.disguised) return;
+  }
+
+  if (aiCatBrain.freezeAfterDisguise && aiCat.disguised) return;
+  if (aiCatBrain.pauseTimer > 0) return;
+
+  const nearTarget = nearestItem(aiCat, DESTROY_RADIUS);
+  if (nearTarget && isDestroyableItem(nearTarget) && aiCatBrain.destroyCooldown <= 0) {
+    if (aiCatBrain.destroyItemId !== nearTarget.id) {
+      aiCatBrain.destroyItemId = nearTarget.id;
+      aiCatBrain.destroyHold = 0;
+    }
+    aiCatBrain.destroyHold += dt;
+    if (aiCatBrain.destroyHold >= DESTROY_HOLD_SECONDS) {
+      completeDestroy(nearTarget, false);
+      aiCatBrain.destroyHold = 0;
+      aiCatBrain.destroyItemId = null;
+      aiCatBrain.destroyCooldown = 1.1;
+    }
+    return;
+  }
+
+  aiCatBrain.destroyHold = 0;
+  aiCatBrain.destroyItemId = null;
+
+  if (aiCatBrain.destroyCooldown > 0.35) return;
+
+  aiCatBrain.sabotageTarget = pickAiSabotageTarget();
+  const target = aiCatBrain.sabotageTarget;
+  if (!target) return;
+
+  if (distance(aiCat, target) <= DESTROY_RADIUS + 8) return;
+
+  const waypoint = getNavigationWaypoint(aiCat, target, aiCatBrain, 'sabotage');
+  const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
+  const len = Math.hypot(desired.x, desired.y) || 1;
+  moveEntity(aiCat, { x: desired.x / len, y: desired.y / len }, getSpeed(aiCat) * dt * 0.55);
+
+  if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
+    aiCatBrain.navPath.shift();
+  }
 }
 
 function updateAiCatHide(dt) {
@@ -1215,6 +1545,12 @@ function updateAiCatHide(dt) {
 
   if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
     aiCatBrain.navPath.shift();
+  }
+
+  if (distance(aiCat, aiCatBrain.hideTarget) <= DISGUISE_RADIUS) {
+    setAiCatDisguise(aiCatBrain.hideTarget);
+    aiCatBrain.needsInitialDisguise = false;
+    return;
   }
 
   const moved = distance(aiCat, { x: aiCatBrain.lastX, y: aiCatBrain.lastY });
@@ -1229,39 +1565,106 @@ function updateAiCatHide(dt) {
 }
 
 function findNavigationPath(start, goal) {
+  if (canTravelDirect(start, goal)) return [goal];
+
   const graph = getNavigationGraph();
-  const baseNodes = graph.nodes;
-  const nodes = [{ x: start.x, y: start.y }, ...baseNodes, { x: goal.x, y: goal.y }];
-  const startIndex = 0;
-  const goalIndex = nodes.length - 1;
-  const graphOffset = 1;
-  const adjacency = Array.from({ length: nodes.length }, () => []);
+  const nodes = graph.nodes;
+  const mainNodeIndices = getMainNodeIndices();
 
-  graph.edges.forEach((edges, index) => {
-    adjacency[index + graphOffset] = edges.map((edge) => ({
-      to: edge.to + graphOffset,
-      cost: edge.cost,
-    }));
-  });
-
-  if (canTravelDirect(start, goal)) {
-    adjacency[startIndex].push({ to: goalIndex, cost: distance(start, goal) });
+  const firstMainIndex = pickNearestReachableMainNodeIndex(start, goal, mainNodeIndices, nodes);
+  if (firstMainIndex === -1) {
+    const nearest = getNearestReachableNavNode(start, goal);
+    return nearest ? [nearest] : [];
   }
 
-  baseNodes.forEach((node, index) => {
-    const nodeIndex = index + graphOffset;
-    if (canTravelDirect(start, node)) {
-      const cost = distance(start, node);
-      adjacency[startIndex].push({ to: nodeIndex, cost });
-      adjacency[nodeIndex].push({ to: startIndex, cost });
-    }
-    if (canTravelDirect(goal, node)) {
-      const cost = distance(goal, node);
-      adjacency[goalIndex].push({ to: nodeIndex, cost });
-      adjacency[nodeIndex].push({ to: goalIndex, cost });
-    }
-  });
+  const firstMainNode = nodes[firstMainIndex];
+  const path = [firstMainNode];
 
+  const mainSearch = runDijkstra(nodes, graph.edges, firstMainIndex, (edge) => edge.type === 'main');
+  const secondMainIndex = pickNearestAuxLinkedMainNodeIndex(goal, mainNodeIndices, graph.edges, mainSearch.dist);
+  if (secondMainIndex === -1) {
+    const nearest = getNearestReachableNavNode(start, goal);
+    return nearest ? [nearest] : path;
+  }
+
+  const mainPathIndices = buildPathIndices(mainSearch.prev, firstMainIndex, secondMainIndex);
+  mainPathIndices.forEach((index) => path.push(nodes[index]));
+
+  if (canTravelDirect(nodes[secondMainIndex], goal)) {
+    path.push(goal);
+    return path;
+  }
+
+  const auxSearch = runDijkstra(
+    nodes,
+    graph.edges,
+    secondMainIndex,
+    (edge, from) => edge.type === 'aux' && (from === secondMainIndex || !mainNodeIndices.has(from))
+  );
+  const auxTargetIndex = pickNearestAuxNodeIndex(goal, auxSearch.dist, mainNodeIndices, nodes);
+  if (auxTargetIndex === -1) {
+    const nearest = getNearestReachableNavNode(start, goal);
+    return nearest ? [nearest] : path;
+  }
+
+  const auxPathIndices = buildPathIndices(auxSearch.prev, secondMainIndex, auxTargetIndex);
+  auxPathIndices.forEach((index) => path.push(nodes[index]));
+  path.push(goal);
+  return path;
+}
+
+function getMainNodeIndices() {
+  const mainNodeIndices = new Set();
+  manualNavMainEdges.forEach(([from, to]) => {
+    mainNodeIndices.add(from);
+    mainNodeIndices.add(to);
+  });
+  return mainNodeIndices;
+}
+
+function pickNearestReachableMainNodeIndex(start, goal, mainNodeIndices, nodes) {
+  const candidates = [...mainNodeIndices].filter((index) => {
+    const node = nodes[index];
+    return node && canTravelDirect(start, node);
+  });
+  if (!candidates.length) return -1;
+  candidates.sort((a, b) => {
+    const byGoal = distance(nodes[a], goal) - distance(nodes[b], goal);
+    if (Math.abs(byGoal) > 0.001) return byGoal;
+    return distance(start, nodes[a]) - distance(start, nodes[b]);
+  });
+  return candidates[0];
+}
+
+function pickNearestAuxLinkedMainNodeIndex(goal, mainNodeIndices, edges, mainDist) {
+  const candidates = [...mainNodeIndices].filter((index) => {
+    if (!Number.isFinite(mainDist[index])) return false;
+    return edges[index].some((edge) => edge.type === 'aux');
+  });
+  if (!candidates.length) return -1;
+  const nodes = getNavigationNodes();
+  candidates.sort((a, b) => {
+    const byGoal = distance(nodes[a], goal) - distance(nodes[b], goal);
+    if (Math.abs(byGoal) > 0.001) return byGoal;
+    return mainDist[a] - mainDist[b];
+  });
+  return candidates[0];
+}
+
+function pickNearestAuxNodeIndex(goal, auxDist, mainNodeIndices, nodes) {
+  const candidates = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node, index }) => Number.isFinite(auxDist[index]) && !mainNodeIndices.has(index) && canTravelDirect(node, goal));
+  if (!candidates.length) return -1;
+  candidates.sort((a, b) => {
+    const byGoal = distance(a.node, goal) - distance(b.node, goal);
+    if (Math.abs(byGoal) > 0.001) return byGoal;
+    return auxDist[a.index] - auxDist[b.index];
+  });
+  return candidates[0].index;
+}
+
+function runDijkstra(nodes, adjacency, startIndex, edgeFilter = null) {
   const dist = new Array(nodes.length).fill(Infinity);
   const prev = new Array(nodes.length).fill(-1);
   const visited = new Set();
@@ -1276,10 +1679,11 @@ function findNavigationPath(start, goal) {
         current = i;
       }
     }
-    if (current === -1 || current === goalIndex) break;
+    if (current === -1) break;
     visited.add(current);
 
     adjacency[current].forEach((edge) => {
+      if (edgeFilter && !edgeFilter(edge, current)) return;
       if (visited.has(edge.to)) return;
       const cost = dist[current] + edge.cost;
       if (cost < dist[edge.to]) {
@@ -1289,16 +1693,21 @@ function findNavigationPath(start, goal) {
     });
   }
 
-  if (!Number.isFinite(dist[goalIndex])) {
-    const nearest = getNearestReachableNavNode(start, goal);
-    return nearest ? [nearest] : [];
-  }
+  return { dist, prev };
+}
 
+function buildPathIndices(prev, startIndex, endIndex) {
+  if (startIndex === endIndex) return [];
   const path = [];
-  for (let i = goalIndex; i !== -1 && i !== startIndex; i = prev[i]) {
-    path.unshift(nodes[i]);
+  for (let i = endIndex; i !== -1 && i !== startIndex; i = prev[i]) {
+    path.unshift(i);
   }
   return path;
+}
+
+function invalidateNavigationCache() {
+  navGraphCache = null;
+  wallCollisionRectsCache = null;
 }
 
 function warmNavigationCache() {
@@ -1311,13 +1720,13 @@ function getNavigationGraph() {
 
   const nodes = getNavigationNodes();
   const edges = nodes.map(() => []);
-  manualNavEdges.forEach(([from, to]) => {
+  forEachManualNavEdge((from, to, type) => {
     const a = nodes[from];
     const b = nodes[to];
     if (!a || !b || !canTravelDirect(a, b)) return;
     const cost = distance(a, b);
-    edges[from].push({ to, cost });
-    edges[to].push({ to: from, cost });
+    edges[from].push({ to, cost, type });
+    edges[to].push({ to: from, cost, type });
   });
 
   navGraphCache = { nodes, edges };
@@ -1338,25 +1747,23 @@ function getNearestReachableNavNode(start, goal) {
 
 function canTravelDirect(a, b) {
   const length = distance(a, b);
-  const steps = Math.max(2, Math.ceil(length / 24));
+  const steps = Math.max(2, Math.ceil(length / 20));
+  const probeRadius = Math.max(NAV_CLEARANCE, (a.r || PLAYER_COLLISION_RADIUS) + 2);
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
     const x = a.x + (b.x - a.x) * t;
     const y = a.y + (b.y - a.y) * t;
-    if (!isNavigationPointClear(x, y)) return false;
+    if (!isNavigationPointClear(x, y, items, probeRadius)) return false;
   }
   return true;
 }
 
-function isNavigationPointClear(x, y) {
-  const probe = {
-    x: x - NAV_CLEARANCE,
-    y: y - NAV_CLEARANCE,
-    w: NAV_CLEARANCE * 2,
-    h: NAV_CLEARANCE * 2,
-  };
-  if (x <= NAV_CLEARANCE || x >= MAP - NAV_CLEARANCE || y <= NAV_CLEARANCE || y >= MAP - NAV_CLEARANCE) return false;
-  return !getWallCollisionRects().some((rect) => rectOverlap(probe, rect));
+function isNavigationPointClear(x, y, navigationItems = items, probeRadius = NAV_CLEARANCE) {
+  const probe = navCorridorProbe(x, y, probeRadius);
+  const border = probeRadius;
+  if (x <= border || x >= MAP - border || y <= border || y >= MAP - border) return false;
+  if (getWallCollisionRects().some((rect) => rectOverlap(probe, rect))) return false;
+  return !navigationItems.some((item) => rectOverlap(probe, itemHitRect(item)));
 }
 
 function moveEntity(entity, dir, amount) {
@@ -1376,14 +1783,14 @@ function collides(entity, sourceEntity = entity) {
   if (getWallCollisionRects().some((rect) => rectOverlap(circleRect, rect))) return true;
   if (items.some((item) => {
     if (sourceEntity.disguised && sourceEntity.disguiseItem && item.id === sourceEntity.disguiseItem.id) return false;
-    return rectOverlap(circleRect, itemHitRect(item, -10));
+    return rectOverlap(circleRect, itemHitRect(item, 0));
   })) return true;
   return getDisguiseCollisionRects(sourceEntity).some((rect) => rectOverlap(circleRect, rect));
 }
 
 function getSpeed(entity) {
   if (entity.disguised) return 52;
-  return entity.kind === 'dog' ? 104 : 78;
+  return entity.kind === 'dog' ? 156 : 78;
 }
 
 function catCaughtByDog(cat, dog, allowDisguisedCheck) {
@@ -1396,21 +1803,20 @@ function startPlayerCatRound() {
   roundTime = HIDE_SECONDS;
   playerCat.disguiseChance = !playerCat.disguised;
   playerCat.canRestore = playerCat.disguised;
-  aiDogBrain.mode = 'patrol';
-  aiDogBrain.inspectTarget = null;
-  aiDogBrain.inspectQueue = [];
-  aiDogBrain.chaseDelay = 0;
-  aiDogBrain.lastCatX = playerCat.x;
-  aiDogBrain.lastCatY = playerCat.y;
+  resetCatFootprintState(playerCat);
+  resetCatDistanceTracking();
+  catDistanceTracking.playerCat.last = distance(aiDog, playerCat);
+  resetAiDogBrain();
   aiTarget = null;
-  showMessage('你是猫：15 秒内寻找家具，按 Enter 伪装。', 3);
+  showMessage(`你是猫：Enter 伪装，长按 Enter 3 秒破坏物品（目标 ${getDestroyGoal()} 件）。`, 3.2);
 }
 
 function startPlayerCatSeek() {
   round = 'playerCatSeek';
   roundTime = SEEK_SECONDS;
+  catDistanceTracking.playerCat.last = distance(aiDog, playerCat);
   aiTarget = null;
-  showMessage('电脑狗开始搜寻，坚持 100 秒即可进入下一局。', 3);
+  showMessage('电脑狗开始搜寻：躲开追捕，或破坏足够物品获胜。', 3);
 }
 
 function startPlayerDogRound() {
@@ -1418,27 +1824,30 @@ function startPlayerDogRound() {
   roundTime = HIDE_SECONDS;
   inspectLeft = 5;
   Object.assign(aiCat, makeEntity('cat', spawnPoints.aiCat.x, spawnPoints.aiCat.y));
+  ensureEntityClear(aiCat);
   aiCat.disguised = false;
   aiCat.disguiseItem = null;
   aiCat.disguiseChance = true;
   resetAiCatBrain();
-  aiCatBrain.hideTarget = choice(items.filter((item) => item.type !== 'bed' || item.region !== 'living'));
+  if (aiDifficulty === 'easy') {
+    aiCatBrain.hideTarget = pickNearestItemBy(aiCat);
+  }
   showMessage('你是狗：电脑猫正在躲藏，15 秒后开始搜寻。', 3);
 }
 
 function startPlayerDogSeek() {
-  const target = aiCatBrain.hideTarget || choice(items.filter((item) => item.type !== 'bed' || item.region !== 'living'));
-  if (distance(aiCat, target) > DISGUISE_RADIUS) {
-    aiCat.x = target.x;
-    aiCat.y = target.y;
-  }
-  aiCat.disguised = true;
-  aiCat.disguiseItem = target;
-  aiCat.angle = target.angle;
-  aiCat.disguiseChance = false;
   round = 'playerDogSeek';
   roundTime = SEEK_SECONDS;
-  showMessage('开始抓猫：靠近可疑家具按 Enter 查验。', 3);
+  resetCatFootprintState(aiCat);
+  resetCatDistanceTracking();
+  catDistanceTracking.aiCat.last = distance(playerDog, aiCat);
+  aiCatBrain.sabotageTarget = null;
+  aiCatBrain.destroyCooldown = 0;
+  aiCatBrain.destroyHold = 0;
+  aiCatBrain.destroyItemId = null;
+  aiCatBrain.dogSenseTimer = 0;
+  aiCatBrain.pauseTimer = 0;
+  showMessage('开始抓猫：Enter 查验，留意足迹与猫头上的感叹号。', 3);
 }
 
 function endGame(win, text) {
@@ -1489,8 +1898,10 @@ function draw() {
   drawEntity(playerCat, human, camX, camY, viewW, viewH);
   drawEntity(aiDog, human, camX, camY, viewW, viewH);
   drawEntity(playerDog, human, camX, camY, viewW, viewH);
-  drawDogAlert(aiDog, playerCat);
-  drawDogAlert(playerDog, aiCat);
+  drawFootprints();
+  drawCatAlert(playerCat);
+  drawCatAlert(aiCat);
+  drawNavigationDebug();
   ctx.restore();
 
   if (round === 'playerDogWait') drawBlindfold(w, h);
@@ -1518,6 +1929,79 @@ function drawWallTrim() {
   getEnvironmentWalls().forEach(drawWallSegment);
   manualWalls.forEach(drawManualWall);
   drawEnvironmentCorners();
+}
+
+function drawNavigationDebug() {
+  if (!debugNavigation) return;
+
+  const nodes = getNavigationNodes();
+  ctx.save();
+
+  forEachManualNavEdge((from, to, kind) => {
+    const a = nodes[from];
+    const b = nodes[to];
+    if (!a || !b) return;
+    const passable = canTravelDirect(a, b);
+    const isMain = kind === 'main';
+    if (passable) {
+      ctx.strokeStyle = isMain ? 'rgba(80, 200, 255, 0.88)' : 'rgba(255, 176, 72, 0.9)';
+      ctx.setLineDash(isMain ? [] : [10, 7]);
+    } else {
+      ctx.strokeStyle = 'rgba(255, 72, 88, 0.92)';
+      ctx.setLineDash([12, 8]);
+    }
+    ctx.lineWidth = isMain ? 3 : 2.5;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  if (aiDogBrain.navPath.length) {
+    ctx.strokeStyle = 'rgba(232, 96, 255, 0.95)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(aiDog.x, aiDog.y);
+    aiDogBrain.navPath.forEach((point) => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+    aiDogBrain.navPath.forEach((point, index) => {
+      ctx.fillStyle = index === 0 ? '#ff66ff' : 'rgba(200, 80, 255, 0.75)';
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, index === 0 ? 11 : 7, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  const waypoint = aiDogBrain.navPath[0];
+  if (waypoint) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(aiDog.x, aiDog.y);
+    ctx.lineTo(waypoint.x, waypoint.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  nodes.forEach((node, index) => {
+    ctx.fillStyle = '#50b4ff';
+    ctx.strokeStyle = '#10131a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f8f1df';
+    ctx.font = 'bold 14px Trebuchet MS, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(index), node.x, node.y);
+  });
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
 }
 
 function getWallCollisionRects() {
@@ -1556,13 +2040,33 @@ function wallPieceRect(segment, piece) {
 }
 
 function manualWallHitRect(wall) {
-  return { x: wall.x, y: wall.y, w: wall.w, h: wall.h };
+  const cx = wall.x + wall.w / 2;
+  const cy = wall.y + wall.h / 2;
+  const thickness = WALL_THICKNESS;
+  // wall.w/h are the editor placement AABB (already axis-aligned), not pre-rotation sprite size.
+  const horizontal = wall.w >= wall.h;
+
+  if (horizontal) {
+    return {
+      x: cx - wall.w / 2,
+      y: cy - thickness / 2,
+      w: wall.w,
+      h: thickness,
+    };
+  }
+
+  return {
+    x: cx - thickness / 2,
+    y: cy - wall.h / 2,
+    w: thickness,
+    h: wall.h,
+  };
 }
 
 function getDisguiseCollisionRects(sourceEntity) {
   return [playerCat, aiCat, playerDog, aiDog]
     .filter((actor) => actor !== sourceEntity && actor.disguised && actor.disguiseItem)
-    .map((actor) => itemHitRect({ ...actor.disguiseItem, x: actor.x, y: actor.y }));
+    .map((actor) => itemHitRect({ ...actor.disguiseItem, x: actor.x, y: actor.y, angle: actor.angle }));
 }
 
 function getEnvironmentWalls() {
@@ -1691,19 +2195,51 @@ function drawCornerWall(x, y, angle) {
 }
 
 function drawItems(human) {
-  const near = nearestItem(human, round === 'playerDogSeek' ? INSPECT_RADIUS : DISGUISE_RADIUS);
+  const inspectRound = round === 'playerDogSeek';
+  const catRound = round === 'playerCatHide' || round === 'playerCatSeek';
+  const radius = inspectRound ? INSPECT_RADIUS : DESTROY_RADIUS;
+  const near = nearestItem(human, radius);
   items.forEach((item) => {
     const isNear = near && near.id === item.id;
-    if (isNear && (round === 'playerCatHide' || round === 'playerDogSeek')) {
+    if (isNear && (catRound || inspectRound)) {
       ctx.save();
       ctx.globalAlpha = 0.55;
-      ctx.fillStyle = round === 'playerDogSeek' ? '#ffdd66' : '#67ffe0';
+      ctx.fillStyle = inspectRound ? '#ffdd66' : '#67ffe0';
       const rect = itemHitRect(item, 14);
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       ctx.restore();
     }
     drawItemSprite(item);
   });
+
+  const destroying = getDestroyHoldVisual();
+  if (destroying) drawDestroyProgress(destroying.item, destroying.progress);
+}
+
+function drawDestroyProgress(item, progress) {
+  const rect = itemHitRect(item, 10);
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const radius = Math.max(rect.w, rect.h) * 0.34 + 12;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 90, 70, 0.28)';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#ff5a46';
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(20, 12, 10, 0.72)';
+  ctx.font = '700 15px Trebuchet MS, Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${Math.ceil((1 - progress) * DESTROY_HOLD_SECONDS)}s`, cx, cy);
+  ctx.restore();
 }
 
 function drawItemSprite(item) {
@@ -1724,7 +2260,7 @@ function drawEntity(entity, human, camX, camY, viewW, viewH) {
 
   if (entity.disguised && entity.disguiseItem) {
     drawImageFit(images[entity.disguiseItem.imgKey], entity.x, entity.y, entity.disguiseItem.w, entity.disguiseItem.h, entity.angle);
-    const rect = itemHitRect({ ...entity.disguiseItem, x: entity.x, y: entity.y });
+    const rect = itemHitRect({ ...entity.disguiseItem, x: entity.x, y: entity.y, angle: entity.angle });
     if (entity === human) drawRing(entity.x, entity.y, Math.max(rect.w, rect.h) / 2, '#67ffe0');
     return;
   }
@@ -1750,11 +2286,18 @@ function drawEntity(entity, human, camX, camY, viewW, viewH) {
   if (entity === human) drawRing(entity.x, entity.y, PLAYER_SIZE / 2 + 8, entity.kind === 'cat' ? '#ffb268' : '#80a0ff');
 }
 
-function drawDogAlert(dog, cat) {
-  if (!dogCanCurrentlySeeCat(dog, cat)) return;
+function drawCatAlert(cat) {
+  if (!isCatAlertActive(cat)) return;
+  const activeCat = (cat === playerCat && (round === 'playerCatHide' || round === 'playerCatSeek')) ||
+    (cat === aiCat && round === 'playerDogSeek');
+  if (!activeCat) return;
+
+  const anchorY = cat.disguised && cat.disguiseItem
+    ? cat.y - Math.max(cat.disguiseItem.w, cat.disguiseItem.h) / 2 - 18
+    : cat.y - PLAYER_SIZE - 16;
 
   ctx.save();
-  ctx.translate(dog.x, dog.y - PLAYER_SIZE - 16);
+  ctx.translate(cat.x, anchorY);
   ctx.fillStyle = '#ffdf4d';
   ctx.strokeStyle = '#3b2500';
   ctx.lineWidth = 4;
@@ -1768,6 +2311,27 @@ function drawDogAlert(dog, cat) {
   ctx.textBaseline = 'middle';
   ctx.fillText('!', 0, 1);
   ctx.restore();
+}
+
+function drawFootprints() {
+  const showPlayerCatMarks = round === 'playerCatSeek';
+  const showAiCatMarks = round === 'playerDogSeek';
+  if (!showPlayerCatMarks && !showAiCatMarks) return;
+  if (!footprints.length) return;
+
+  const now = performance.now() / 1000;
+  footprints.forEach((mark) => {
+    const life = (mark.until - now) / FOOTPRINT_LIFETIME;
+    if (life <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = 0.2 + life * 0.55;
+    ctx.fillStyle = '#8b5a2b';
+    ctx.beginPath();
+    ctx.ellipse(mark.x - 8, mark.y + 6, 9, 5, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(mark.x + 8, mark.y + 6, 9, 5, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
 }
 
 function dogCanCurrentlySeeCat(dog, cat) {
@@ -1811,10 +2375,11 @@ function drawHud(w, h) {
   }[round];
 
   ctx.save();
+  const hudHeight = round === 'playerCatHide' || round === 'playerCatSeek' || round === 'playerDogSeek' ? 118 : 96;
   ctx.fillStyle = 'rgba(12, 14, 22, 0.76)';
-  ctx.fillRect(16, 16, Math.min(520, w - 32), 96);
+  ctx.fillRect(16, 16, Math.min(560, w - 32), hudHeight);
   ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-  ctx.strokeRect(16, 16, Math.min(520, w - 32), 96);
+  ctx.strokeRect(16, 16, Math.min(560, w - 32), hudHeight);
   ctx.fillStyle = '#f8f1df';
   ctx.font = '700 20px Trebuchet MS, Arial';
   ctx.fillText(title, 32, 48);
@@ -1822,8 +2387,18 @@ function drawHud(w, h) {
   ctx.fillStyle = '#d9ccb9';
   const time = Math.max(0, Math.ceil(roundTime));
   const inspect = round === 'playerDogSeek' ? `  查验：${inspectLeft}/5` : '';
-  ctx.fillText(`剩余时间：${time}s  电脑难度：${difficultyLabel}${inspect}`, 32, 75);
+  const destroyProgress = round === 'playerCatHide' || round === 'playerCatSeek'
+    ? `  破坏：${playerCatDestroyed}/${getDestroyGoal()}`
+    : round === 'playerDogSeek'
+      ? `  电脑破坏：${aiCatDestroyed}/${getDestroyGoal()}`
+      : '';
+  ctx.fillText(`剩余时间：${time}s  电脑难度：${difficultyLabel}${inspect}${destroyProgress}`, 32, 75);
   ctx.fillText(getHint(), 32, 98);
+  if (debugNavigation) {
+    ctx.fillStyle = '#9ed4ff';
+    ctx.font = '13px Trebuchet MS, Arial';
+    ctx.fillText('导航调试 [N]  蓝实线=主路  橙虚线=辅路  红虚线=阻断  紫线=狗路径', 32, hudHeight + 8);
+  }
 
   if (messageTimer > 0) {
     ctx.fillStyle = 'rgba(12, 14, 22, 0.82)';
@@ -1846,12 +2421,15 @@ function drawBlindfold(w, h) {
 
 function getHint() {
   if (round === 'playerCatHide') {
-    if (playerCat.disguised && playerCat.canRestore) return 'Enter 恢复猫形态，之后可重新伪装；Q/E 旋转伪装物';
-    if (playerCat.disguised) return '已伪装，Q/E 可转向，躲到不显眼的位置';
-    return '靠近发光家具按 Enter 伪装';
+    if (playerCat.disguised && playerCat.canRestore) return 'Enter 恢复猫形态；长按 Enter 3 秒破坏；Q/E 旋转伪装物';
+    if (playerCat.disguised) return '已伪装：长按 Enter 3 秒破坏家具，Q/E 转向，狗靠近时头上会出现感叹号';
+    return '靠近家具：点按 Enter 伪装，长按 Enter 3 秒破坏';
   }
-  if (round === 'playerCatSeek' && !playerCat.disguised && playerCat.disguiseChance) return '还没伪装：靠近家具仍可按 Enter 伪装，但别被狗碰到';
-  if (round === 'playerDogSeek') return '小地图在右上角，靠近可疑家具按 Enter 查验';
+  if (round === 'playerCatSeek' && !playerCat.disguised && playerCat.disguiseChance) {
+    return '点按 Enter 伪装、长按 Enter 破坏；狗靠近时头上会出现感叹号';
+  }
+  if (round === 'playerCatSeek') return '躲开追捕或破坏足够物品；狗靠近时头上会出现感叹号';
+  if (round === 'playerDogSeek') return '小地图在右上角；Enter 查验，留意足迹与猫头上的感叹号';
   if (round === 'playerDogWait') return '电脑猫躲藏时你不能移动，准备开始搜寻';
   return '远离电脑狗，伪装时保持自然';
 }
@@ -1869,10 +2447,52 @@ function drawMinimap(w, h, human) {
   ctx.fillRect(x, y, size, size);
   ctx.fillStyle = '#3a2a1e';
   manualWalls.forEach((wall) => ctx.fillRect(x + wall.x * s, y + wall.y * s, Math.max(1, wall.w * s), Math.max(1, wall.h * s)));
+  if (debugNavigation) {
+    const nodes = getNavigationNodes();
+    ctx.lineWidth = 1;
+    forEachManualNavEdge((from, to, kind) => {
+      const a = nodes[from];
+      const b = nodes[to];
+      if (!a || !b) return;
+      const passable = canTravelDirect(a, b);
+      const isMain = kind === 'main';
+      ctx.strokeStyle = passable
+        ? (isMain ? 'rgba(80, 200, 255, 0.9)' : 'rgba(255, 176, 72, 0.9)')
+        : 'rgba(255, 72, 88, 0.9)';
+      ctx.setLineDash(passable && !isMain ? [4, 3] : []);
+      ctx.beginPath();
+      ctx.moveTo(x + a.x * s, y + a.y * s);
+      ctx.lineTo(x + b.x * s, y + b.y * s);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    ctx.fillStyle = '#50b4ff';
+    nodes.forEach((node, index) => {
+      ctx.beginPath();
+      ctx.arc(x + node.x * s, y + node.y * s, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      if (index % 5 === 0) {
+        ctx.fillStyle = '#f8f1df';
+        ctx.font = '8px Arial';
+        ctx.fillText(String(index), x + node.x * s + 3, y + node.y * s - 2);
+        ctx.fillStyle = '#50b4ff';
+      }
+    });
+  }
   ctx.fillStyle = '#80a0ff';
   ctx.beginPath();
   ctx.arc(x + human.x * s, y + human.y * s, 5, 0, Math.PI * 2);
   ctx.fill();
+  if (footprints.length) {
+    const now = performance.now() / 1000;
+    ctx.fillStyle = 'rgba(139, 90, 43, 0.85)';
+    footprints.forEach((mark) => {
+      if (mark.until <= now) return;
+      ctx.beginPath();
+      ctx.arc(x + mark.x * s, y + mark.y * s, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
   ctx.restore();
 }
 
@@ -1904,16 +2524,51 @@ function itemHitRect(item, pad = 0) {
   const base = getSpriteSize(item.imgKey);
   const scale = item.w / base.w;
   const hitbox = profile.hitbox;
-  return {
-    x: item.x + hitbox.x * scale - pad,
-    y: item.y + hitbox.y * scale - pad,
+  return rotatedLocalRectBounds(item, {
+    x: hitbox.x * scale - pad,
+    y: hitbox.y * scale - pad,
     w: hitbox.w * scale + pad * 2,
     h: hitbox.h * scale + pad * 2,
-  };
+  });
 }
 
 function itemRect(item, pad = 0) {
-  return { x: item.x - item.w / 2 - pad, y: item.y - item.h / 2 - pad, w: item.w + pad * 2, h: item.h + pad * 2 };
+  return rotatedLocalRectBounds(item, {
+    x: -item.w / 2 - pad,
+    y: -item.h / 2 - pad,
+    w: item.w + pad * 2,
+    h: item.h + pad * 2,
+  });
+}
+
+function rotatedLocalRectBounds(item, rect) {
+  const angle = Number.isFinite(item.angle) ? item.angle : 0;
+  if (!angle) {
+    return {
+      x: item.x + rect.x,
+      y: item.y + rect.y,
+      w: rect.w,
+      h: rect.h,
+    };
+  }
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const corners = [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.w, y: rect.y },
+    { x: rect.x + rect.w, y: rect.y + rect.h },
+    { x: rect.x, y: rect.y + rect.h },
+  ].map((point) => ({
+    x: item.x + point.x * cos - point.y * sin,
+    y: item.y + point.x * sin + point.y * cos,
+  }));
+  const xs = corners.map((point) => point.x);
+  const ys = corners.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
 function rectOverlap(a, b) {
