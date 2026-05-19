@@ -39,6 +39,7 @@ let gameStarted = false;
 let message = '按开始进入第一回合';
 let messageTimer = 0;
 let debugNavigation = true;
+let debugWallCollision = true;
 let round = 'playerCatHide';
 let roundTime = HIDE_SECONDS;
 let inspectLeft = 5;
@@ -531,6 +532,10 @@ const WALL_STRAIGHT_NATIVE_H = 340;
 const WALL_CORNER_NATIVE_SIZE = 341;
 const WALL_TILE_OVERLAP = 3;
 const NAV_CLEARANCE = PLAYER_COLLISION_RADIUS + 2;
+const STUCK_NET_THRESHOLD = 8;
+const STUCK_TIMEOUT_SECONDS = 1.2;
+const STUCK_SIDESTEP_DISTANCE = 50;
+const STUCK_SIDESTEP_STEP = 8;
 
 let items = [];
 
@@ -560,8 +565,8 @@ const aiDogBrain = {
   navPath: [],
   navTargetKey: '',
   stuckTimer: 0,
-  lastDogX: aiDog.x,
-  lastDogY: aiDog.y,
+  stuckAnchorX: aiDog.x,
+  stuckAnchorY: aiDog.y,
   lastCatX: playerCat.x,
   lastCatY: playerCat.y,
   footprintTarget: null,
@@ -576,8 +581,8 @@ const aiCatBrain = {
   navPath: [],
   navTargetKey: '',
   stuckTimer: 0,
-  lastX: aiCat.x,
-  lastY: aiCat.y,
+  stuckAnchorX: aiCat.x,
+  stuckAnchorY: aiCat.y,
   dogSenseTimer: 0,
   pauseTimer: 0,
   freezeAfterDisguise: false,
@@ -645,6 +650,10 @@ window.addEventListener('keydown', (event) => {
     if (key === 'n') {
       debugNavigation = !debugNavigation;
       showMessage(debugNavigation ? '导航调试：开' : '导航调试：关', 1.2);
+    }
+    if (key === 'b') {
+      debugWallCollision = !debugWallCollision;
+      showMessage(debugWallCollision ? '墙壁碰撞：开' : '墙壁碰撞：关', 1.2);
     }
   }
   keys.add(key);
@@ -997,8 +1006,8 @@ function resetAiDogBrain() {
     navPath: [],
     navTargetKey: '',
     stuckTimer: 0,
-    lastDogX: aiDog.x,
-    lastDogY: aiDog.y,
+    stuckAnchorX: aiDog.x,
+    stuckAnchorY: aiDog.y,
     lastCatX: playerCat.x,
     lastCatY: playerCat.y,
     footprintTarget: null,
@@ -1078,23 +1087,13 @@ function moveAiDogToward(target, dt) {
   const waypoint = getNavigationWaypoint(aiDog, moveTarget, aiDogBrain, aiDogBrain.mode);
   const desired = { x: waypoint.x - aiDog.x, y: waypoint.y - aiDog.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
-  moveEntity(aiDog, { x: desired.x / len, y: desired.y / len }, getSpeed(aiDog) * dt);
-
-  const moved = distance(aiDog, { x: aiDogBrain.lastDogX, y: aiDogBrain.lastDogY });
-  aiDogBrain.stuckTimer = moved < 0.5 ? aiDogBrain.stuckTimer + dt : 0;
-  aiDogBrain.lastDogX = aiDog.x;
-  aiDogBrain.lastDogY = aiDog.y;
+  const moveDir = { x: desired.x / len, y: desired.y / len };
+  moveEntity(aiDog, moveDir, getSpeed(aiDog) * dt);
 
   if (aiDogBrain.navPath.length && distance(aiDog, aiDogBrain.navPath[0]) < 34) {
     aiDogBrain.navPath.shift();
   }
-  if (aiDogBrain.stuckTimer > 1.2) {
-    aiDogBrain.navPath = [];
-    aiDogBrain.navTargetKey = '';
-    aiDogBrain.patrolTarget = null;
-    if (aiDogBrain.mode === 'inspect') aiDogBrain.mode = 'patrol';
-    aiDogBrain.stuckTimer = 0;
-  }
+  updateAiStuckRecovery(aiDog, aiDogBrain, dt, moveDir);
 }
 
 function isNavigableItem(target) {
@@ -1236,8 +1235,8 @@ function resetAiCatBrain() {
     navPath: [],
     navTargetKey: '',
     stuckTimer: 0,
-    lastX: aiCat.x,
-    lastY: aiCat.y,
+    stuckAnchorX: aiCat.x,
+    stuckAnchorY: aiCat.y,
     dogSenseTimer: 0,
     pauseTimer: 0,
     freezeAfterDisguise: false,
@@ -1529,11 +1528,13 @@ function updateAiCatSeek(dt) {
   const waypoint = getNavigationWaypoint(aiCat, target, aiCatBrain, 'sabotage');
   const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
-  moveEntity(aiCat, { x: desired.x / len, y: desired.y / len }, getSpeed(aiCat) * dt * 0.55);
+  const moveDir = { x: desired.x / len, y: desired.y / len };
+  moveEntity(aiCat, moveDir, getSpeed(aiCat) * dt * 0.55);
 
   if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
     aiCatBrain.navPath.shift();
   }
+  updateAiStuckRecovery(aiCat, aiCatBrain, dt, moveDir);
 }
 
 function updateAiCatHide(dt) {
@@ -1541,7 +1542,8 @@ function updateAiCatHide(dt) {
   const waypoint = getNavigationWaypoint(aiCat, aiCatBrain.hideTarget, aiCatBrain, 'hide');
   const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
-  moveEntity(aiCat, { x: desired.x / len, y: desired.y / len }, getSpeed(aiCat) * dt);
+  const moveDir = { x: desired.x / len, y: desired.y / len };
+  moveEntity(aiCat, moveDir, getSpeed(aiCat) * dt);
 
   if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
     aiCatBrain.navPath.shift();
@@ -1553,15 +1555,7 @@ function updateAiCatHide(dt) {
     return;
   }
 
-  const moved = distance(aiCat, { x: aiCatBrain.lastX, y: aiCatBrain.lastY });
-  aiCatBrain.stuckTimer = moved < 0.5 ? aiCatBrain.stuckTimer + dt : 0;
-  aiCatBrain.lastX = aiCat.x;
-  aiCatBrain.lastY = aiCat.y;
-  if (aiCatBrain.stuckTimer > 1.2) {
-    aiCatBrain.navPath = [];
-    aiCatBrain.navTargetKey = '';
-    aiCatBrain.stuckTimer = 0;
-  }
+  updateAiStuckRecovery(aiCat, aiCatBrain, dt, moveDir);
 }
 
 function findNavigationPath(start, goal) {
@@ -1778,6 +1772,50 @@ function moveEntity(entity, dir, amount) {
   entity.frame += amount / 80;
 }
 
+function resetStuckAnchor(brain, entity) {
+  brain.stuckTimer = 0;
+  brain.stuckAnchorX = entity.x;
+  brain.stuckAnchorY = entity.y;
+}
+
+function updateAiStuckRecovery(entity, brain, dt, moveDir) {
+  if (!Number.isFinite(brain.stuckAnchorX) || !Number.isFinite(brain.stuckAnchorY)) {
+    resetStuckAnchor(brain, entity);
+    return;
+  }
+
+  const netMoved = distance(entity, { x: brain.stuckAnchorX, y: brain.stuckAnchorY });
+  if (netMoved >= STUCK_NET_THRESHOLD) {
+    resetStuckAnchor(brain, entity);
+    return;
+  }
+
+  brain.stuckTimer += dt;
+  if (brain.stuckTimer <= STUCK_TIMEOUT_SECONDS) return;
+
+  applyRandomSidestep(entity, STUCK_SIDESTEP_DISTANCE, moveDir);
+  resetStuckAnchor(brain, entity);
+}
+
+function applyRandomSidestep(entity, totalDistance, moveDir) {
+  let baseAngle;
+  if (moveDir && Math.hypot(moveDir.x, moveDir.y) > 0.05) {
+    baseAngle = Math.atan2(moveDir.y, moveDir.x);
+  } else {
+    baseAngle = Math.random() * Math.PI * 2;
+  }
+  const side = Math.random() < 0.5 ? 1 : -1;
+  const angle = baseAngle + side * (Math.PI / 2);
+  const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+
+  let remaining = totalDistance;
+  while (remaining > 0) {
+    const chunk = Math.min(STUCK_SIDESTEP_STEP, remaining);
+    moveEntity(entity, dir, chunk);
+    remaining -= chunk;
+  }
+}
+
 function collides(entity, sourceEntity = entity) {
   const circleRect = { x: entity.x - entity.r, y: entity.y - entity.r, w: entity.r * 2, h: entity.r * 2 };
   if (getWallCollisionRects().some((rect) => rectOverlap(circleRect, rect))) return true;
@@ -1893,6 +1931,7 @@ function draw() {
   ctx.scale(scale, scale);
   ctx.translate(-camX, -camY);
   drawWorld();
+  drawWallCollisionDebug();
   drawItems(human);
   drawEntity(aiCat, human, camX, camY, viewW, viewH);
   drawEntity(playerCat, human, camX, camY, viewW, viewH);
@@ -1929,6 +1968,21 @@ function drawWallTrim() {
   getEnvironmentWalls().forEach(drawWallSegment);
   manualWalls.forEach(drawManualWall);
   drawEnvironmentCorners();
+}
+
+function drawWallCollisionDebug() {
+  if (!debugWallCollision) return;
+
+  const rects = getWallCollisionRects();
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 72, 72, 0.28)';
+  ctx.strokeStyle = 'rgba(255, 120, 80, 0.92)';
+  ctx.lineWidth = 2;
+  rects.forEach((rect) => {
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  });
+  ctx.restore();
 }
 
 function drawNavigationDebug() {
@@ -2394,10 +2448,13 @@ function drawHud(w, h) {
       : '';
   ctx.fillText(`剩余时间：${time}s  电脑难度：${difficultyLabel}${inspect}${destroyProgress}`, 32, 75);
   ctx.fillText(getHint(), 32, 98);
-  if (debugNavigation) {
+  if (debugWallCollision || debugNavigation) {
     ctx.fillStyle = '#9ed4ff';
     ctx.font = '13px Trebuchet MS, Arial';
-    ctx.fillText('导航调试 [N]  蓝实线=主路  橙虚线=辅路  红虚线=阻断  紫线=狗路径', 32, hudHeight + 8);
+    let debugHint = '';
+    if (debugWallCollision) debugHint += '墙壁碰撞 [B]  红框=不可通行区域';
+    if (debugNavigation) debugHint += `${debugHint ? '  |  ' : ''}导航调试 [N]  蓝实线=主路  橙虚线=辅路  红虚线=阻断  紫线=狗路径`;
+    ctx.fillText(debugHint, 32, hudHeight + 8);
   }
 
   if (messageTimer > 0) {
