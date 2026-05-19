@@ -9,6 +9,8 @@ const SOURCE_W = 562;
 const SOURCE_H = 482;
 const VIEW_H = 450;
 const VIEW_W = VIEW_H * (16 / 9);
+const DEBUG_FULL_MAP_VIEW = true;
+const DEBUG_SHOW_ALL_ACTORS = DEBUG_FULL_MAP_VIEW;
 const PLAYER_SIZE = 46;
 const PLAYER_COLLISION_RADIUS = 13;
 const DISGUISE_RADIUS = 96;
@@ -533,9 +535,8 @@ const WALL_CORNER_NATIVE_SIZE = 341;
 const WALL_TILE_OVERLAP = 3;
 const NAV_CLEARANCE = PLAYER_COLLISION_RADIUS + 2;
 const STUCK_NET_THRESHOLD = 8;
-const STUCK_TIMEOUT_SECONDS = 1.2;
-const STUCK_SIDESTEP_DISTANCE = 50;
-const STUCK_SIDESTEP_STEP = 8;
+const STUCK_TIMEOUT_SECONDS = 0.5;
+const MAIN_ROAD_REACHED_DISTANCE = 50;
 
 let items = [];
 
@@ -567,6 +568,8 @@ const aiDogBrain = {
   stuckTimer: 0,
   stuckAnchorX: aiDog.x,
   stuckAnchorY: aiDog.y,
+  recoveryTarget: null,
+  recoveryMainIndex: -1,
   lastCatX: playerCat.x,
   lastCatY: playerCat.y,
   footprintTarget: null,
@@ -583,6 +586,8 @@ const aiCatBrain = {
   stuckTimer: 0,
   stuckAnchorX: aiCat.x,
   stuckAnchorY: aiCat.y,
+  recoveryTarget: null,
+  recoveryMainIndex: -1,
   dogSenseTimer: 0,
   pauseTimer: 0,
   freezeAfterDisguise: false,
@@ -948,13 +953,23 @@ function updateAiDog(dt, cat) {
     track.alertUntil = performance.now() / 1000 + CAT_ALERT_DURATION;
   }
 
-  if (seesCat && (!cat.disguised || catMoved)) {
+  if (aiDogBrain.mode === 'recover') {
+    aiTarget = aiDogBrain.recoveryTarget;
+    moveAiDogToward(aiDogBrain.recoveryTarget, dt);
+    updateAiDogMainRoadRecovery();
+  } else if (seesCat && (!cat.disguised || catMoved)) {
     setAiMode('chase', cat);
   } else if (aiDifficulty === 'easy' && seesCat && cat.disguised) {
     prepareAiRandomInspection(dog, cat);
   } else if (aiDogBrain.mode === 'chase' || aiDogBrain.mode === 'inspect') {
     aiDogBrain.mode = 'patrol';
     aiDogBrain.inspectTarget = null;
+  }
+
+  if (aiDogBrain.mode === 'recover') {
+    aiDogBrain.lastCatX = cat.x;
+    aiDogBrain.lastCatY = cat.y;
+    return;
   }
 
   updateAiDogClueIntent(dt, cat);
@@ -1008,6 +1023,8 @@ function resetAiDogBrain() {
     stuckTimer: 0,
     stuckAnchorX: aiDog.x,
     stuckAnchorY: aiDog.y,
+    recoveryTarget: null,
+    recoveryMainIndex: -1,
     lastCatX: playerCat.x,
     lastCatY: playerCat.y,
     footprintTarget: null,
@@ -1015,6 +1032,7 @@ function resetAiDogBrain() {
 }
 
 function setAiMode(mode, target = null) {
+  if (aiDogBrain.mode === 'recover' && mode !== 'recover') return;
   aiDogBrain.mode = mode;
   if (mode === 'chase' || mode === 'footprint' || mode === 'clue') aiDogBrain.inspectTarget = null;
   if (target) aiTarget = target;
@@ -1093,7 +1111,7 @@ function moveAiDogToward(target, dt) {
   if (aiDogBrain.navPath.length && distance(aiDog, aiDogBrain.navPath[0]) < 34) {
     aiDogBrain.navPath.shift();
   }
-  updateAiStuckRecovery(aiDog, aiDogBrain, dt, moveDir);
+  updateAiStuckRecovery(aiDog, aiDogBrain, dt);
 }
 
 function isNavigableItem(target) {
@@ -1237,6 +1255,8 @@ function resetAiCatBrain() {
     stuckTimer: 0,
     stuckAnchorX: aiCat.x,
     stuckAnchorY: aiCat.y,
+    recoveryTarget: null,
+    recoveryMainIndex: -1,
     dogSenseTimer: 0,
     pauseTimer: 0,
     freezeAfterDisguise: false,
@@ -1458,6 +1478,11 @@ function updateAiCatSeek(dt) {
   aiCatBrain.destroyCooldown = Math.max(0, aiCatBrain.destroyCooldown - dt);
   aiCatBrain.pauseTimer = Math.max(0, aiCatBrain.pauseTimer - dt);
 
+  if (aiCatBrain.recoveryTarget) {
+    updateAiCatMainRoadRecovery(dt);
+    return;
+  }
+
   if (aiDifficulty === 'easy' && isCatAlertActive(aiCat)) {
     aiCatBrain.pauseTimer = Math.max(aiCatBrain.pauseTimer, 1);
   }
@@ -1534,10 +1559,15 @@ function updateAiCatSeek(dt) {
   if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
     aiCatBrain.navPath.shift();
   }
-  updateAiStuckRecovery(aiCat, aiCatBrain, dt, moveDir);
+  updateAiStuckRecovery(aiCat, aiCatBrain, dt);
 }
 
 function updateAiCatHide(dt) {
+  if (aiCatBrain.recoveryTarget) {
+    updateAiCatMainRoadRecovery(dt);
+    return;
+  }
+
   if (!aiCatBrain.hideTarget || aiCat.disguised) return;
   const waypoint = getNavigationWaypoint(aiCat, aiCatBrain.hideTarget, aiCatBrain, 'hide');
   const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
@@ -1555,7 +1585,7 @@ function updateAiCatHide(dt) {
     return;
   }
 
-  updateAiStuckRecovery(aiCat, aiCatBrain, dt, moveDir);
+  updateAiStuckRecovery(aiCat, aiCatBrain, dt);
 }
 
 function findNavigationPath(start, goal) {
@@ -1778,7 +1808,7 @@ function resetStuckAnchor(brain, entity) {
   brain.stuckAnchorY = entity.y;
 }
 
-function updateAiStuckRecovery(entity, brain, dt, moveDir) {
+function updateAiStuckRecovery(entity, brain, dt) {
   if (!Number.isFinite(brain.stuckAnchorX) || !Number.isFinite(brain.stuckAnchorY)) {
     resetStuckAnchor(brain, entity);
     return;
@@ -1793,27 +1823,115 @@ function updateAiStuckRecovery(entity, brain, dt, moveDir) {
   brain.stuckTimer += dt;
   if (brain.stuckTimer <= STUCK_TIMEOUT_SECONDS) return;
 
-  applyRandomSidestep(entity, STUCK_SIDESTEP_DISTANCE, moveDir);
+  beginMainRoadRecovery(entity, brain);
   resetStuckAnchor(brain, entity);
 }
 
-function applyRandomSidestep(entity, totalDistance, moveDir) {
-  let baseAngle;
-  if (moveDir && Math.hypot(moveDir.x, moveDir.y) > 0.05) {
-    baseAngle = Math.atan2(moveDir.y, moveDir.x);
-  } else {
-    baseAngle = Math.random() * Math.PI * 2;
-  }
-  const side = Math.random() < 0.5 ? 1 : -1;
-  const angle = baseAngle + side * (Math.PI / 2);
-  const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+function beginMainRoadRecovery(entity, brain) {
+  const target = getFarthestMainRoadNode(entity);
+  if (!target) return;
 
-  let remaining = totalDistance;
-  while (remaining > 0) {
-    const chunk = Math.min(STUCK_SIDESTEP_STEP, remaining);
-    moveEntity(entity, dir, chunk);
-    remaining -= chunk;
+  brain.recoveryTarget = target.node;
+  brain.recoveryMainIndex = target.index;
+  brain.navPath = [];
+  brain.navTargetKey = '';
+
+  if (brain === aiDogBrain) {
+    aiDogBrain.mode = 'recover';
+    aiDogBrain.patrolTarget = null;
+    aiDogBrain.inspectTarget = null;
+    aiDogBrain.clueTarget = null;
+    aiDogBrain.footprintTarget = null;
+    aiTarget = target.node;
+    return;
   }
+
+  aiCatBrain.hideTarget = null;
+  aiCatBrain.sabotageTarget = null;
+  aiCatBrain.destroyHold = 0;
+  aiCatBrain.destroyItemId = null;
+  aiCatBrain.freezeAfterDisguise = false;
+}
+
+function getFarthestMainRoadNode(entity) {
+  const nodes = getNavigationNodes();
+  const candidates = [...getMainNodeIndices()]
+    .map((index) => ({ index, node: nodes[index] }))
+    .filter(({ node }) => node);
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => distance(entity, b.node) - distance(entity, a.node));
+  return candidates[0];
+}
+
+function getRandomMainRoadPatrolTarget(fromIndex = -1) {
+  const nodes = getNavigationNodes();
+  const neighbors = manualNavMainEdges
+    .filter(([from, to]) => from === fromIndex || to === fromIndex)
+    .map(([from, to]) => (from === fromIndex ? to : from))
+    .filter((index) => nodes[index]);
+
+  const index = neighbors.length
+    ? choice(neighbors)
+    : choice([...getMainNodeIndices()]);
+  const node = nodes[index];
+  return node ? { ...node } : getRandomPatrolPoint();
+}
+
+function updateAiDogMainRoadRecovery() {
+  if (!aiDogBrain.recoveryTarget) {
+    finishAiDogMainRoadRecovery();
+    return;
+  }
+
+  if (distance(aiDog, aiDogBrain.recoveryTarget) > MAIN_ROAD_REACHED_DISTANCE) return;
+  finishAiDogMainRoadRecovery();
+}
+
+function finishAiDogMainRoadRecovery() {
+  const nextPatrol = getRandomMainRoadPatrolTarget(aiDogBrain.recoveryMainIndex);
+  aiDogBrain.mode = 'patrol';
+  aiDogBrain.recoveryTarget = null;
+  aiDogBrain.recoveryMainIndex = -1;
+  aiDogBrain.navPath = [];
+  aiDogBrain.navTargetKey = '';
+  aiDogBrain.patrolTarget = nextPatrol;
+  aiTarget = nextPatrol;
+  resetStuckAnchor(aiDogBrain, aiDog);
+}
+
+function updateAiCatMainRoadRecovery(dt) {
+  const target = aiCatBrain.recoveryTarget;
+  if (!target) {
+    finishAiCatMainRoadRecovery();
+    return;
+  }
+
+  const waypoint = getNavigationWaypoint(aiCat, target, aiCatBrain, 'recover');
+  const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
+  const len = Math.hypot(desired.x, desired.y) || 1;
+  const moveDir = { x: desired.x / len, y: desired.y / len };
+  moveEntity(aiCat, moveDir, getSpeed(aiCat) * dt);
+
+  if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
+    aiCatBrain.navPath.shift();
+  }
+  if (distance(aiCat, target) <= MAIN_ROAD_REACHED_DISTANCE) {
+    finishAiCatMainRoadRecovery();
+    return;
+  }
+  updateAiStuckRecovery(aiCat, aiCatBrain, dt);
+}
+
+function finishAiCatMainRoadRecovery() {
+  aiCatBrain.recoveryTarget = null;
+  aiCatBrain.recoveryMainIndex = -1;
+  aiCatBrain.navPath = [];
+  aiCatBrain.navTargetKey = '';
+  aiCatBrain.sabotageTarget = null;
+  if (!aiCat.disguised && (round === 'playerDogWait' || aiCatBrain.needsInitialDisguise)) {
+    aiCatBrain.hideTarget = pickNearestItemBy(aiCat);
+  }
+  resetStuckAnchor(aiCatBrain, aiCat);
 }
 
 function collides(entity, sourceEntity = entity) {
@@ -1921,13 +2039,16 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
 
   const human = getHuman();
-  const scale = Math.min(w / VIEW_W, h / VIEW_H);
-  const viewW = w / scale;
-  const viewH = h / scale;
-  const camX = clamp(human.x - viewW / 2, 0, MAP - viewW);
-  const camY = clamp(human.y - viewH / 2, 0, MAP - viewH);
+  const scale = DEBUG_FULL_MAP_VIEW ? Math.min(w / MAP, h / MAP) : Math.min(w / VIEW_W, h / VIEW_H);
+  const viewW = DEBUG_FULL_MAP_VIEW ? MAP : w / scale;
+  const viewH = DEBUG_FULL_MAP_VIEW ? MAP : h / scale;
+  const camX = DEBUG_FULL_MAP_VIEW ? 0 : clamp(human.x - viewW / 2, 0, MAP - viewW);
+  const camY = DEBUG_FULL_MAP_VIEW ? 0 : clamp(human.y - viewH / 2, 0, MAP - viewH);
+  const mapOffsetX = DEBUG_FULL_MAP_VIEW ? (w - MAP * scale) / 2 : 0;
+  const mapOffsetY = DEBUG_FULL_MAP_VIEW ? (h - MAP * scale) / 2 : 0;
 
   ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
   ctx.scale(scale, scale);
   ctx.translate(-camX, -camY);
   drawWorld();
@@ -1943,7 +2064,7 @@ function draw() {
   drawNavigationDebug();
   ctx.restore();
 
-  if (round === 'playerDogWait') drawBlindfold(w, h);
+  if (round === 'playerDogWait' && !DEBUG_FULL_MAP_VIEW) drawBlindfold(w, h);
   drawHud(w, h);
   if (round === 'playerDogSeek') drawMinimap(w, h, human);
 }
@@ -2302,15 +2423,18 @@ function drawItemSprite(item) {
 
 function drawEntity(entity, human, camX, camY, viewW, viewH) {
   const visible = entity === human ||
+    DEBUG_SHOW_ALL_ACTORS ||
     round === 'playerCatHide' ||
     round === 'playerDogSeek' ||
     (entity.x > camX - 80 && entity.x < camX + viewW + 80 && entity.y > camY - 80 && entity.y < camY + viewH + 80);
 
   if (!visible) return;
-  if (entity === aiCat && round !== 'playerDogSeek') return;
-  if (entity === playerDog && round !== 'playerDogSeek' && round !== 'playerDogWait') return;
-  if (entity === aiDog && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
-  if (entity === playerCat && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
+  if (!DEBUG_SHOW_ALL_ACTORS) {
+    if (entity === aiCat && round !== 'playerDogSeek') return;
+    if (entity === playerDog && round !== 'playerDogSeek' && round !== 'playerDogWait') return;
+    if (entity === aiDog && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
+    if (entity === playerCat && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
+  }
 
   if (entity.disguised && entity.disguiseItem) {
     drawImageFit(images[entity.disguiseItem.imgKey], entity.x, entity.y, entity.disguiseItem.w, entity.disguiseItem.h, entity.angle);
