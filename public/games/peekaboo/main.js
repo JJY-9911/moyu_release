@@ -1809,6 +1809,8 @@ function resetStuckAnchor(brain, entity) {
 }
 
 function updateAiStuckRecovery(entity, brain, dt) {
+  if (brain.recoveryTarget) return;
+
   if (!Number.isFinite(brain.stuckAnchorX) || !Number.isFinite(brain.stuckAnchorY)) {
     resetStuckAnchor(brain, entity);
     return;
