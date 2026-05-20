@@ -7,10 +7,9 @@ const difficultyButtons = Array.from(document.querySelectorAll('[data-difficulty
 const MAP = 2000;
 const SOURCE_W = 562;
 const SOURCE_H = 482;
-const VIEW_H = 450;
+const MAP_VIEW_AREA_FRACTION = 1 / 25;
+const VIEW_H = MAP * Math.sqrt(MAP_VIEW_AREA_FRACTION * 9 / 16);
 const VIEW_W = VIEW_H * (16 / 9);
-const DEBUG_FULL_MAP_VIEW = true;
-const DEBUG_SHOW_ALL_ACTORS = DEBUG_FULL_MAP_VIEW;
 const PLAYER_SIZE = 46;
 const PLAYER_COLLISION_RADIUS = 13;
 const DISGUISE_RADIUS = 96;
@@ -40,8 +39,8 @@ let lastTime = performance.now();
 let gameStarted = false;
 let message = '按开始进入第一回合';
 let messageTimer = 0;
-let debugNavigation = true;
-let debugWallCollision = true;
+let debugNavigation = false;
+let debugWallCollision = false;
 let round = 'playerCatHide';
 let roundTime = HIDE_SECONDS;
 let inspectLeft = 5;
@@ -535,8 +534,11 @@ const WALL_CORNER_NATIVE_SIZE = 341;
 const WALL_TILE_OVERLAP = 3;
 const NAV_CLEARANCE = PLAYER_COLLISION_RADIUS + 2;
 const STUCK_NET_THRESHOLD = 8;
-const STUCK_TIMEOUT_SECONDS = 0.5;
+const STUCK_TIMEOUT_SECONDS = 1;
+const STUCK_RECOVERY_COOLDOWN = 2.5;
 const MAIN_ROAD_REACHED_DISTANCE = 50;
+const MAIN_ROAD_MIN_RECOVERY_SECONDS = 0.4;
+const NAV_REPLAN_COOLDOWN = 0.75;
 
 let items = [];
 
@@ -570,6 +572,9 @@ const aiDogBrain = {
   stuckAnchorY: aiDog.y,
   recoveryTarget: null,
   recoveryMainIndex: -1,
+  recoveryElapsed: 0,
+  recoveryCooldown: 0,
+  navReplanCooldown: 0,
   lastCatX: playerCat.x,
   lastCatY: playerCat.y,
   footprintTarget: null,
@@ -588,6 +593,9 @@ const aiCatBrain = {
   stuckAnchorY: aiCat.y,
   recoveryTarget: null,
   recoveryMainIndex: -1,
+  recoveryElapsed: 0,
+  recoveryCooldown: 0,
+  navReplanCooldown: 0,
   dogSenseTimer: 0,
   pauseTimer: 0,
   freezeAfterDisguise: false,
@@ -956,7 +964,7 @@ function updateAiDog(dt, cat) {
   if (aiDogBrain.mode === 'recover') {
     aiTarget = aiDogBrain.recoveryTarget;
     moveAiDogToward(aiDogBrain.recoveryTarget, dt);
-    updateAiDogMainRoadRecovery();
+    updateAiDogMainRoadRecovery(dt);
   } else if (seesCat && (!cat.disguised || catMoved)) {
     setAiMode('chase', cat);
   } else if (aiDifficulty === 'easy' && seesCat && cat.disguised) {
@@ -1025,6 +1033,9 @@ function resetAiDogBrain() {
     stuckAnchorY: aiDog.y,
     recoveryTarget: null,
     recoveryMainIndex: -1,
+    recoveryElapsed: 0,
+    recoveryCooldown: 0,
+    navReplanCooldown: 0,
     lastCatX: playerCat.x,
     lastCatY: playerCat.y,
     footprintTarget: null,
@@ -1101,6 +1112,7 @@ function updateAiDogClueIntent(dt, cat) {
 
 function moveAiDogToward(target, dt) {
   if (!target) return;
+  aiDogBrain.navReplanCooldown = Math.max(0, aiDogBrain.navReplanCooldown - dt);
   const moveTarget = isNavigableItem(target) ? getItemApproachPoint(aiDog, target) : target;
   const waypoint = getNavigationWaypoint(aiDog, moveTarget, aiDogBrain, aiDogBrain.mode);
   const desired = { x: waypoint.x - aiDog.x, y: waypoint.y - aiDog.y };
@@ -1111,7 +1123,7 @@ function moveAiDogToward(target, dt) {
   if (aiDogBrain.navPath.length && distance(aiDog, aiDogBrain.navPath[0]) < 34) {
     aiDogBrain.navPath.shift();
   }
-  updateAiStuckRecovery(aiDog, aiDogBrain, dt);
+  if (aiDogBrain.mode !== 'recover') updateAiStuckRecovery(aiDog, aiDogBrain, dt);
 }
 
 function isNavigableItem(target) {
@@ -1148,13 +1160,16 @@ function getNavigationWaypoint(entity, target, brain, modeKey) {
   if (canTravelDirect(entity, target)) {
     brain.navPath = [];
     brain.navTargetKey = '';
+    brain.navReplanCooldown = 0;
     return target;
   }
 
   const targetKey = `${Math.round(target.x / 20)}:${Math.round(target.y / 20)}:${modeKey}`;
-  if (brain.navTargetKey !== targetKey || !brain.navPath.length) {
+  const needsReplan = brain.navTargetKey !== targetKey || !brain.navPath.length;
+  if (needsReplan && !(brain.navReplanCooldown > 0 && brain.navTargetKey === targetKey && !brain.navPath.length)) {
     brain.navPath = findNavigationPath(entity, target);
     brain.navTargetKey = targetKey;
+    brain.navReplanCooldown = brain.navPath.length ? 0 : NAV_REPLAN_COOLDOWN;
   }
 
   return brain.navPath[0] || getNearestReachableNavNode(entity, target) || target;
@@ -1183,7 +1198,7 @@ function getAiPatrolTarget() {
   const target = aiDogBrain.patrolTarget;
   if (target && distance(aiDog, target) > 70) return target;
 
-  aiDogBrain.patrolTarget = getRandomPatrolPoint();
+  aiDogBrain.patrolTarget = getRandomMainRoadPatrolTarget(getNearestMainRoadNodeIndex(aiDog));
   return aiDogBrain.patrolTarget;
 }
 
@@ -1257,6 +1272,9 @@ function resetAiCatBrain() {
     stuckAnchorY: aiCat.y,
     recoveryTarget: null,
     recoveryMainIndex: -1,
+    recoveryElapsed: 0,
+    recoveryCooldown: 0,
+    navReplanCooldown: 0,
     dogSenseTimer: 0,
     pauseTimer: 0,
     freezeAfterDisguise: false,
@@ -1550,6 +1568,7 @@ function updateAiCatSeek(dt) {
 
   if (distance(aiCat, target) <= DESTROY_RADIUS + 8) return;
 
+  aiCatBrain.navReplanCooldown = Math.max(0, aiCatBrain.navReplanCooldown - dt);
   const waypoint = getNavigationWaypoint(aiCat, target, aiCatBrain, 'sabotage');
   const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
@@ -1569,6 +1588,7 @@ function updateAiCatHide(dt) {
   }
 
   if (!aiCatBrain.hideTarget || aiCat.disguised) return;
+  aiCatBrain.navReplanCooldown = Math.max(0, aiCatBrain.navReplanCooldown - dt);
   const waypoint = getNavigationWaypoint(aiCat, aiCatBrain.hideTarget, aiCatBrain, 'hide');
   const desired = { x: waypoint.x - aiCat.x, y: waypoint.y - aiCat.y };
   const len = Math.hypot(desired.x, desired.y) || 1;
@@ -1723,7 +1743,8 @@ function runDijkstra(nodes, adjacency, startIndex, edgeFilter = null) {
 function buildPathIndices(prev, startIndex, endIndex) {
   if (startIndex === endIndex) return [];
   const path = [];
-  for (let i = endIndex; i !== -1 && i !== startIndex; i = prev[i]) {
+  const nodeCount = getNavigationNodes().length;
+  for (let i = endIndex, guard = 0; i !== -1 && i !== startIndex && guard < nodeCount; i = prev[i], guard += 1) {
     path.unshift(i);
   }
   return path;
@@ -1811,6 +1832,12 @@ function resetStuckAnchor(brain, entity) {
 function updateAiStuckRecovery(entity, brain, dt) {
   if (brain.recoveryTarget) return;
 
+  brain.recoveryCooldown = Math.max(0, (brain.recoveryCooldown || 0) - dt);
+  if (brain.recoveryCooldown > 0) {
+    resetStuckAnchor(brain, entity);
+    return;
+  }
+
   if (!Number.isFinite(brain.stuckAnchorX) || !Number.isFinite(brain.stuckAnchorY)) {
     resetStuckAnchor(brain, entity);
     return;
@@ -1830,13 +1857,16 @@ function updateAiStuckRecovery(entity, brain, dt) {
 }
 
 function beginMainRoadRecovery(entity, brain) {
-  const target = getFarthestMainRoadNode(entity);
+  const target = getRecoveryMainRoadNode(entity);
   if (!target) return;
 
   brain.recoveryTarget = target.node;
   brain.recoveryMainIndex = target.index;
+  brain.recoveryElapsed = 0;
+  brain.recoveryCooldown = STUCK_RECOVERY_COOLDOWN;
   brain.navPath = [];
   brain.navTargetKey = '';
+  brain.navReplanCooldown = 0;
 
   if (brain === aiDogBrain) {
     aiDogBrain.mode = 'recover';
@@ -1855,14 +1885,33 @@ function beginMainRoadRecovery(entity, brain) {
   aiCatBrain.freezeAfterDisguise = false;
 }
 
-function getFarthestMainRoadNode(entity) {
+function getRecoveryMainRoadNode(entity) {
   const nodes = getNavigationNodes();
   const candidates = [...getMainNodeIndices()]
     .map((index) => ({ index, node: nodes[index] }))
     .filter(({ node }) => node);
   if (!candidates.length) return null;
-  candidates.sort((a, b) => distance(entity, b.node) - distance(entity, a.node));
-  return candidates[0];
+
+  const reachable = candidates.filter(({ node }) => canTravelDirect(entity, node));
+  const pool = reachable.length ? reachable : candidates;
+  pool.sort((a, b) => distance(entity, b.node) - distance(entity, a.node));
+  return pool[0];
+}
+
+function getNearestMainRoadNodeIndex(entity) {
+  const nodes = getNavigationNodes();
+  let bestIndex = -1;
+  let bestDist = Infinity;
+  getMainNodeIndices().forEach((index) => {
+    const node = nodes[index];
+    if (!node) return;
+    const dist = distance(entity, node);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
 }
 
 function getRandomMainRoadPatrolTarget(fromIndex = -1) {
@@ -1879,13 +1928,16 @@ function getRandomMainRoadPatrolTarget(fromIndex = -1) {
   return node ? { ...node } : getRandomPatrolPoint();
 }
 
-function updateAiDogMainRoadRecovery() {
+function updateAiDogMainRoadRecovery(dt) {
+  aiDogBrain.recoveryElapsed += dt;
+
   if (!aiDogBrain.recoveryTarget) {
     finishAiDogMainRoadRecovery();
     return;
   }
 
   if (distance(aiDog, aiDogBrain.recoveryTarget) > MAIN_ROAD_REACHED_DISTANCE) return;
+  if (aiDogBrain.recoveryElapsed < MAIN_ROAD_MIN_RECOVERY_SECONDS) return;
   finishAiDogMainRoadRecovery();
 }
 
@@ -1894,14 +1946,20 @@ function finishAiDogMainRoadRecovery() {
   aiDogBrain.mode = 'patrol';
   aiDogBrain.recoveryTarget = null;
   aiDogBrain.recoveryMainIndex = -1;
+  aiDogBrain.recoveryElapsed = 0;
+  aiDogBrain.recoveryCooldown = STUCK_RECOVERY_COOLDOWN;
   aiDogBrain.navPath = [];
   aiDogBrain.navTargetKey = '';
+  aiDogBrain.navReplanCooldown = 0;
   aiDogBrain.patrolTarget = nextPatrol;
   aiTarget = nextPatrol;
   resetStuckAnchor(aiDogBrain, aiDog);
 }
 
 function updateAiCatMainRoadRecovery(dt) {
+  aiCatBrain.navReplanCooldown = Math.max(0, aiCatBrain.navReplanCooldown - dt);
+  aiCatBrain.recoveryElapsed += dt;
+
   const target = aiCatBrain.recoveryTarget;
   if (!target) {
     finishAiCatMainRoadRecovery();
@@ -1917,18 +1975,20 @@ function updateAiCatMainRoadRecovery(dt) {
   if (aiCatBrain.navPath.length && distance(aiCat, aiCatBrain.navPath[0]) < 30) {
     aiCatBrain.navPath.shift();
   }
-  if (distance(aiCat, target) <= MAIN_ROAD_REACHED_DISTANCE) {
+  if (distance(aiCat, target) <= MAIN_ROAD_REACHED_DISTANCE && aiCatBrain.recoveryElapsed >= MAIN_ROAD_MIN_RECOVERY_SECONDS) {
     finishAiCatMainRoadRecovery();
     return;
   }
-  updateAiStuckRecovery(aiCat, aiCatBrain, dt);
 }
 
 function finishAiCatMainRoadRecovery() {
   aiCatBrain.recoveryTarget = null;
   aiCatBrain.recoveryMainIndex = -1;
+  aiCatBrain.recoveryElapsed = 0;
+  aiCatBrain.recoveryCooldown = STUCK_RECOVERY_COOLDOWN;
   aiCatBrain.navPath = [];
   aiCatBrain.navTargetKey = '';
+  aiCatBrain.navReplanCooldown = 0;
   aiCatBrain.sabotageTarget = null;
   if (!aiCat.disguised && (round === 'playerDogWait' || aiCatBrain.needsInitialDisguise)) {
     aiCatBrain.hideTarget = pickNearestItemBy(aiCat);
@@ -2041,16 +2101,13 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
 
   const human = getHuman();
-  const scale = DEBUG_FULL_MAP_VIEW ? Math.min(w / MAP, h / MAP) : Math.min(w / VIEW_W, h / VIEW_H);
-  const viewW = DEBUG_FULL_MAP_VIEW ? MAP : w / scale;
-  const viewH = DEBUG_FULL_MAP_VIEW ? MAP : h / scale;
-  const camX = DEBUG_FULL_MAP_VIEW ? 0 : clamp(human.x - viewW / 2, 0, MAP - viewW);
-  const camY = DEBUG_FULL_MAP_VIEW ? 0 : clamp(human.y - viewH / 2, 0, MAP - viewH);
-  const mapOffsetX = DEBUG_FULL_MAP_VIEW ? (w - MAP * scale) / 2 : 0;
-  const mapOffsetY = DEBUG_FULL_MAP_VIEW ? (h - MAP * scale) / 2 : 0;
+  const scale = Math.min(w / VIEW_W, h / VIEW_H);
+  const viewW = w / scale;
+  const viewH = h / scale;
+  const camX = clamp(human.x - viewW / 2, 0, MAP - viewW);
+  const camY = clamp(human.y - viewH / 2, 0, MAP - viewH);
 
   ctx.save();
-  ctx.translate(mapOffsetX, mapOffsetY);
   ctx.scale(scale, scale);
   ctx.translate(-camX, -camY);
   drawWorld();
@@ -2066,7 +2123,7 @@ function draw() {
   drawNavigationDebug();
   ctx.restore();
 
-  if (round === 'playerDogWait' && !DEBUG_FULL_MAP_VIEW) drawBlindfold(w, h);
+  if (round === 'playerDogWait') drawBlindfold(w, h);
   drawHud(w, h);
   if (round === 'playerDogSeek') drawMinimap(w, h, human);
 }
@@ -2425,18 +2482,15 @@ function drawItemSprite(item) {
 
 function drawEntity(entity, human, camX, camY, viewW, viewH) {
   const visible = entity === human ||
-    DEBUG_SHOW_ALL_ACTORS ||
     round === 'playerCatHide' ||
     round === 'playerDogSeek' ||
     (entity.x > camX - 80 && entity.x < camX + viewW + 80 && entity.y > camY - 80 && entity.y < camY + viewH + 80);
 
   if (!visible) return;
-  if (!DEBUG_SHOW_ALL_ACTORS) {
-    if (entity === aiCat && round !== 'playerDogSeek') return;
-    if (entity === playerDog && round !== 'playerDogSeek' && round !== 'playerDogWait') return;
-    if (entity === aiDog && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
-    if (entity === playerCat && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
-  }
+  if (entity === aiCat && round !== 'playerDogSeek') return;
+  if (entity === playerDog && round !== 'playerDogSeek' && round !== 'playerDogWait') return;
+  if (entity === aiDog && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
+  if (entity === playerCat && round !== 'playerCatSeek' && round !== 'playerCatHide') return;
 
   if (entity.disguised && entity.disguiseItem) {
     drawImageFit(images[entity.disguiseItem.imgKey], entity.x, entity.y, entity.disguiseItem.w, entity.disguiseItem.h, entity.angle);
