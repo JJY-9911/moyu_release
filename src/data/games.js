@@ -4,6 +4,16 @@
 
 export const games = [
   {
+    id: 'invest',
+    name: '异世界炒股',
+    icon: '📈',
+    category: 'clicker',
+    categoryLabel: '点击',
+    hot: false,
+    cover: '/games/invest/assets/cover.svg',
+    desc: '异世界百业股票按考拉兹法则波动，低买高卖积累财富',
+  },
+  {
     id: 'feed-fish',
     name: '摸大鲲',
     icon: '🐟',

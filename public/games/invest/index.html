@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>异世界炒股 - GameHub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="../../index.html" class="top-btn back-btn">← 返回</a>
+  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+
+  <div id="openOverlay" class="overlay">
+    <div class="overlay-card">
+      <h1>异世界炒股</h1>
+      <p>异世界股票，低买高卖，积累你的第一桶金。</p>
+      <p class="overlay-tip">初始资金：<strong>¥1,000</strong></p>
+      <button id="openAccountBtn" type="button" class="btn-primary">开户交易</button>
+    </div>
+  </div>
+
+  <div class="game-shell" id="gameShell" hidden>
+    <section class="panel chart-panel">
+      <div class="chart-main">
+        <div class="chart-header">
+          <span id="chartTitle">请选择股票</span>
+          <span id="chartPrice" class="chart-price"></span>
+        </div>
+        <canvas id="priceChart"></canvas>
+      </div>
+      <div class="event-feed">
+        <div class="panel-title">事件</div>
+        <div class="event-log" id="eventLog"></div>
+      </div>
+    </section>
+
+    <section class="panel bottom-panel">
+      <div class="stock-list-panel">
+        <div class="panel-title">上市股票</div>
+        <div class="stock-table-wrap">
+          <table class="stock-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>板块</th>
+                <th>现价</th>
+                <th>涨幅</th>
+                <th>持股</th>
+              </tr>
+            </thead>
+            <tbody id="stockTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="trade-panel">
+        <div class="panel-title">账户</div>
+        <div class="day-status">
+          <span id="tradingDayDisplay">第 0 日 · 上市观望</span>
+          <span id="worldEventDisplay">暂无世界事件</span>
+        </div>
+
+        <div class="account-stats">
+          <div class="stat-row">
+            <span>现金</span>
+            <span id="cashDisplay">¥1,000.00</span>
+          </div>
+          <div class="stat-row">
+            <span>持仓市值</span>
+            <span id="holdingsValue">¥0.00</span>
+          </div>
+          <div class="stat-row total">
+            <span>总资产</span>
+            <span id="totalAssets">¥1,000.00</span>
+          </div>
+        </div>
+
+        <div class="selected-stock" id="selectedStockInfo">未选择股票</div>
+
+        <div class="lot-size">
+          <span class="lot-label">单次数量</span>
+          <div class="lot-btns" id="lotBtns"></div>
+        </div>
+
+        <div class="trade-btns">
+          <button type="button" id="buyBtn" class="btn-buy" disabled>买入</button>
+          <button type="button" id="sellBtn" class="btn-sell" disabled>卖出</button>
+        </div>
+
+        <button type="button" id="nextDayBtn" class="btn-next-day">下一交易日 →</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="events-data.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
