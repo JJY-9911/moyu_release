@@ -19,8 +19,9 @@
   const LOT_SIZES = [1, 10, 100, 1000, 10000];
   const LISTED_COUNT = 10;
   const CHART_STEPS = 120;
-  const INITIAL_CASH = 1000;
-  const WORLD_EVENT_DAYS = 3;
+  const INITIAL_CASH = 100000;
+  const WORLD_EVENT_DAYS_MIN = 1;
+  const WORLD_EVENT_DAYS_MAX = 5;
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -167,6 +168,7 @@
   }
 
   function addEvent(type, text) {
+    if (type !== 'world' && type !== 'sector') return;
     const div = document.createElement('div');
     div.className = 'event-item event-' + type;
     div.textContent = dayLabel() + ' ' + text;
@@ -224,40 +226,64 @@
     };
   }
 
-  function logWorldSectorEvents(tickCtx) {
-    const logged = new Set();
-    tickCtx.sectorEvents.forEach((events, sectorId) => {
-      events.forEach((eventId) => {
-        const key = sectorId + ':' + eventId;
-        if (logged.has(key)) return;
-        logged.add(key);
-        const sector = getSector(sectorId);
-        addEvent('sector', '【板块】' + (sector ? sector.name : sectorId) + '：' + getEventLabel(eventId));
-      });
+  function getListedSectorIds() {
+    const ids = new Set();
+    listed.forEach((s) => ids.add(s.sector));
+    return ids;
+  }
+
+  function formatWorldNewsMessage(world) {
+    const listedSectors = getListedSectorIds();
+    const sectorImpacts = [];
+    const seen = new Set();
+
+    function pushSectorImpact(sectorId, eventId) {
+      if (!listedSectors.has(sectorId)) return;
+      const key = sectorId + ':' + eventId;
+      if (seen.has(key)) return;
+      seen.add(key);
+      sectorImpacts.push('【' + getEventLabel(eventId) + '】');
+    }
+
+    const showForceDrop =
+      world.constructionForceDrop && listedSectors.has('construction');
+
+    world.sectorEvents.forEach(({ sector, event }) => {
+      pushSectorImpact(sector, event);
+      const links = LINKED_EVENTS[event];
+      if (links) links.forEach(({ sector: ls, event: le }) => pushSectorImpact(ls, le));
     });
-    tickCtx.linkedEvents.forEach((events, sectorId) => {
-      events.forEach((eventId) => {
-        const key = sectorId + ':' + eventId;
-        if (logged.has(key)) return;
-        logged.add(key);
-        const sector = getSector(sectorId);
-        addEvent('sector', '【板块】' + (sector ? sector.name : sectorId) + '：' + getEventLabel(eventId));
-      });
-    });
+
+    let text = '新闻：【' + world.name + '】';
+    if (!showForceDrop && sectorImpacts.length === 0) return text;
+
+    let impactText = '';
+    if (showForceDrop) impactText = '城建强跌';
+    if (sectorImpacts.length > 0) {
+      const eventsText = sectorImpacts.join('、');
+      impactText = impactText ? impactText + '，' + eventsText : eventsText;
+    }
+    return text + '，影响：' + impactText + '。';
   }
 
   function pickRandomWorldEvent() {
     return WORLD_EVENTS[Math.floor(Math.random() * WORLD_EVENTS.length)];
   }
 
+  function pickRandomWorldEventDays() {
+    return (
+      WORLD_EVENT_DAYS_MIN +
+      Math.floor(Math.random() * (WORLD_EVENT_DAYS_MAX - WORLD_EVENT_DAYS_MIN + 1))
+    );
+  }
+
   function startWorldEvent(world) {
     activeWorld = {
       world,
       tickCtx: buildTickCtxFromWorld(world),
-      daysLeft: WORLD_EVENT_DAYS,
+      daysLeft: pickRandomWorldEventDays(),
     };
-    addEvent('world', '【世界】' + world.name + '（持续 ' + WORLD_EVENT_DAYS + ' 个交易日）');
-    logWorldSectorEvents(activeWorld.tickCtx);
+    addEvent('world', formatWorldNewsMessage(world));
     updateWorldDisplay();
   }
 
@@ -322,10 +348,8 @@
     if (mods.forceEven) n = forceEven(n);
 
     if (stock.veinTicks > 0) {
-      if (!isEven(n)) n = roundPrice(n - 1);
-      stock.price = roundPrice(3 * n + 1);
+      if (isEven(n)) n = roundPrice(n - 1);
       stock.veinTicks--;
-      return;
     }
 
     const even = isEven(n);
@@ -372,13 +396,13 @@
         mergeMods(mods, { forceEven: true });
         break;
       case 'manaSurge':
-        mergeMods(mods, { odd: (n) => 7 * n + 1 });
+        mergeMods(mods, { odd: (n) => 5 * n + 1 });
         break;
       case 'manaDry':
         mergeMods(mods, { even: (n) => n / 4 });
         break;
       case 'forbidden':
-        mergeMods(mods, { multiply: 10, skipCollatz: true });
+        mergeMods(mods, { multiply: 5, skipCollatz: true });
         break;
       case 'bubble':
         mergeMods(mods, { divide: 4, skipCollatz: true });
@@ -403,7 +427,7 @@
     if (stock.sector === 'medicine' && stock.consecutiveUp >= 3) {
       chainEven(mods, (n) => roundPrice(n / 3));
     }
-    if (stock.sector === 'mining' && stock.depletion >= 10) {
+    if (stock.sector === 'mining' && stock.depletion >= 3) {
       chainEven(mods, (n) => roundPrice(n / 5));
     }
     if (stock.sector === 'food') {
@@ -471,20 +495,12 @@
     if (owned > 0) {
       cash += owned;
       holdings.delete(removed.id);
-      addEvent('delist', '【退市】' + meta.name + '（持仓已按 ¥1 清算）');
-    } else {
-      addEvent('delist', '【退市】' + meta.name);
     }
 
     const replacement = pickRandomUnlisted();
     if (replacement) {
       const entry = setupListedEntry(replacement);
       listed[index] = entry;
-      const sector = getSector(replacement.sector);
-      addEvent(
-        'list',
-        '【上市】' + replacement.name + '（' + (sector ? sector.short : '') + ' · 预览半程走势 · 现价 ¥' + entry.price + '）'
-      );
       if (selectedId === removed.id) selectedId = replacement.id;
     } else {
       listed.splice(index, 1);
@@ -842,22 +858,12 @@
     tradingDay = 0;
     initListedStocks();
 
-    listed.forEach((s) => {
-      const meta = stockPool.get(s.id);
-      const sector = getSector(s.sector);
-      addEvent(
-        'list',
-        '【上市】' + meta.name + '（' + (sector ? sector.short : '') + ' · 预览半程走势 · 现价 ¥' + s.price + '）'
-      );
-    });
-
     startWorldEvent(pickRandomWorldEvent());
     updateTradingDayDisplay();
 
     if (listed.length > 0) selectStock(listed[0].id);
 
     renderAll();
-    addEvent('world', '【提示】点击「下一交易日」推进股价；世界事件每 ' + WORLD_EVENT_DAYS + ' 个交易日更换');
   }
 
   function onResize() {
