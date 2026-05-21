@@ -19,9 +19,30 @@
   const LOT_SIZES = [1, 10, 100, 1000, 10000];
   const LISTED_COUNT = 10;
   const CHART_STEPS = 120;
-  const INITIAL_CASH = 100000;
+  const INITIAL_CASH = 10000;
   const WORLD_EVENT_DAYS_MIN = 1;
   const WORLD_EVENT_DAYS_MAX = 5;
+  const GURU_BRIBE_BASE = 50000;
+
+  const GURU_HINTS = [
+    '任何时候，都要关注股价为奇数的股票...',
+    '魔药有副作用，连续上涨3次后，最好抛掉...',
+    '【炼金变异】时，小心股价为偶数的股票...',
+    '矿产资源总是有限的，连续上涨3次后，可能会暴跌...',
+    '餐饮市场很大，跌幅总是最小的...',
+    '【禁术暴走】是好消息...',
+    '【炼金爆炸】非常严重，如果持股，亏本也要卖出去...',
+    '【魔力涌动】是好消息...',
+    '城建板块一般不会连续下跌超过2次，再观望观望...',
+    '炼金行业的波动很大，不过如果你想赌一把的话...',
+    '魔药行业适合新手碰碰运气...',
+    '军事可以说一本万利，这世界怎么了...',
+    '矿产受世界影响是最小的，如果你不关注新闻，可以试试...',
+    '餐饮行业长久不衰，别害怕...',
+    '魔导板块是最危险的，也是最诱人的，如果你想一步登天...',
+    '商贸受世界影响最大，如果掌握了王国的战况，一切都变得简单了...',
+    '宠物板块很简单，适合积累财富...',
+  ];
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -43,6 +64,8 @@
   const sellBtn = $('#sellBtn');
   const nextDayBtn = $('#nextDayBtn');
   const eventLog = $('#eventLog');
+  const guruBribe = $('#guruBribe');
+  const guruBribeTip = $('#guruBribeTip');
 
   const ctx = priceChart.getContext('2d');
 
@@ -69,6 +92,7 @@
 
   /** @type {{ world: object, tickCtx: object, daysLeft: number } | null} */
   let activeWorld = null;
+  let guruBribeCost = GURU_BRIBE_BASE;
 
   function collatzNextInt(n) {
     if (n % 2 === 0) return n / 2;
@@ -168,7 +192,7 @@
   }
 
   function addEvent(type, text) {
-    if (type !== 'world' && type !== 'sector') return;
+    if (type !== 'world' && type !== 'sector' && type !== 'hint') return;
     const div = document.createElement('div');
     div.className = 'event-item event-' + type;
     div.textContent = dayLabel() + ' ' + text;
@@ -180,6 +204,27 @@
 
   function showTradeHint(text) {
     selectedStockInfo.textContent = text;
+  }
+
+  function updateGuruBribeTip() {
+    guruBribeTip.textContent =
+      '把股神灌醉，' +
+      guruBribeCost.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 });
+  }
+
+  function buyGuruHint() {
+    if (!gameStarted) return;
+    if (cash < guruBribeCost) {
+      showTradeHint('现金不足，无法请股神喝酒（需要 ' + formatMoney(guruBribeCost) + '）');
+      return;
+    }
+    cash -= guruBribeCost;
+    const hint = GURU_HINTS[Math.floor(Math.random() * GURU_HINTS.length)];
+    const body = hint.endsWith('。') ? hint : hint + '。';
+    addEvent('hint', '【股神的暗示】：' + body);
+    guruBribeCost *= 2;
+    updateGuruBribeTip();
+    renderAccount();
   }
 
   function createEmptyTickCtx() {
@@ -856,6 +901,8 @@
     gameShell.hidden = false;
 
     tradingDay = 0;
+    guruBribeCost = GURU_BRIBE_BASE;
+    updateGuruBribeTip();
     initListedStocks();
 
     startWorldEvent(pickRandomWorldEvent());
@@ -874,7 +921,9 @@
   buyBtn.addEventListener('click', buy);
   sellBtn.addEventListener('click', sell);
   nextDayBtn.addEventListener('click', advanceTradingDay);
+  guruBribe.addEventListener('click', buyGuruHint);
 
+  updateGuruBribeTip();
   initLotButtons();
   window.addEventListener('resize', onResize);
 })();
