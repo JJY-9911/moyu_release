@@ -19,6 +19,7 @@
   const LOT_SIZES = [1, 10, 100, 1000, 10000];
   const LISTED_COUNT = 10;
   const CHART_STEPS = 120;
+  const PREVIEW_STEPS = 10;
   const INITIAL_CASH = 10000;
   const WORLD_EVENT_DAYS_MIN = 1;
   const WORLD_EVENT_DAYS_MAX = 5;
@@ -33,10 +34,10 @@
     '【禁术暴走】是好消息...',
     '【炼金爆炸】非常严重，如果持股，亏本也要卖出去...',
     '【魔力涌动】是好消息...',
-    '城建板块一般不会连续下跌超过2次，再观望观望...',
+    '城建板块一般不会连续下跌或上涨超过2次，再观望观望...',
     '炼金行业的波动很大，不过如果你想赌一把的话...',
     '魔药行业适合新手碰碰运气...',
-    '军事可以说一本万利，这世界怎么了...',
+    '裁军的后果非常严重，如果涨了尽快卖掉...',
     '矿产受世界影响是最小的，如果你不关注新闻，可以试试...',
     '餐饮行业长久不衰，别害怕...',
     '魔导板块是最危险的，也是最诱人的，如果你想一步登天...',
@@ -79,7 +80,7 @@
   });
 
   function randomStartPrice() {
-    return Math.floor(Math.random() * 40) + 1;
+    return Math.floor(Math.random() * 39) + 2;
   }
 
   let listed = [];
@@ -87,31 +88,36 @@
   let cash = INITIAL_CASH;
   const holdings = new Map();
   let lotSize = 1;
+  let sellAllBtn = null;
   let gameStarted = false;
   let tradingDay = 0;
 
   /** @type {{ world: object, tickCtx: object, daysLeft: number } | null} */
   let activeWorld = null;
   let guruBribeCost = GURU_BRIBE_BASE;
+  /** @type {number[]} */
+  let guruHintPool = [];
+  let lastGuruHintIdx = -1;
 
-  function collatzNextInt(n) {
-    if (n % 2 === 0) return n / 2;
-    return 3 * n + 1;
+  function priceSeqNext(n) {
+    if (isEven(n)) return roundPrice(n / 2);
+    return roundPrice(3 * n + 1);
   }
 
   function computeCollatzPath(startPrice) {
-    const path = [startPrice];
-    let n = startPrice;
-    while (n > 1) {
-      n = collatzNextInt(n);
+    const path = [roundPrice(startPrice)];
+    let n = path[0];
+    let guard = 0;
+    while (n > 1 && guard++ < 500) {
+      n = priceSeqNext(n);
       path.push(n);
     }
     return path;
   }
 
-  function getPreviewHalf(path) {
-    const len = Math.max(2, Math.ceil(path.length / 2));
-    return path.slice(0, len);
+  function getPreviewSteps(path) {
+    const len = Math.min(path.length, PREVIEW_STEPS + 1);
+    return path.slice(0, Math.max(2, len));
   }
 
   function roundPrice(n) {
@@ -119,7 +125,9 @@
   }
 
   function isEven(n) {
-    return Math.round(n * 10) % 2 === 0;
+    const tenths = Math.round(n * 10);
+    if (tenths % 10 === 0) return (tenths / 10) % 2 === 0;
+    return tenths % 2 === 0;
   }
 
   function forceEven(n) {
@@ -156,19 +164,21 @@
   function setupListedEntry(stock) {
     const startPrice = randomStartPrice();
     const path = computeCollatzPath(startPrice);
-    const preview = getPreviewHalf(path);
+    const preview = getPreviewSteps(path);
     const last = preview[preview.length - 1];
     return {
       id: stock.id,
       sector: stock.sector,
+      collatzResult: last,
       price: last,
       prevPrice: last,
       history: preview.slice(),
       consecutiveUp: 0,
       depletion: 0,
       consecutiveEven: 0,
+      consecutiveOdd: 0,
       freezeTicks: 0,
-      veinTicks: 0,
+      expansionPending: null,
       forceDelist: false,
       previewMode: true,
     };
@@ -212,6 +222,22 @@
       guruBribeCost.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 });
   }
 
+  function refillGuruHintPool() {
+    guruHintPool = GURU_HINTS.map((_, i) => i);
+    shuffle(guruHintPool);
+    if (guruHintPool.length > 1 && guruHintPool[guruHintPool.length - 1] === lastGuruHintIdx) {
+      const swapWith = Math.floor(Math.random() * (guruHintPool.length - 1));
+      const last = guruHintPool.length - 1;
+      [guruHintPool[last], guruHintPool[swapWith]] = [guruHintPool[swapWith], guruHintPool[last]];
+    }
+  }
+
+  function pickGuruHint() {
+    if (guruHintPool.length === 0) refillGuruHintPool();
+    lastGuruHintIdx = guruHintPool.pop();
+    return GURU_HINTS[lastGuruHintIdx];
+  }
+
   function buyGuruHint() {
     if (!gameStarted) return;
     if (cash < guruBribeCost) {
@@ -219,7 +245,7 @@
       return;
     }
     cash -= guruBribeCost;
-    const hint = GURU_HINTS[Math.floor(Math.random() * GURU_HINTS.length)];
+    const hint = pickGuruHint();
     const body = hint.endsWith('。') ? hint : hint + '。';
     addEvent('hint', '【股神的暗示】：' + body);
     guruBribeCost *= 2;
@@ -311,8 +337,16 @@
     return text + '，影响：' + impactText + '。';
   }
 
+  const WORLD_EVENT_BY_ID = Object.fromEntries(WORLD_EVENTS.map((e) => [e.id, e]));
+
   function pickRandomWorldEvent() {
-    return WORLD_EVENTS[Math.floor(Math.random() * WORLD_EVENTS.length)];
+    if (Math.random() >= 0.5) return null;
+    const r = Math.random();
+    if (r < 0.6) return WORLD_EVENT_BY_ID.peaceful;
+    if (r < 0.7) return WORLD_EVENT_BY_ID.magicTide;
+    if (r < 0.8) return WORLD_EVENT_BY_ID.kingdomWar;
+    if (r < 0.9) return WORLD_EVENT_BY_ID.dragonSiege;
+    return WORLD_EVENT_BY_ID.worldPlague;
   }
 
   function pickRandomWorldEventDays() {
@@ -323,6 +357,11 @@
   }
 
   function startWorldEvent(world) {
+    if (!world) {
+      activeWorld = null;
+      updateWorldDisplay();
+      return;
+    }
     activeWorld = {
       world,
       tickCtx: buildTickCtxFromWorld(world),
@@ -345,177 +384,191 @@
     tradingDayDisplay.textContent = tradingDay > 0 ? '第 ' + tradingDay + ' 交易日' : '第 0 日 · 上市观望';
   }
 
-  function applyForceDrop(stock) {
-    let n = stock.price;
-    if (!isEven(n)) n = roundPrice(n - 1);
-    stock.price = roundPrice(n / 2);
+  function applyForceDropToCollatz(stock) {
+    let n = stock.collatzResult;
+    if (isEven(n)) n = roundPrice(n - 1);
+    stock.collatzResult = roundPrice(n / 2);
   }
 
-  function createTickMods() {
-    return {
-      forceEven: false,
-      odd: null,
-      even: null,
-      multiply: null,
-      divide: null,
-      setPrice: null,
-      skipCollatz: false,
-    };
-  }
-
-  function mergeMods(mods, patch) {
-    Object.assign(mods, patch);
-  }
-
-  function applyDirectMods(stock, mods) {
-    if (mods.setPrice != null) {
-      stock.price = roundPrice(mods.setPrice);
-      return true;
-    }
-    if (mods.multiply != null) {
-      stock.price = roundPrice(stock.price * mods.multiply);
-      return !!mods.skipCollatz;
-    }
-    if (mods.divide != null) {
-      stock.price = roundPrice(stock.price / mods.divide);
-      return !!mods.skipCollatz;
-    }
-    return false;
-  }
-
-  function applyCollatzWithMods(stock, mods) {
+  /** @returns {{ applied: boolean, even: boolean }} */
+  function applyCollatzStep(stock, preCollatz) {
     if (stock.freezeTicks > 0) {
       stock.freezeTicks--;
-      return;
+      return { applied: false, even: false };
     }
 
-    let n = stock.price;
-    if (mods.forceEven) n = forceEven(n);
-
-    if (stock.veinTicks > 0) {
-      if (isEven(n)) n = roundPrice(n - 1);
-      stock.veinTicks--;
+    if (stock.expansionPending) {
+      const pending = stock.expansionPending;
+      stock.expansionPending = null;
+      const n = stock.collatzResult;
+      stock.consecutiveEven = 0;
+      stock.consecutiveOdd = 0;
+      if (pending === 'forceOdd') {
+        stock.collatzResult = roundPrice(3 * n + 1);
+        return { applied: true, even: false };
+      }
+      if (pending === 'forceEven') {
+        stock.collatzResult = roundPrice(n / 2);
+        return { applied: true, even: true };
+      }
     }
+
+    let n = stock.collatzResult;
+    if (preCollatz.forceEven) n = forceEven(n);
+    if (preCollatz.forceOdd && isEven(n)) n = roundPrice(n - 1);
 
     const even = isEven(n);
     if (even) {
       if (stock.sector === 'construction') {
+        stock.consecutiveOdd = 0;
         stock.consecutiveEven++;
         if (stock.consecutiveEven >= 2) {
           stock.freezeTicks = 2;
           stock.consecutiveEven = 0;
-          return;
+          stock.expansionPending = 'forceOdd';
+          return { applied: false, even: true };
         }
       }
-      if (mods.even) stock.price = roundPrice(mods.even(n));
-      else stock.price = roundPrice(n / 2);
-    } else {
-      stock.consecutiveEven = 0;
-      if (mods.odd) stock.price = roundPrice(mods.odd(n));
-      else stock.price = roundPrice(3 * n + 1);
+      stock.collatzResult = roundPrice(n / 2);
+      return { applied: true, even: true };
+    }
+
+    if (stock.sector === 'construction') {
+      stock.consecutiveOdd++;
+      if (stock.consecutiveOdd >= 3) {
+        stock.freezeTicks = 2;
+        stock.consecutiveOdd = 0;
+        stock.expansionPending = 'forceEven';
+        return { applied: false, even: false };
+      }
+    }
+
+    stock.consecutiveEven = 0;
+    stock.collatzResult = roundPrice(3 * n + 1);
+    return { applied: true, even: false };
+  }
+
+  function applyStablePhase(stock, stepInfo, tick) {
+    if (stock.sector === 'medicine' && stock.consecutiveUp >= 3) {
+      tick.marketModifier *= 0.2;
+    }
+    if (stock.sector === 'mining' && stock.depletion >= 3) {
+      tick.marketModifier *= 0.05;
+    }
+    if (stock.sector === 'food' && stepInfo.applied && stepInfo.even) {
+      tick.marketModifier *= 1.1;
     }
   }
 
-  function applyAccidentalEvent(stock, eventId, mods) {
+  function applyAccidentalEvent(stock, eventId, stepInfo, tick) {
     switch (eventId) {
       case 'breakthrough':
-        mergeMods(mods, { odd: (n) => 4 * n + 1 });
+        tick.marketModifier *= 1.1;
         break;
       case 'mutation':
-        mergeMods(mods, { odd: (n) => 5 * n + 1, even: (n) => n / 4 });
+        if (stepInfo.applied && stepInfo.even) {
+          tick.marketModifier *= 0.4;
+        } else if (stepInfo.applied) {
+          tick.marketModifier *= 1.1;
+        }
         break;
       case 'explosion':
-        mergeMods(mods, { setPrice: 1, skipCollatz: true });
         stock.forceDelist = true;
+        tick.explosion = true;
         break;
       case 'war':
-        mergeMods(mods, { odd: (n) => 6 * n + 1 });
+        tick.marketModifier *= 4;
         break;
       case 'peace':
-        mergeMods(mods, { even: (n) => roundPrice(n / 3) });
+        tick.marketModifier *= 0.01;
         break;
       case 'vein':
-        stock.veinTicks = 2;
+        tick.marketModifier *= 1.15;
+        break;
+      case 'grainTax':
+        tick.marketModifier *= 0.01;
         break;
       case 'plague':
-        mergeMods(mods, { forceEven: true });
+        if (stepInfo.applied && stepInfo.even) {
+          tick.marketModifier *= 0.05;
+        }
         break;
       case 'manaSurge':
-        mergeMods(mods, { odd: (n) => 5 * n + 1 });
+        tick.marketModifier *= 1.2;
         break;
       case 'manaDry':
-        mergeMods(mods, { even: (n) => n / 4 });
+        tick.marketModifier *= 0.25;
         break;
       case 'forbidden':
-        mergeMods(mods, { multiply: 5, skipCollatz: true });
+        tick.marketModifier *= 2;
         break;
       case 'bubble':
-        mergeMods(mods, { divide: 4, skipCollatz: true });
+        tick.marketModifier *= 0.05;
         break;
       case 'rareBeast':
-        mergeMods(mods, { multiply: 5, skipCollatz: true });
+        tick.marketModifier *= 2;
         break;
       case 'beastTide':
-        mergeMods(mods, { divide: 5, skipCollatz: true });
+        tick.marketModifier *= 0.05;
         break;
       default:
         break;
     }
   }
 
-  function chainEven(mods, fn) {
-    const prev = mods.even;
-    mods.even = (n) => fn(prev ? prev(n) : n);
+  function applyLinkedEvent(stock, eventId, stepInfo, tick) {
+    switch (eventId) {
+      case 'tradeBoom':
+        tick.marketModifier *= 1.2;
+        break;
+      case 'roadBlock':
+        tick.marketModifier *= 0.04;
+        break;
+      default:
+        break;
+    }
   }
 
-  function applyStableMods(stock, mods) {
-    if (stock.sector === 'medicine' && stock.consecutiveUp >= 3) {
-      chainEven(mods, (n) => roundPrice(n / 3));
+  function syncPriceFromCollatz(stock, tick) {
+    if (tick.explosion) {
+      stock.collatzResult = 1;
+      stock.price = 1;
+      return;
     }
-    if (stock.sector === 'mining' && stock.depletion >= 3) {
-      chainEven(mods, (n) => roundPrice(n / 5));
-    }
-    if (stock.sector === 'food') {
-      mods.even = (n) => roundPrice(n * 0.75);
-    }
-    if (stock.sector === 'trade' && mods._tradeBoom) {
-      mods.odd = (n) => 4 * n + 1;
-    }
-    if (stock.sector === 'trade' && mods._roadBlock) {
-      chainEven(mods, (n) => roundPrice(n / 4));
-    }
+    stock.price = roundPrice(stock.collatzResult * tick.marketModifier);
   }
 
   function processStockTick(stock, tickCtx) {
     stock.prevPrice = stock.price;
     stock.forceDelist = false;
     stock.previewMode = false;
-    const mods = createTickMods();
+
+    if (stock.collatzResult == null) stock.collatzResult = stock.price;
+
+    const tick = {
+      marketModifier: 1,
+      explosion: false,
+    };
+
+    const stepInfo = applyCollatzStep(stock, { forceEven: false, forceOdd: false });
+
+    applyStablePhase(stock, stepInfo, tick);
 
     if (tickCtx.constructionForceDrop && stock.sector === 'construction') {
-      applyForceDrop(stock);
+      applyForceDropToCollatz(stock);
     }
 
-    const sectorEvents = tickCtx.sectorEvents.get(stock.sector);
-    if (sectorEvents) {
-      sectorEvents.forEach((eventId) => applyAccidentalEvent(stock, eventId, mods));
+    const accidental = tickCtx.sectorEvents.get(stock.sector);
+    if (accidental) {
+      accidental.forEach((eventId) => applyAccidentalEvent(stock, eventId, stepInfo, tick));
     }
 
     const linked = tickCtx.linkedEvents.get(stock.sector);
     if (linked) {
-      linked.forEach((eventId) => {
-        if (eventId === 'tradeBoom') mods._tradeBoom = true;
-        if (eventId === 'roadBlock') mods._roadBlock = true;
-        applyAccidentalEvent(stock, eventId, mods);
-      });
+      linked.forEach((eventId) => applyLinkedEvent(stock, eventId, stepInfo, tick));
     }
 
-    if (applyDirectMods(stock, mods)) {
-      return finishStockStep(stock);
-    }
-
-    applyStableMods(stock, mods);
-    applyCollatzWithMods(stock, mods);
+    syncPriceFromCollatz(stock, tick);
     return finishStockStep(stock);
   }
 
@@ -556,7 +609,7 @@
   function advanceTradingDay() {
     if (!gameStarted) return;
 
-    if (activeWorld && activeWorld.daysLeft === 0) {
+    if (!activeWorld || activeWorld.daysLeft === 0) {
       startWorldEvent(pickRandomWorldEvent());
     }
 
@@ -608,11 +661,9 @@
     const meta = stockPool.get(id);
     if (!stock || !meta) return;
 
-    buyBtn.disabled = false;
-    sellBtn.disabled = false;
-    updateSelectedInfo();
-    renderChart();
     renderStockTable();
+    renderChart();
+    renderAccount();
   }
 
   function updateSelectedInfo() {
@@ -679,6 +730,25 @@
     renderAll();
   }
 
+  function sellAll() {
+    if (selectedId == null) return;
+    const stock = getListedStock(selectedId);
+    const meta = stockPool.get(selectedId);
+    if (!stock || !meta) return;
+
+    const owned = getHolding(selectedId);
+    if (owned <= 0) {
+      showTradeHint('未持有该股票，无法全抛');
+      return;
+    }
+
+    const revenue = stock.price * owned;
+    cash += revenue;
+    holdings.delete(selectedId);
+    showTradeHint('已全抛 ' + meta.name + ' ' + owned + ' 股，收入 ' + formatMoney(revenue));
+    renderAll();
+  }
+
   function renderStockTable() {
     stockTableBody.innerHTML = '';
     listed.forEach((stock) => {
@@ -729,6 +799,7 @@
       const stock = getListedStock(selectedId);
       buyBtn.disabled = !stock || cash < stock.price * lotSize;
       sellBtn.disabled = !stock || getHolding(selectedId) < lotSize;
+      if (sellAllBtn) sellAllBtn.disabled = !stock || getHolding(selectedId) <= 0;
     }
   }
 
@@ -750,7 +821,7 @@
       stock.prevPrice && !stock.previewMode
         ? ((stock.price - stock.prevPrice) / stock.prevPrice) * 100
         : 0;
-    const previewTag = stock.previewMode ? ' · 半程预览' : '';
+    const previewTag = stock.previewMode ? ' · ' + PREVIEW_STEPS + '步预览' : '';
     chartTitle.textContent = meta.name + (sector ? ' · ' + sector.name : '') + previewTag;
     chartPrice.textContent = stock.previewMode
       ? '¥' + stock.price + ' · 观望'
@@ -868,7 +939,7 @@
       ctx.fillStyle = '#63b3ed';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('考拉兹半程预览 · 点击「下一交易日」开始交易', xAt(0) + 6, pad.top + 14);
+      ctx.fillText('考拉兹' + PREVIEW_STEPS + '步预览 · 点击「下一交易日」开始交易', xAt(0) + 6, pad.top + 14);
     }
   }
 
@@ -892,6 +963,14 @@
       });
       lotBtns.appendChild(btn);
     });
+
+    sellAllBtn = document.createElement('button');
+    sellAllBtn.type = 'button';
+    sellAllBtn.className = 'lot-btn lot-btn-sell-all';
+    sellAllBtn.textContent = '全抛';
+    sellAllBtn.disabled = true;
+    sellAllBtn.addEventListener('click', sellAll);
+    lotBtns.appendChild(sellAllBtn);
   }
 
   function startGame() {
@@ -902,6 +981,8 @@
 
     tradingDay = 0;
     guruBribeCost = GURU_BRIBE_BASE;
+    lastGuruHintIdx = -1;
+    refillGuruHintPool();
     updateGuruBribeTip();
     initListedStocks();
 

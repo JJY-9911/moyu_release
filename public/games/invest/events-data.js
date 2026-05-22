@@ -37,6 +37,7 @@
     vein: '发现矿脉',
     depletion: '资源枯竭',
     livelihood: '民生需求',
+    grainTax: '征收粮食',
     plague: '瘟疫事件',
     manaSurge: '魔力涌动',
     manaDry: '魔力枯竭',
@@ -68,6 +69,7 @@
       sectorEvents: [
         { sector: 'mercenary', event: 'war' },
         { sector: 'mining', event: 'vein' },
+        { sector: 'food', event: 'grainTax' },
       ],
     },
     {
@@ -79,6 +81,7 @@
         { sector: 'mercenary', event: 'war' },
         { sector: 'magic', event: 'forbidden' },
         { sector: 'alchemy', event: 'explosion' },
+        { sector: 'food', event: 'grainTax' },
       ],
     },
     {

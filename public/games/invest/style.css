@@ -392,6 +392,22 @@ body {
   color: #fff;
 }
 
+.lot-btn-sell-all {
+  border-color: rgba(252, 129, 129, 0.35);
+  color: #feb2b2;
+}
+
+.lot-btn-sell-all:hover:not(:disabled) {
+  border-color: #fc8181;
+  background: rgba(252, 129, 129, 0.15);
+  color: #fff;
+}
+
+.lot-btn-sell-all:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .trade-btns {
   display: flex;
   gap: 8px;

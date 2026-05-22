@@ -35,3 +35,24 @@ html, body {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
+
+.lab-link {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 100;
+  padding: 5px 12px;
+  background: rgba(40, 30, 60, 0.75);
+  border: 1px solid rgba(200, 160, 80, 0.35);
+  border-radius: 6px;
+  color: #e8c86a;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.lab-link:hover {
+  background: rgba(80, 60, 100, 0.85);
+  color: #fff;
+}

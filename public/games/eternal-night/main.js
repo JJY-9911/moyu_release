@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  var LAB_MODE = !!window.ETERNAL_NIGHT_LAB;
+
   // ===================== CONSTANTS =====================
   var TILE = 16;          // tile size in pixels
   var MAP_W = 80;         // map width in tiles
@@ -8,6 +10,8 @@
   var VIEW_W = 800;       // canvas width
   var VIEW_H = 600;       // canvas height (4:3)
   var SCALE = 2;          // render scale (16px tile → 32px on screen)
+  /** 所有单位位移速度（英雄 / 怪物 / 飞刀 / 圣水下落 / 环绕武器转速 / 宝石吸附 / 受击侧移） */
+  var GAME_MOVE_SPEED_MULT = 0.7;
   var GRASS_SRC_PX = 128;
   var GRASS_DRAW_MULT = 1.8; // 128px art × mult → patch size; draws edge-to-edge (no gaps)
 
@@ -122,6 +126,7 @@
       armor: 0,
       expMult: 1.1,
       startWeapon: 'bible',
+      bibleDamage: 2,
       bibleMult: 1.0,
       bibleDisp: 24,
       bibleOrbit: 72,
@@ -183,6 +188,10 @@
     canvas.height = VIEW_H;
     var maxW = window.innerWidth;
     var maxH = window.innerHeight;
+    if (LAB_MODE && canvas.parentElement) {
+      maxW = canvas.parentElement.clientWidth;
+      maxH = canvas.parentElement.clientHeight;
+    }
     var scale = Math.min(maxW / VIEW_W, maxH / VIEW_H);
     canvas.style.width  = Math.floor(VIEW_W * scale) + 'px';
     canvas.style.height = Math.floor(VIEW_H * scale) + 'px';
@@ -445,62 +454,70 @@
 
   function getDamageMult() {
     if (!isWarrior() && !isWizard()) return 1;
-    return 1 + Math.min(UPGRADE_CAP_DAMAGE, playerUpgrades.damageBonus || 0) / 100;
+    var dmg = playerUpgrades.damageBonus || 0;
+    if (!LAB_MODE) dmg = Math.min(UPGRADE_CAP_DAMAGE, dmg);
+    return 1 + dmg / 100;
   }
 
   function getBibleDamage() {
     var entry = HERO_ROSTER[hero.rosterIndex];
-    var base = 1 + Math.floor((level - 1) / 5);
-    return Math.max(1, Math.floor(base * (entry.bibleMult || 1) * getDamageMult()));
+    var baseDmg = entry.bibleDamage != null ? entry.bibleDamage : 1;
+    var base = baseDmg + Math.floor((level - 1) / 5);
+    return Math.max(1, Math.round(base * (entry.bibleMult || 1) * getDamageMult()));
   }
 
   function getSwordDamage() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = 1 + Math.floor((level - 1) / 5);
-    return Math.max(1, Math.floor(base * entry.swordMult * getDamageMult()));
+    return Math.max(1, Math.round(base * entry.swordMult * getDamageMult()));
   }
 
   function getKnifeDamage() {
-    return Math.max(1, Math.floor(HERO_ROSTER[hero.rosterIndex].knifeDamage * getDamageMult()));
+    return Math.max(1, Math.round(HERO_ROSTER[hero.rosterIndex].knifeDamage * getDamageMult()));
   }
 
   function getHolyWaterDamage() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = 1 + Math.floor((level - 1) / 5);
-    return Math.max(1, Math.floor(base * (entry.holyWaterMult || 1) * getDamageMult()));
+    return Math.max(1, Math.round(base * (entry.holyWaterMult || 1) * getDamageMult()));
+  }
+
+  function cappedUpgradeBonus(val, cap) {
+    val = val || 0;
+    return LAB_MODE ? val : Math.min(cap, val);
   }
 
   function getSwordCastSpeedMult() {
     if (!isWarrior()) return 1;
-    var sword = Math.min(UPGRADE_CAP_CAST_SPEED, playerUpgrades.castSpeedBonus || 0);
-    var global = Math.min(UPGRADE_CAP_GLOBAL_CAST, playerUpgrades.globalCastSpeedBonus || 0);
+    var sword = cappedUpgradeBonus(playerUpgrades.castSpeedBonus, UPGRADE_CAP_CAST_SPEED);
+    var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
     return 1 + (sword + global) / 100;
   }
 
   function getKnifeCastSpeedMult() {
     if (!isWarrior()) return 1;
-    var knife = Math.min(UPGRADE_CAP_KNIFE_CAST, playerUpgrades.knifeCastSpeedBonus || 0);
-    var global = Math.min(UPGRADE_CAP_GLOBAL_CAST, playerUpgrades.globalCastSpeedBonus || 0);
+    var knife = cappedUpgradeBonus(playerUpgrades.knifeCastSpeedBonus, UPGRADE_CAP_KNIFE_CAST);
+    var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
     return 1 + (knife + global) / 100;
   }
 
   function getBibleCastSpeedMult() {
     if (!isWizard()) return 1;
-    var bible = Math.min(UPGRADE_CAP_BIBLE_CAST, playerUpgrades.bibleCastSpeedBonus || 0);
-    var global = Math.min(UPGRADE_CAP_GLOBAL_CAST, playerUpgrades.globalCastSpeedBonus || 0);
+    var bible = cappedUpgradeBonus(playerUpgrades.bibleCastSpeedBonus, UPGRADE_CAP_BIBLE_CAST);
+    var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
     return 1 + (bible + global) / 100;
   }
 
   function getHolyWaterCastSpeedMult() {
     if (!isWizard()) return 1;
-    var hw = Math.min(UPGRADE_CAP_HOLY_WATER_CAST, playerUpgrades.holyWaterCastSpeedBonus || 0);
-    var global = Math.min(UPGRADE_CAP_GLOBAL_CAST, playerUpgrades.globalCastSpeedBonus || 0);
+    var hw = cappedUpgradeBonus(playerUpgrades.holyWaterCastSpeedBonus, UPGRADE_CAP_HOLY_WATER_CAST);
+    var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
     return 1 + (hw + global) / 100;
   }
 
   function getKnifeCooldown() {
     if (!isWarrior()) return 1500;
-    return Math.max(800, Math.floor(2000 / getKnifeCastSpeedMult()));
+    return Math.max(800, Math.round(2000 / getKnifeCastSpeedMult()));
   }
 
   function getHeroRosterEntry() {
@@ -534,6 +551,12 @@
   }
 
   function triggerHeroDeath() {
+    if (LAB_MODE) {
+      hero.hp = hero.maxHp;
+      hero.dead = false;
+      hero.invincibleTimer = 0;
+      return;
+    }
     if (hero.dead) return;
     hero.dead = true;
     hero.deathAnimFrame = 0;
@@ -592,7 +615,7 @@
   function refreshHeroMoveSpeed() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var mult = (isWarrior() || isWizard()) ? playerUpgrades.speedMult : 1;
-    hero.speed = entry.speed * mult;
+    hero.speed = entry.speed * mult * GAME_MOVE_SPEED_MULT;
   }
 
   // Spell Brigade–style: additive % totals; global upgrades use lower tiers than single-skill
@@ -681,8 +704,14 @@
   }
 
   function applyUpgradeMultipliers() {
-    playerUpgrades.speedMult = 1 + Math.min(UPGRADE_CAP_SPEED, playerUpgrades.speedBonus) / 100;
-    playerUpgrades.swordSizeMult = 1 + Math.min(UPGRADE_CAP_SWORD_SIZE, playerUpgrades.swordSizeBonus) / 100;
+    var spd = playerUpgrades.speedBonus || 0;
+    var sz = playerUpgrades.swordSizeBonus || 0;
+    if (!LAB_MODE) {
+      spd = Math.min(UPGRADE_CAP_SPEED, spd);
+      sz = Math.min(UPGRADE_CAP_SWORD_SIZE, sz);
+    }
+    playerUpgrades.speedMult = 1 + spd / 100;
+    playerUpgrades.swordSizeMult = 1 + sz / 100;
   }
 
   function isStatUpgradeCapped(id) {
@@ -1090,7 +1119,10 @@
       walkTimer: 0,
       bobOffset: 0,
       hitCooldown: 0,
-      slowTimer: 0,
+      hitFlashTimer: 0,
+      knockbackRemain: 0,
+      knockbackDx: 0,
+      knockbackDy: 0,
       facingLeft: false,
       summoning: false,
       summonTimer: opts.summonTimer != null ? opts.summonTimer : 0,
@@ -1102,8 +1134,43 @@
       bossFlyCd: opts.bossFlyCd != null ? opts.bossFlyCd : (BOSS_FLY_COOLDOWN_MIN + Math.random() * (BOSS_FLY_COOLDOWN_MAX - BOSS_FLY_COOLDOWN_MIN)),
       bossFlying: false,
       bossFlyDur: 0,
-      bossFlyTime: 0
+      bossFlyTime: 0,
+      labDummy: !!opts.labDummy
     };
+  }
+
+  var labRespawnQueue = [];
+
+  function scheduleLabRespawn(typeIndex, x, y) {
+    labRespawnQueue.push({ typeIndex: typeIndex, x: x, y: y, timer: 450 });
+  }
+
+  function updateLabRespawns(dt) {
+    for (var ri = labRespawnQueue.length - 1; ri >= 0; ri--) {
+      labRespawnQueue[ri].timer -= dt;
+      if (labRespawnQueue[ri].timer <= 0) {
+        var slot = labRespawnQueue[ri];
+        labRespawnQueue.splice(ri, 1);
+        var nm = createMonster(slot.typeIndex, slot.x, slot.y, {
+          labDummy: true,
+          spawning: false,
+          bossAnim: 'idle'
+        });
+        nm.speed = 0;
+        monsters.push(nm);
+      }
+    }
+  }
+
+  function removeDeadMonster(index) {
+    var mon = monsters[index];
+    if (LAB_MODE && mon.labDummy) {
+      scheduleLabRespawn(mon.type, mon.x, mon.y);
+      monsters.splice(index, 1);
+      return;
+    }
+    onMonsterKill(mon);
+    monsters.splice(index, 1);
   }
 
   function onBossDefeated() {
@@ -1154,6 +1221,7 @@
   }
 
   function addExp(amount) {
+    if (LAB_MODE) return;
     var entry = HERO_ROSTER[hero.rosterIndex];
     var gained = Math.floor(amount * (entry.expMult || 1));
     exp += gained;
@@ -1192,21 +1260,21 @@
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = entry.bibleRpm || 40;
     if (!isWizard()) return base;
-    return base * getBibleCastSpeedMult();
+    return base * getBibleCastSpeedMult() * GAME_MOVE_SPEED_MULT;
   }
 
   function getBibleDuration() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = entry.bibleDuration != null ? entry.bibleDuration : 3000;
     if (!isWizard()) return base;
-    return Math.max(1200, Math.floor(base / getBibleCastSpeedMult()));
+    return Math.max(1200, Math.round(base / getBibleCastSpeedMult()));
   }
 
   function getBibleCooldown() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = entry.bibleCooldown != null ? entry.bibleCooldown : 3000;
     if (!isWizard()) return base;
-    return Math.max(1200, Math.floor(base / getBibleCastSpeedMult()));
+    return Math.max(1200, Math.round(base / getBibleCastSpeedMult()));
   }
 
   function getBibleHitDelay() {
@@ -1225,15 +1293,15 @@
   function getHolyWaterCooldown() {
     var base = getHeroRosterEntry().holyWaterCooldown || 2600;
     if (!isWizard()) return base;
-    return Math.max(900, Math.floor(base / getHolyWaterCastSpeedMult()));
+    return Math.max(900, Math.round(base / getHolyWaterCastSpeedMult()));
   }
 
   function getHolyWaterFallSpeed() {
-    return getHeroRosterEntry().holyWaterFallSpeed || 4.2;
+    return (getHeroRosterEntry().holyWaterFallSpeed || 4.2) * GAME_MOVE_SPEED_MULT;
   }
 
   function getHolyWaterSpinRadPerMs() {
-    var rps = getHeroRosterEntry().holyWaterSpinRps || 2.5;
+    var rps = (getHeroRosterEntry().holyWaterSpinRps || 2.5) * GAME_MOVE_SPEED_MULT;
     return rps * (2 * Math.PI) / 1000;
   }
 
@@ -1253,19 +1321,19 @@
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = entry.greatswordDisp || SWORD_DISP;
     if (isWarrior()) base *= playerUpgrades.swordSizeMult;
-    return Math.floor(base);
+    return Math.round(base);
   }
 
   function getGreatswordOrbit() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var base = entry.greatswordOrbit || SWORD_ORBIT_R;
     if (isWarrior()) base *= Math.sqrt(playerUpgrades.swordSizeMult);
-    return Math.floor(base);
+    return Math.round(base);
   }
 
   function getSwordRpm() {
-    if (!isWarrior()) return SWORD_RPM;
-    return SWORD_RPM * getSwordCastSpeedMult();
+    if (!isWarrior()) return SWORD_RPM * GAME_MOVE_SPEED_MULT;
+    return SWORD_RPM * getSwordCastSpeedMult() * GAME_MOVE_SPEED_MULT;
   }
 
   // Item slots + warrior upgrades
@@ -1739,15 +1807,66 @@
 
   var MONSTER_DISP = 32;   // default display size (overridden per type)
   var MONSTER_HIT_COOLDOWN = 900;
-  var MONSTER_SLOW_DURATION = 480;
+  /** 受击闪红，与玩家 invincibleTimer 一致 */
+  var MONSTER_HIT_FLASH_MS = 500;
+  /** 受击侧移总距离（屏幕像素 → 世界坐标） */
+  var MONSTER_HIT_KNOCKBACK_DIST = 20 / SCALE;
+  /** 受击侧移速度（所有敌人统一，与追击 spd 同单位：每帧世界坐标） */
+  var MONSTER_HIT_KNOCKBACK_SPEED = 0.28;
 
   function isMonsterBoss(m) {
     var mt = MONSTER_TYPES[m.type];
     return !!(mt && mt.key === 'boss');
   }
 
-  function applyMonsterSlow(m) {
-    if (!isMonsterBoss(m)) m.slowTimer = MONSTER_SLOW_DURATION;
+  function pickMonsterKnockbackDir(m) {
+    var mx = m.x + TILE / 2;
+    var my = m.y + TILE / 2;
+    var hx = hero.x + TILE / 2;
+    var hy = hero.y + TILE / 2;
+    var toHx = hx - mx;
+    var toHy = hy - my;
+    var toDist = Math.sqrt(toHx * toHx + toHy * toHy);
+    var toHxN = 0;
+    var toHyN = 0;
+    if (toDist > 0.01) {
+      toHxN = toHx / toDist;
+      toHyN = toHy / toDist;
+    }
+    var kdx = 0;
+    var kdy = 0;
+    var guard = 0;
+    while (guard++ < 16) {
+      var ang = Math.random() * Math.PI * 2;
+      kdx = Math.cos(ang);
+      kdy = Math.sin(ang);
+      if (toDist <= 0.01 || kdx * toHxN + kdy * toHyN <= 0) break;
+    }
+    if (toDist > 0.01 && kdx * toHxN + kdy * toHyN > 0) {
+      kdx = -toHxN;
+      kdy = -toHyN;
+    }
+    return { dx: kdx, dy: kdy };
+  }
+
+  function applyMonsterHitKnockback(m) {
+    if (LAB_MODE && m.labDummy) return;
+    if (isMonsterBoss(m)) return;
+    var dir = pickMonsterKnockbackDir(m);
+    m.knockbackDx = dir.dx;
+    m.knockbackDy = dir.dy;
+    m.knockbackRemain = MONSTER_HIT_KNOCKBACK_DIST;
+  }
+
+  function updateMonsterKnockback(m) {
+    if (!m.knockbackRemain || m.knockbackRemain <= 0) return false;
+    var step = Math.min(m.knockbackRemain, MONSTER_HIT_KNOCKBACK_SPEED * GAME_MOVE_SPEED_MULT);
+    m.x += m.knockbackDx * step;
+    m.y += m.knockbackDy * step;
+    m.knockbackRemain -= step;
+    if (m.knockbackRemain < 0.001) m.knockbackRemain = 0;
+    clampMonsterPos(m);
+    return m.knockbackRemain > 0;
   }
 
   var MAX_SEEKERS = 12;
@@ -1867,12 +1986,12 @@
         // Only start attracting after lock expires AND hero walks into range
         if (g.attractLockTimer <= 0 && dist < GEM_ATTRACT_RANGE) {
           g.attracted = true;
-          g.attractSpeed = 0.8; // start slow — VS feel
+          g.attractSpeed = 0.8 * GAME_MOVE_SPEED_MULT; // start slow — VS feel
         }
       } else {
         // ── Phase 3: accelerating pull toward hero ──
         // Slow start, then ramp up — matches VS magnet feel
-        g.attractSpeed = Math.min(g.attractSpeed * 1.08 + 0.15, GEM_MAX_SPEED);
+        g.attractSpeed = Math.min(g.attractSpeed * 1.08 + 0.15 * GAME_MOVE_SPEED_MULT, GEM_MAX_SPEED * GAME_MOVE_SPEED_MULT);
         g.x += (dx / dist) * g.attractSpeed * dtS;
         g.y += (dy / dist) * g.attractSpeed * dtS;
       }
@@ -2199,6 +2318,10 @@
   }
 
   function updateMonsters(dt) {
+    if (LAB_MODE) {
+      updateLabRespawns(dt);
+    }
+    if (!LAB_MODE) {
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       var batch = getVsSpawnBatchSize();
@@ -2208,6 +2331,7 @@
         spawnMonster();
       }
       spawnTimer = getSpawnInterval();
+    }
     }
 
     for (var i = monsters.length - 1; i >= 0; i--) {
@@ -2222,12 +2346,12 @@
       var dx = hero.x - m.x;
       var dy = hero.y - m.y;
       var dist = Math.sqrt(dx * dx + dy * dy);
-      var spd = (!isBoss && m.slowTimer > 0) ? 0 : m.speed;
+      var spd = LAB_MODE ? 0 : (m.speed * GAME_MOVE_SPEED_MULT);
       if (isNecro && m.summoning) spd = 0;
       if (isSeeker && m.spawning) spd = 0;
+      if (LAB_MODE && m.labDummy) spd = 0;
 
-      if (isBoss) {
-        m.slowTimer = 0;
+      if (isBoss && !LAB_MODE) {
         var nextBossAnim = 'idle';
         var bossFlyStartDist = BOSS_FLY_STOP_DIST + BOSS_FLY_START_EXTRA;
         if (m.bossFlying) {
@@ -2266,11 +2390,10 @@
         }
       }
 
-      if (spd > 0 && dist > 0.5) {
+      var inKnockback = updateMonsterKnockback(m);
+      if (!inKnockback && spd > 0 && dist > 0.5) {
         moveMonsterVsChase(m, spd);
       }
-
-      if (!isBoss && m.slowTimer > 0) m.slowTimer -= dt;
 
       // Seeker spawn animation
       if (isSeeker && m.spawning) {
@@ -2283,10 +2406,17 @@
           }
         }
       }
-      if (isNecro) {
+      if (isNecro && !LAB_MODE) {
         m.summonTimer -= dt;
         if (!m.summoning && m.summonTimer <= 0) {
           m.summoning = true;
+          m.animFrame = 0;
+          m.animTimer = 0;
+        }
+      }
+      if (LAB_MODE && isBoss && m.labDummy) {
+        if (m.bossAnim !== 'idle') {
+          m.bossAnim = 'idle';
           m.animFrame = 0;
           m.animTimer = 0;
         }
@@ -2319,11 +2449,12 @@
         }
       }
 
-      // Hit cooldown
+      // Hit cooldown / 受击闪红
       if (m.hitCooldown > 0) m.hitCooldown -= dt;
+      if (m.hitFlashTimer > 0) m.hitFlashTimer -= dt;
 
       // Damage hero on contact-circle overlap
-      if (hero.invincibleTimer <= 0 && m.hitCooldown <= 0 && heroTouchesMonster(m, mType)) {
+      if (!LAB_MODE && hero.invincibleTimer <= 0 && m.hitCooldown <= 0 && heroTouchesMonster(m, mType)) {
         var hurt = Math.max(1, Math.floor(m.damage * (1 - (hero.armor || 0))));
         hero.hp = Math.max(0, hero.hp - hurt);
         if (hero.hp <= 0) triggerHeroDeath();
@@ -2332,8 +2463,10 @@
       }
     }
 
+    if (!LAB_MODE) {
     separateOverlappingMobs();
     repelMobsFromBoss();
+    }
 
     if (hero.invincibleTimer > 0) hero.invincibleTimer -= dt;
   }
@@ -2341,6 +2474,7 @@
   function damageMonster(m, dmg) {
     if (dmg <= 0) return;
     m.hp -= dmg;
+    m.hitFlashTimer = MONSTER_HIT_FLASH_MS;
   }
 
   var spriteTintBuf = { canvas: null, ctx: null };
@@ -2387,6 +2521,15 @@
     ctx.restore();
   }
 
+  function drawMonsterSprite(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh, m) {
+    if (!img || !img.complete) return;
+    if (m.hitFlashTimer > 0) {
+      drawSpriteSolidTint(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh, '#ff2222');
+    } else {
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh);
+    }
+  }
+
   function drawOneMonster(m, mType) {
       var isBossDraw = mType.key === 'boss';
       // Seeker uses separate walk/spawn images; boss uses per-frame PNGs
@@ -2425,13 +2568,8 @@
           dh = s; dw = Math.round(s * srcW / srcH);
           var spawnDrawX = sx + (s - dw) / 2;
           var spawnDrawY = sy + s - dh;
-          if (m.slowTimer > 0) {
-            drawSpriteSolidTint(spawnImg, srcX, srcY, srcW, srcH,
-              spawnDrawX, spawnDrawY, dw, dh, '#ffffff');
-          } else {
-            ctx.drawImage(spawnImg, srcX, srcY, srcW, srcH,
-              spawnDrawX, spawnDrawY, dw, dh);
-          }
+          drawMonsterSprite(spawnImg, srcX, srcY, srcW, srcH,
+            spawnDrawX, spawnDrawY, dw, dh, m);
         }
         ctx.restore();
         return;
@@ -2448,7 +2586,7 @@
         dw = Math.round(s * srcW / srcH);
         var bossDrawX = sx + (s - dw) / 2;
         var bossDrawY = sy + s - dh;
-        ctx.drawImage(frameImg, 0, 0, srcW, srcH, bossDrawX, bossDrawY, dw, dh);
+        drawMonsterSprite(frameImg, 0, 0, srcW, srcH, bossDrawX, bossDrawY, dw, dh, m);
         ctx.restore();
         return;
       } else if (mType.vertical) {
@@ -2464,11 +2602,7 @@
       // Center horizontally, bottom-align vertically so feet stay grounded
       var drawX = sx + (s - dw) / 2;
       var drawY = sy + s - dh;  // align bottom edge to sprite bottom
-      if (m.slowTimer > 0 && mType.key !== 'boss') {
-        drawSpriteSolidTint(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh, '#ffffff');
-      } else {
-        ctx.drawImage(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh);
-      }
+      drawMonsterSprite(img, srcX, srcY, srcW, srcH, drawX, drawY, dw, dh, m);
       ctx.restore();
   }
 
@@ -3006,6 +3140,7 @@
     batWaveSpawnTimer = 0;
     skelWaveSpawnTimer = 0;
     swordAngle = 0;
+    swordBlades = [];
     bibleAngle = 0;
     biblePhase = 'active';
     biblePhaseMs = 0;
@@ -3014,6 +3149,7 @@
     holyWaterDrops = [];
     holyWaterBursts = [];
     holyWaterTimer = 0;
+    bibleShockwaves = [];
     lastMoveDir = { x: 1, y: 0 };
     deathScreenTimer = 0;
     // Reset stats
@@ -3029,6 +3165,166 @@
     expToNext = calcExpToNext(1);
     initItemSlots();
     generateMap();
+    centerCam();
+    gameState = 'playing';
+  }
+
+  function initLabMonsters() {
+    monsters = [];
+    var cx = hero.x + TILE * 6;
+    var cy = hero.y;
+    var radius = 200;
+    for (var ti = 0; ti < MONSTER_TYPES.length; ti++) {
+      var ang = (ti / MONSTER_TYPES.length) * Math.PI * 2 - Math.PI / 2;
+      var px = cx + Math.cos(ang) * radius;
+      var py = cy + Math.sin(ang) * radius * 0.7;
+      var opts = { labDummy: true, spawning: false, bossAnim: 'idle' };
+      var m = createMonster(ti, px, py, opts);
+      m.speed = 0;
+      monsters.push(m);
+    }
+  }
+
+  function applyLabUpgrade(id) {
+    if (id === 'addSword') {
+      playerUpgrades.swordCount = (playerUpgrades.swordCount || 0) + 1;
+      syncItemSlotsFromUpgrades();
+      return;
+    }
+    if (id === 'addKnife') {
+      playerUpgrades.knifeCount = (playerUpgrades.knifeCount || 0) + 1;
+      knifeTimer = 0;
+      syncItemSlotsFromUpgrades();
+      return;
+    }
+    if (id === 'addBible') {
+      playerUpgrades.bibleCount = (playerUpgrades.bibleCount || 0) + 1;
+      syncItemSlotsFromUpgrades();
+      return;
+    }
+    if (id === 'addHolyWater') {
+      playerUpgrades.holyWaterCount = (playerUpgrades.holyWaterCount || 0) + 1;
+      holyWaterTimer = 0;
+      syncItemSlotsFromUpgrades();
+      return;
+    }
+    var def = UPGRADE_DEFS[id];
+    if (!def) return;
+    var picks = playerUpgrades.statPicks[id] || 0;
+    var add = def.tiers[Math.min(picks, def.tiers.length - 1)];
+    playerUpgrades.statPicks[id] = picks + 1;
+    playerUpgrades[def.bonusKey] = (playerUpgrades[def.bonusKey] || 0) + add;
+    applyUpgradeMultipliers();
+    if (id === 'speed') refreshHeroMoveSpeed();
+    syncItemSlotsFromUpgrades();
+  }
+
+  function labSyncWeaponsForHero() {
+    if (isWarrior()) {
+      if ((playerUpgrades.swordCount || 0) < 1) playerUpgrades.swordCount = 1;
+      playerUpgrades.bibleCount = 0;
+      playerUpgrades.holyWaterCount = 0;
+    } else if (isWizard()) {
+      if ((playerUpgrades.bibleCount || 0) < 1) playerUpgrades.bibleCount = 1;
+      playerUpgrades.swordCount = 0;
+      playerUpgrades.knifeCount = 0;
+    }
+    syncItemSlotsFromUpgrades();
+  }
+
+  function labSwitchHero(index) {
+    if (index < 0 || index >= HERO_ROSTER.length) return;
+    selectedHeroIndex = index;
+    hero.rosterIndex = index;
+    applyHeroStats();
+    labSyncWeaponsForHero();
+    hero.dead = false;
+    hero.invincibleTimer = 0;
+    gameState = 'playing';
+    levelUpQueue = [];
+    levelUpChoices = [];
+  }
+
+  function getLabSnapshot() {
+    var entry = getHeroRosterEntry();
+    return {
+      heroName: entry.name,
+      heroKey: entry.key,
+      hp: hero.hp,
+      maxHp: hero.maxHp,
+      speed: hero.speed,
+      speedBonus: playerUpgrades.speedBonus || 0,
+      speedMult: playerUpgrades.speedMult || 1,
+      damageBonus: playerUpgrades.damageBonus || 0,
+      damageMult: getDamageMult(),
+      swordSizeBonus: playerUpgrades.swordSizeBonus || 0,
+      swordSizeMult: playerUpgrades.swordSizeMult || 1,
+      castSpeedBonus: playerUpgrades.castSpeedBonus || 0,
+      knifeCastSpeedBonus: playerUpgrades.knifeCastSpeedBonus || 0,
+      bibleCastSpeedBonus: playerUpgrades.bibleCastSpeedBonus || 0,
+      holyWaterCastSpeedBonus: playerUpgrades.holyWaterCastSpeedBonus || 0,
+      globalCastSpeedBonus: playerUpgrades.globalCastSpeedBonus || 0,
+      swordCount: getSwordCount(),
+      knifeCount: getKnifeCount(),
+      bibleCount: getBibleCount(),
+      holyWaterCount: getHolyWaterCount(),
+      swordDamage: heroHasGreatsword() ? getSwordDamage() : null,
+      knifeDamage: heroHasKnife() ? getKnifeDamage() : null,
+      bibleDamage: heroHasBible() ? getBibleDamage() : null,
+      holyWaterDamage: heroHasHolyWater() ? getHolyWaterDamage() : null,
+      knifeCooldown: heroHasKnife() ? getKnifeCooldown() : null,
+      swordCastMult: getSwordCastSpeedMult(),
+      knifeCastMult: getKnifeCastSpeedMult(),
+      bibleCastMult: getBibleCastSpeedMult(),
+      holyWaterCastMult: getHolyWaterCastSpeedMult()
+    };
+  }
+
+  function startLabGame() {
+    keys = {};
+    selectedHeroIndex = selectedHeroIndex || 0;
+    hero.x = (MAP_W / 2) * TILE;
+    hero.y = (MAP_H / 2) * TILE;
+    hero.rosterIndex = selectedHeroIndex;
+    resetPlayerUpgrades();
+    applyHeroStats();
+    hero.facingLeft = false;
+    hero.moving = false;
+    hero.walkTimer = 0;
+    hero.bobOffset = 0;
+    hero.invincibleTimer = 0;
+    hero.spriteRow = 0;
+    hero.animFrame = 0;
+    hero.animTimer = 0;
+    hero.dead = false;
+    hero.deathAnimFrame = 0;
+    hero.deathAnimTimer = 0;
+    gems = [];
+    gemCount = 0;
+    spawnTimer = 0;
+    labRespawnQueue = [];
+    swordAngle = 0;
+    swordBlades = [];
+    bibleAngle = 0;
+    biblePhase = 'active';
+    biblePhaseMs = 0;
+    knives = [];
+    knifeTimer = 0;
+    holyWaterDrops = [];
+    holyWaterBursts = [];
+    holyWaterTimer = 0;
+    bibleShockwaves = [];
+    lastMoveDir = { x: 1, y: 0 };
+    levelUpQueue = [];
+    levelUpChoices = [];
+    gameTime = 0;
+    killCount = 0;
+    level = 1;
+    exp = 0;
+    expToNext = calcExpToNext(1);
+    initItemSlots();
+    generateMap();
+    initLabMonsters();
     centerCam();
     gameState = 'playing';
   }
@@ -3352,7 +3648,11 @@
   var SWORD_DISP    = 32;        // display size on screen (px)
   var SWORD_ORBIT_R = 48;        // orbit radius in screen pixels
   var SWORD_RPM     = 32;        // rotations per minute
+  var SWORD_LUNGE_INTERVAL_MS = 3000;
+  var SWORD_LUNGE_SPEED = 3;     // world units per frame @ 60fps
+  var SWORD_LUNGE_ARRIVE = 10;   // world units — reach target / home
   var swordAngle = 0;
+  var swordBlades = [];          // per-blade lunge: orbit | strike | return
 
   function getSwordHitRadius() {
     return getGreatswordDisp() / SCALE / 2;
@@ -3373,6 +3673,89 @@
     };
   }
 
+  function getSwordHomeWorldPos(si, swordN, center, orbitR) {
+    var bladeAngle = swordAngle + (si / swordN) * Math.PI * 2;
+    return {
+      x: center.cx + Math.cos(bladeAngle) * orbitR,
+      y: center.cy + Math.sin(bladeAngle) * orbitR,
+      angle: bladeAngle
+    };
+  }
+
+  function ensureSwordBlades(swordN) {
+    while (swordBlades.length < swordN) {
+      swordBlades.push({
+        phase: 'orbit',
+        timer: Math.random() * SWORD_LUNGE_INTERVAL_MS,
+        x: 0,
+        y: 0,
+        strikeX: 0,
+        strikeY: 0,
+        inRange: {}
+      });
+    }
+    while (swordBlades.length > swordN) swordBlades.pop();
+  }
+
+  function findNearestMonsterTo(wx, wy) {
+    var bestIdx = -1;
+    var bestD2 = Infinity;
+    for (var mi = 0; mi < monsters.length; mi++) {
+      var m = monsters[mi];
+      if (m.hp <= 0) continue;
+      var mx = m.x + TILE / 2;
+      var my = m.y + TILE / 2;
+      var dx = mx - wx;
+      var dy = my - wy;
+      var d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestIdx = mi;
+      }
+    }
+    return bestIdx;
+  }
+
+  function clearSwordBladeInRange(blade) {
+    blade.inRange = {};
+  }
+
+  function moveSwordToward(blade, tx, ty, step) {
+    var dx = tx - blade.x;
+    var dy = ty - blade.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= SWORD_LUNGE_ARRIVE || dist < 0.01) {
+      blade.x = tx;
+      blade.y = ty;
+      return true;
+    }
+    var move = Math.min(step, dist);
+    blade.x += (dx / dist) * move;
+    blade.y += (dy / dist) * move;
+    return dist - move <= SWORD_LUNGE_ARRIVE;
+  }
+
+  function swordLungeHitMonsters(blade) {
+    var hitR = getSwordHitRadius();
+    for (var j = monsters.length - 1; j >= 0; j--) {
+      var mon = monsters[j];
+      if (mon.hp <= 0) continue;
+      var mType = MONSTER_TYPES[mon.type] || MONSTER_TYPES[0];
+      var touching = worldPointHitsMonster(blade.x, blade.y, mon, mType, hitR);
+      var wasIn = !!blade.inRange[j];
+      if (touching && !wasIn) {
+        damageMonster(mon, getSwordDamage());
+        applyMonsterHitKnockback(mon);
+        if (mon.hp <= 0) {
+          removeDeadMonster(j);
+        }
+        blade.inRange[j] = true;
+      } else if (!touching) {
+        blade.inRange[j] = false;
+      }
+    }
+  }
+
   function updateSword(dt) {
     var swordN = getSwordCount();
     if (swordN <= 0) return;
@@ -3380,22 +3763,57 @@
 
     var orbitR = getGreatswordOrbit() / SCALE;
     var center = getWeaponOrbitCenter();
+    var dtS = dt / 16.67;
+    var lungeStep = SWORD_LUNGE_SPEED * dtS;
+
+    ensureSwordBlades(swordN);
+
     for (var hi = 0; hi < monsters.length; hi++) {
       monsters[hi].swordTouch = false;
     }
 
     for (var si = 0; si < swordN; si++) {
-      var bladeAngle = swordAngle + (si / swordN) * Math.PI * 2;
-      var swordWX = center.cx + Math.cos(bladeAngle) * orbitR;
-      var swordWY = center.cy + Math.sin(bladeAngle) * orbitR;
+      var blade = swordBlades[si];
+      var home = getSwordHomeWorldPos(si, swordN, center, orbitR);
 
-      for (var i = monsters.length - 1; i >= 0; i--) {
-        var m = monsters[i];
-        if (m.hp <= 0) continue;
-        var mTypeS = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
-        if (worldPointHitsMonster(swordWX, swordWY, m, mTypeS, getSwordHitRadius())) {
-          m.swordTouch = true;
+      if (blade.phase === 'orbit') {
+        blade.x = home.x;
+        blade.y = home.y;
+        blade.timer -= dt;
+        if (blade.timer <= 0) {
+          var tgtIdx = findNearestMonsterTo(home.x, home.y);
+          if (tgtIdx >= 0) {
+            var tgtM = monsters[tgtIdx];
+            blade.phase = 'strike';
+            blade.strikeX = tgtM.x + TILE / 2;
+            blade.strikeY = tgtM.y + TILE / 2;
+            clearSwordBladeInRange(blade);
+          } else {
+            blade.timer = SWORD_LUNGE_INTERVAL_MS;
+          }
         }
+
+        for (var oi = 0; oi < monsters.length; oi++) {
+          var om = monsters[oi];
+          if (om.hp <= 0) continue;
+          var omType = MONSTER_TYPES[om.type] || MONSTER_TYPES[0];
+          if (worldPointHitsMonster(home.x, home.y, om, omType, getSwordHitRadius())) {
+            om.swordTouch = true;
+          }
+        }
+      } else if (blade.phase === 'strike') {
+        if (moveSwordToward(blade, blade.strikeX, blade.strikeY, lungeStep)) {
+          blade.phase = 'return';
+          clearSwordBladeInRange(blade);
+        }
+        swordLungeHitMonsters(blade);
+      } else if (blade.phase === 'return') {
+        if (moveSwordToward(blade, home.x, home.y, lungeStep)) {
+          blade.phase = 'orbit';
+          blade.timer = SWORD_LUNGE_INTERVAL_MS;
+          clearSwordBladeInRange(blade);
+        }
+        swordLungeHitMonsters(blade);
       }
     }
 
@@ -3405,10 +3823,9 @@
       if (mon.swordTouch) {
         if (!mon.swordInRange) {
           damageMonster(mon, getSwordDamage());
-          applyMonsterSlow(mon);
+          applyMonsterHitKnockback(mon);
           if (mon.hp <= 0) {
-            onMonsterKill(mon);
-            monsters.splice(j, 1);
+            removeDeadMonster(j);
           }
         }
         mon.swordInRange = true;
@@ -3424,21 +3841,28 @@
     var img = assets.weapon;
     if (!isImgOk(img)) return;
     var disp = getGreatswordDisp();
-    var drawSize = 32 * Math.max(1, Math.round(disp / 32));
-    var orbit = getGreatswordOrbit();
-    var screenCX = hero.x * SCALE - cam.x + TILE * SCALE / 2;
-    var screenCY = hero.y * SCALE - cam.y + TILE * SCALE / 2;
-    var entry2 = HERO_ROSTER[hero.rosterIndex];
-    screenCY -= entry2.displayH * SCALE / 2;
+    var drawSize = Math.max(16, disp);
+    var orbitR = getGreatswordOrbit() / SCALE;
+    var center = getWeaponOrbitCenter();
 
+    ensureSwordBlades(swordN);
     ctx.imageSmoothingEnabled = false;
+
     for (var si = 0; si < swordN; si++) {
-      var bladeAngle = swordAngle + (si / swordN) * Math.PI * 2;
-      var sx = Math.floor(screenCX + Math.cos(bladeAngle) * orbit - drawSize / 2);
-      var sy = Math.floor(screenCY + Math.sin(bladeAngle) * orbit - drawSize / 2);
+      var blade = swordBlades[si];
+      var home = getSwordHomeWorldPos(si, swordN, center, orbitR);
+      var wx = blade.phase === 'orbit' ? home.x : blade.x;
+      var wy = blade.phase === 'orbit' ? home.y : blade.y;
+      var drawAngle = home.angle;
+      if (blade.phase !== 'orbit') {
+        drawAngle = Math.atan2(wy - home.y, wx - home.x);
+      }
+
+      var sx = Math.floor(wx * SCALE - cam.x - drawSize / 2);
+      var sy = Math.floor(wy * SCALE - cam.y - drawSize / 2);
       ctx.save();
       ctx.translate(sx + drawSize / 2, sy + drawSize / 2);
-      ctx.rotate(bladeAngle + Math.PI - Math.PI / 4);
+      ctx.rotate(drawAngle + Math.PI - Math.PI / 4);
       ctx.drawImage(img, 0, 0, 32, 32, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
       ctx.restore();
     }
@@ -3451,6 +3875,73 @@
   var bibleAngle = 0;
   var biblePhase = 'active';
   var biblePhaseMs = 0;
+  var BIBLE_SHOCKWAVE_RADIUS = 30;           // world units
+  var BIBLE_SHOCKWAVE_KNOCKBACK = 40 / SCALE; // screen px → world (侧移距离)
+  var BIBLE_SHOCKWAVE_VIS_MS = 480;
+  var bibleShockwaves = [];                  // [{ x, y, life, maxLife }]
+
+  function applyBibleShockwaveKnockback(m) {
+    if (LAB_MODE && m.labDummy) return;
+    if (isMonsterBoss(m)) return;
+    var dir = pickMonsterKnockbackDir(m);
+    m.knockbackDx = dir.dx;
+    m.knockbackDy = dir.dy;
+    m.knockbackRemain = BIBLE_SHOCKWAVE_KNOCKBACK;
+  }
+
+  function triggerBibleShockwaveAt(wx, wy) {
+    var dmg = getBibleDamage();
+    for (var j = monsters.length - 1; j >= 0; j--) {
+      var mon = monsters[j];
+      if (mon.hp <= 0) continue;
+      var monType = MONSTER_TYPES[mon.type] || MONSTER_TYPES[0];
+      if (!circleHitsMonster(wx, wy, BIBLE_SHOCKWAVE_RADIUS, mon, monType)) continue;
+      damageMonster(mon, dmg);
+      applyBibleShockwaveKnockback(mon);
+      if (mon.hp <= 0) {
+        removeDeadMonster(j);
+      }
+    }
+    bibleShockwaves.push({
+      x: wx,
+      y: wy,
+      life: BIBLE_SHOCKWAVE_VIS_MS,
+      maxLife: BIBLE_SHOCKWAVE_VIS_MS
+    });
+  }
+
+  function updateBibleShockwaves(dt) {
+    for (var si = bibleShockwaves.length - 1; si >= 0; si--) {
+      bibleShockwaves[si].life -= dt;
+      if (bibleShockwaves[si].life <= 0) bibleShockwaves.splice(si, 1);
+    }
+  }
+
+  function drawBibleShockwaves() {
+    if (!bibleShockwaves.length) return;
+    ctx.save();
+    for (var vi = 0; vi < bibleShockwaves.length; vi++) {
+      var sw = bibleShockwaves[vi];
+      var prog = 1 - sw.life / sw.maxLife;
+      var alpha = 1 - prog;
+      var r = BIBLE_SHOCKWAVE_RADIUS * SCALE * (0.25 + 0.75 * prog);
+      var sx = sw.x * SCALE - cam.x;
+      var sy = sw.y * SCALE - cam.y;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(64, 150, 255, ' + (0.22 * alpha) + ')';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(100, 190, 255, ' + (0.9 * alpha) + ')';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 0.72, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(180, 220, 255, ' + (0.45 * alpha) + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   function getBibleBookAngle(bi, bibleN) {
     return bibleAngle + (bi / bibleN) * Math.PI * 2;
@@ -3506,10 +3997,9 @@
         if (inRange) {
           if (!mon.bibleInRange[bi]) {
             damageMonster(mon, getBibleDamage());
-            applyMonsterSlow(mon);
+            applyMonsterHitKnockback(mon);
             if (mon.hp <= 0) {
-              onMonsterKill(mon);
-              monsters.splice(j, 1);
+              removeDeadMonster(j);
             } else {
               mon.bibleInRange[bi] = true;
             }
@@ -3521,6 +4011,10 @@
     }
 
     if (biblePhaseMs >= getBibleDuration()) {
+      for (var swi = 0; swi < bibleN; swi++) {
+        var swPos = getBibleBookWorldPos(swi, bibleN, center, orbitR);
+        triggerBibleShockwaveAt(swPos.x, swPos.y);
+      }
       biblePhase = 'cooldown';
       biblePhaseMs = 0;
       clearMonsterBibleInRange();
@@ -3586,7 +4080,7 @@
     var dist = Math.sqrt(toHeroX * toHeroX + toHeroY * toHeroY);
     if (dist < 0.01) return { x: m.x, y: m.y };
     var mType = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
-    var spd = (!isMonsterBoss(m) && m.slowTimer > 0) ? 0 : m.speed;
+    var spd = m.speed * GAME_MOVE_SPEED_MULT;
     var lead = fallFrames * spd * 0.92;
     return {
       x: m.x + (toHeroX / dist) * lead,
@@ -3679,10 +4173,9 @@
       var monTypeH = MONSTER_TYPES[mon.type] || MONSTER_TYPES[0];
       if (!circleHitsMonster(burst.x, burst.y, radius, mon, monTypeH)) continue;
       damageMonster(mon, dmg);
-      applyMonsterSlow(mon);
+      applyMonsterHitKnockback(mon);
       if (mon.hp <= 0) {
-        onMonsterKill(mon);
-        monsters.splice(j, 1);
+        removeDeadMonster(j);
       }
     }
   }
@@ -3773,7 +4266,7 @@
   }
 
   // ===================== THROWING KNIFE =====================
-  var KNIFE_SPEED     = 2.5;  // world units per frame
+  var KNIFE_SPEED     = 2.5 * GAME_MOVE_SPEED_MULT;  // world units per frame
   var KNIFE_DISP      = 14;   // max display height on screen (px)
   var KNIFE_RANGE     = 220;  // max travel distance in world units before despawn
 
@@ -3781,7 +4274,7 @@
     return Math.max(4, KNIFE_DISP / SCALE / 2);
   }
 
-  var knives = [];             // [{x, y, vx, vy, dist, angle}]
+  var knives = [];             // [{x, y, vx, vy, dist, angle, hitMonsters}]
   var knifeTimer = 0;
   var lastMoveDir = { x: 1, y: 0 }; // last non-zero movement direction
 
@@ -3818,7 +4311,8 @@
           vx: Math.cos(ang) * KNIFE_SPEED,
           vy: Math.sin(ang) * KNIFE_SPEED,
           dist: 0,
-          angle: ang
+          angle: ang,
+          hitMonsters: []
         });
       }
     }
@@ -3832,23 +4326,22 @@
 
       if (k.dist > KNIFE_RANGE) { knives.splice(i, 1); continue; }
 
-      // Hit detection
-      var hit = false;
+      // Piercing hit — each enemy at most once per knife
+      if (!k.hitMonsters) k.hitMonsters = [];
       for (var j = monsters.length - 1; j >= 0; j--) {
         var m = monsters[j];
+        if (m.hp <= 0) continue;
+        if (k.hitMonsters.indexOf(m) >= 0) continue;
         var mTypeK = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
         if (worldPointHitsMonster(k.x, k.y, m, mTypeK, getKnifeHitRadius())) {
+          k.hitMonsters.push(m);
           damageMonster(m, getKnifeDamage());
-          applyMonsterSlow(m);
+          applyMonsterHitKnockback(m);
           if (m.hp <= 0) {
-            onMonsterKill(m);
-            monsters.splice(j, 1);
+            removeDeadMonster(j);
           }
-          hit = true;
-          break; // knife hits one monster then despawns
         }
       }
-      if (hit) { knives.splice(i, 1); }
     }
   }
 
@@ -3883,8 +4376,10 @@
   // ===================== UPDATE =====================
   function update(dt) {
     if (!hero.dead) {
-      gameTime += dt;
-      updateTimedEvents(dt);
+      if (!LAB_MODE) {
+        gameTime += dt;
+        updateTimedEvents(dt);
+      }
     }
     var dx = 0, dy = 0;
     if (!hero.dead) {
@@ -3915,6 +4410,7 @@
       }
 
       if (heroHasGreatsword()) updateSword(dt);
+      updateBibleShockwaves(dt);
       if (heroHasBible()) updateBible(dt);
       if (heroHasHolyWater()) updateHolyWater(dt);
       if (heroHasKnife()) updateKnives(dt);
@@ -4025,6 +4521,7 @@
     drawMonsters();
     drawContactDebug();
     drawHolyWater();
+    drawBibleShockwaves();
     if (heroHasGreatsword()) drawSword();
     if (heroHasKnife()) drawKnives();
     drawHero();
@@ -4220,7 +4717,26 @@
   function onReady() {
     generateMap();
     centerCam();
+    if (LAB_MODE) {
+      startLabGame();
+      if (window.EternalNightLab && typeof window.EternalNightLab._onGameReady === 'function') {
+        window.EternalNightLab._onGameReady();
+      }
+    }
     requestAnimationFrame(loop);
+  }
+
+  if (LAB_MODE) {
+    window.EternalNightLab = {
+      applyUpgrade: applyLabUpgrade,
+      switchHero: labSwitchHero,
+      getSnapshot: getLabSnapshot,
+      reset: startLabGame,
+      roster: HERO_ROSTER.map(function (h, i) {
+        return { index: i, name: h.name, key: h.key };
+      }),
+      monsterNames: MONSTER_TYPES.map(function (m) { return m.key; })
+    };
   }
 
 })();

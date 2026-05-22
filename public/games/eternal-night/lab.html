@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Eternal Night · 增益实验室</title>
+  <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+  <a href="index.html" class="back-btn">← 游戏</a>
+  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+
+  <div class="lab-layout">
+    <aside class="lab-sidebar">
+      <header class="lab-header">
+        <h1>增益实验室</h1>
+        <p class="lab-sub">点击任意增益立即生效，无等级与上限限制</p>
+      </header>
+
+      <section class="lab-section">
+        <h2>角色</h2>
+        <div id="heroSwitch" class="hero-switch"></div>
+      </section>
+
+      <section class="lab-section">
+        <h2>属性增益</h2>
+        <div id="statUpgrades" class="upgrade-grid"></div>
+      </section>
+
+      <section class="lab-section">
+        <h2>武器数量</h2>
+        <div id="weaponUpgrades" class="upgrade-grid"></div>
+      </section>
+
+      <div class="lab-actions">
+        <button type="button" id="btnReset" class="lab-btn lab-btn-muted">重置场景</button>
+      </div>
+    </aside>
+
+    <main class="lab-main">
+      <div class="lab-canvas-wrap">
+        <canvas id="game"></canvas>
+      </div>
+      <aside class="lab-stats" id="statsPanel">
+        <h2>当前效果</h2>
+        <div id="statsBody" class="stats-body">加载中…</div>
+        <p class="lab-hint">WASD 移动 · 敌人静止 · 击杀后约 0.5 秒刷新</p>
+      </aside>
+    </main>
+  </div>
+
+  <script>window.ETERNAL_NIGHT_LAB = true;</script>
+  <script src="main.js"></script>
+  <script src="lab.js"></script>
+</body>
+</html>
