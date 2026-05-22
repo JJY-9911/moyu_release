@@ -99,6 +99,75 @@ html, body {
   color: #f0d890;
 }
 
+.lab-section-hint {
+  font-size: 10px;
+  color: #777;
+  line-height: 1.4;
+  margin: -4px 0 8px;
+}
+
+.exclusive-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exclusive-btn {
+  text-align: left;
+  padding: 8px 10px;
+  border: 2px solid #3a3848;
+  border-radius: 5px;
+  background: #1a1824;
+  color: #d8d0c0;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.35;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.exclusive-btn:hover {
+  border-color: #6a8ac8;
+}
+
+.exclusive-btn.active {
+  border-color: #88bbff;
+  background: #243048;
+  color: #d0e8ff;
+}
+
+.exclusive-btn .up-name {
+  display: block;
+  color: #a8d4ff;
+  font-weight: bold;
+}
+
+.exclusive-btn.active .up-name {
+  color: #cce8ff;
+}
+
+.exclusive-btn .up-desc {
+  display: block;
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.exclusive-btn-none {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.exclusive-btn-none.active {
+  border-color: #888;
+  background: #2a2830;
+  color: #bbb;
+}
+
+.exclusive-btn-none.active .up-name {
+  color: #ccc;
+}
+
 .upgrade-grid {
   display: flex;
   flex-direction: column;

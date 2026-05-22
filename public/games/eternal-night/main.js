@@ -346,7 +346,18 @@
   var killWeaponMilestoneIdx = 0;
   var pendingWeaponPicks = 0;
   var weaponUnlockToasts = [];
-  var levelUpPickKind = 'upgrade'; // 'upgrade' | 'weapon'
+  var levelUpPickKind = 'upgrade'; // 'upgrade' | 'weapon' | 'exclusive'
+  var HERO_EXCLUSIVE_LV = 15;
+  var heroExclusiveBuff = null; // warrior: yujian|shengdun|zhanhou  wizard: shengguan|shengyu|chongsheng
+  var rebirthUsed = false;
+  var holyShieldTimer = 30000;
+  var holyShieldReady = false;
+  var battleCryTimer = 0;
+  var holyDomainTick = 0;
+  var EXCLUSIVE_AURA_RADIUS = 100;
+  /** 战吼：径向击退速度（屏幕 px/s），直至敌人离开 EXCLUSIVE_AURA_RADIUS */
+  var BATTLE_CRY_KNOCKBACK_SCREEN_SPEED = 200;
+  var HOLY_DOMAIN_RADIUS = 50;
   var gold      = 0;
   var level     = 1;
   var exp       = 0;
@@ -402,15 +413,15 @@
     return Math.ceil(base * balanceDmgMul(getSegmentMin()));
   }
 
-  // Vampire Survivors 式刷怪：本波 0~10 分钟内数量与频率持续上升
+  // Vampire Survivors 式刷怪：本波 0~10 分钟内数量与频率持续上升（常规密度约 ×2）
   function getSpawnInterval() {
     var p = getSpawnProgress10m();
-    return Math.max(360, Math.floor(2200 - p * 1750));
+    return Math.max(180, Math.floor((2200 - p * 1750) * 0.5));
   }
 
   function getMaxMonsters() {
     var p = getSpawnProgress10m();
-    return Math.floor(36 + p * 94);
+    return Math.floor(72 + p * 188);
   }
 
   function getVsSpawnBatchSize() {
@@ -452,11 +463,15 @@
     return n;
   }
 
+  function getBattleCryMult() {
+    return (isWarrior() && battleCryTimer > 0) ? 2 : 1;
+  }
+
   function getDamageMult() {
     if (!isWarrior() && !isWizard()) return 1;
     var dmg = playerUpgrades.damageBonus || 0;
     if (!LAB_MODE) dmg = Math.min(UPGRADE_CAP_DAMAGE, dmg);
-    return 1 + dmg / 100;
+    return (1 + dmg / 100) * getBattleCryMult();
   }
 
   function getBibleDamage() {
@@ -491,14 +506,14 @@
     if (!isWarrior()) return 1;
     var sword = cappedUpgradeBonus(playerUpgrades.castSpeedBonus, UPGRADE_CAP_CAST_SPEED);
     var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
-    return 1 + (sword + global) / 100;
+    return (1 + (sword + global) / 100) * getBattleCryMult();
   }
 
   function getKnifeCastSpeedMult() {
     if (!isWarrior()) return 1;
     var knife = cappedUpgradeBonus(playerUpgrades.knifeCastSpeedBonus, UPGRADE_CAP_KNIFE_CAST);
     var global = cappedUpgradeBonus(playerUpgrades.globalCastSpeedBonus, UPGRADE_CAP_GLOBAL_CAST);
-    return 1 + (knife + global) / 100;
+    return (1 + (knife + global) / 100) * getBattleCryMult();
   }
 
   function getBibleCastSpeedMult() {
@@ -555,6 +570,17 @@
       hero.hp = hero.maxHp;
       hero.dead = false;
       hero.invincibleTimer = 0;
+      return;
+    }
+    if (heroExclusiveBuff === 'chongsheng' && isWizard() && !rebirthUsed) {
+      rebirthUsed = true;
+      wipeMonstersInRadius(EXCLUSIVE_AURA_RADIUS, true);
+      hero.hp = Math.max(1, Math.floor(hero.maxHp * 0.5));
+      hero.dead = false;
+      hero.deathAnimFrame = 0;
+      hero.deathAnimTimer = 0;
+      deathScreenTimer = 0;
+      hero.invincibleTimer = 1200;
       return;
     }
     if (hero.dead) return;
@@ -615,7 +641,7 @@
   function refreshHeroMoveSpeed() {
     var entry = HERO_ROSTER[hero.rosterIndex];
     var mult = (isWarrior() || isWizard()) ? playerUpgrades.speedMult : 1;
-    hero.speed = entry.speed * mult * GAME_MOVE_SPEED_MULT;
+    hero.speed = entry.speed * mult * GAME_MOVE_SPEED_MULT * getBattleCryMult();
   }
 
   // Spell Brigade–style: additive % totals; global upgrades use lower tiers than single-skill
@@ -701,6 +727,229 @@
     levelUpChoices = [];
     hoveredUpgradeChoice = -1;
     pendingLevelForChoices = 0;
+    resetExclusiveBuffState();
+  }
+
+  function resetExclusiveBuffState() {
+    heroExclusiveBuff = null;
+    rebirthUsed = false;
+    holyShieldTimer = 30000;
+    holyShieldReady = false;
+    battleCryTimer = 0;
+    holyDomainTick = 0;
+  }
+
+  function needsExclusiveLevelUp(lv) {
+    return lv === HERO_EXCLUSIVE_LV && !heroExclusiveBuff;
+  }
+
+  function hasYujianLunge() {
+    return isWarrior() && heroExclusiveBuff === 'yujian';
+  }
+
+  function hasShengguanShockwave() {
+    return isWizard() && heroExclusiveBuff === 'shengguan';
+  }
+
+  function getHeroCenterWorld() {
+    return { x: hero.x + TILE / 2, y: hero.y + TILE / 2 };
+  }
+
+  function wipeMonstersInRadius(radius, skipBoss) {
+    var c = getHeroCenterWorld();
+    for (var j = monsters.length - 1; j >= 0; j--) {
+      var m = monsters[j];
+      if (m.hp <= 0) continue;
+      var mType = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
+      if (skipBoss && isMonsterBoss(m)) continue;
+      if (!circleHitsMonster(c.x, c.y, radius, m, mType)) continue;
+      if (LAB_MODE && m.labDummy) {
+        scheduleLabRespawn(m.type, m.x, m.y);
+        monsters.splice(j, 1);
+      } else {
+        monsters.splice(j, 1);
+      }
+    }
+  }
+
+  function knockbackMonstersInRadius(cx, cy, radius, knockDist) {
+    for (var j = 0; j < monsters.length; j++) {
+      var m = monsters[j];
+      if (m.hp <= 0) continue;
+      var mType = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
+      if (isMonsterBoss(m) && !LAB_MODE) continue;
+      if (!circleHitsMonster(cx, cy, radius, m, mType)) continue;
+      var dir = pickMonsterKnockbackDir(m);
+      m.knockbackDx = dir.dx;
+      m.knockbackDy = dir.dy;
+      m.knockbackRemain = knockDist;
+    }
+  }
+
+  function grantHolyShield() {
+    holyShieldReady = true;
+    holyShieldTimer = 0;
+  }
+
+  function tryBlockHolyShield() {
+    if (heroExclusiveBuff !== 'shengdun' || !isWarrior() || !holyShieldReady) return false;
+    holyShieldReady = false;
+    holyShieldTimer = 30000;
+    return true;
+  }
+
+  function applyBattleCryKnockback() {
+    var c = getHeroCenterWorld();
+    for (var j = 0; j < monsters.length; j++) {
+      var m = monsters[j];
+      if (m.hp <= 0) continue;
+      var mType = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
+      if (!circleHitsMonster(c.x, c.y, EXCLUSIVE_AURA_RADIUS, m, mType)) continue;
+      m.auraKnockback = true;
+      m.knockbackRemain = 0;
+    }
+  }
+
+  function triggerBattleCry() {
+    battleCryTimer = 10000;
+    refreshHeroMoveSpeed();
+    applyBattleCryKnockback();
+  }
+
+  function triggerLabExclusiveOnSelect(id) {
+    if (!LAB_MODE) return;
+    if (id === 'zhanhou' && isWarrior()) triggerBattleCry();
+    if (id === 'chongsheng' && isWizard()) {
+      wipeMonstersInRadius(EXCLUSIVE_AURA_RADIUS, true);
+      hero.hp = Math.max(1, Math.floor(hero.maxHp * 0.5));
+      hero.dead = false;
+      hero.deathAnimFrame = 0;
+      hero.deathAnimTimer = 0;
+      deathScreenTimer = 0;
+      hero.invincibleTimer = 1200;
+    }
+  }
+
+  function applyHolyDomainTick() {
+    var c = getHeroCenterWorld();
+    for (var j = monsters.length - 1; j >= 0; j--) {
+      var m = monsters[j];
+      if (m.hp <= 0) continue;
+      var mType = MONSTER_TYPES[m.type] || MONSTER_TYPES[0];
+      if (!circleHitsMonster(c.x, c.y, HOLY_DOMAIN_RADIUS, m, mType)) continue;
+      damageMonster(m, 1);
+      if (m.hp <= 0) removeDeadMonster(j);
+    }
+  }
+
+  function updateExclusiveBuffs(dt) {
+    if (!heroExclusiveBuff || hero.dead) return;
+
+    if (heroExclusiveBuff === 'shengdun' && isWarrior()) {
+      if (!holyShieldReady) {
+        holyShieldTimer -= dt;
+        if (holyShieldTimer <= 0) holyShieldReady = true;
+      }
+    }
+
+    if (battleCryTimer > 0) {
+      battleCryTimer -= dt;
+      if (battleCryTimer <= 0) refreshHeroMoveSpeed();
+    }
+
+    if (heroExclusiveBuff === 'zhanhou' && isWarrior() && battleCryTimer <= 0 && hero.maxHp > 0) {
+      if (hero.hp / hero.maxHp < 0.1) triggerBattleCry();
+    }
+
+    if (heroExclusiveBuff === 'shengyu' && isWizard()) {
+      holyDomainTick -= dt;
+      if (holyDomainTick <= 0) {
+        holyDomainTick = 500;
+        applyHolyDomainTick();
+      }
+    }
+  }
+
+  function drawExclusiveBuffFx() {
+    if (!heroExclusiveBuff || hero.dead) return;
+    var c = getHeroCenterWorld();
+    var sx = c.x * SCALE - cam.x;
+    var sy = c.y * SCALE - cam.y;
+
+    if (heroExclusiveBuff === 'shengdun' && holyShieldReady) {
+      var shieldR = 22;
+      ctx.beginPath();
+      ctx.arc(sx, sy, shieldR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 220, 60, 0.35)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 230, 100, 0.95)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    if (heroExclusiveBuff === 'shengyu') {
+      var domainR = HOLY_DOMAIN_RADIUS * SCALE;
+      ctx.beginPath();
+      ctx.arc(sx, sy, domainR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 220, 60, 0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 210, 50, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  function generateExclusiveBuffChoices() {
+    if (isWarrior()) {
+      return [
+        {
+          id: 'yujian',
+          name: '御剑',
+          desc: '每 6 秒大剑追踪最近敌人飞出并返回，飞行中碰撞造成伤害',
+          apply: function () { heroExclusiveBuff = 'yujian'; }
+        },
+        {
+          id: 'shengdun',
+          name: '圣盾',
+          desc: '每 30 秒获得圣盾，抵挡下一次所受伤害',
+          apply: function () {
+            heroExclusiveBuff = 'shengdun';
+            grantHolyShield();
+          }
+        },
+        {
+          id: 'zhanhou',
+          name: '战吼',
+          desc: '生命低于 10% 时击退周围敌人，10 秒内伤害/攻速/移速 +100%',
+          apply: function () { heroExclusiveBuff = 'zhanhou'; }
+        }
+      ];
+    }
+    return [
+      {
+        id: 'shengguan',
+        name: '圣歌',
+        desc: '圣经消失时释放震荡波，范围伤害并击退敌人',
+        apply: function () { heroExclusiveBuff = 'shengguan'; }
+      },
+      {
+        id: 'shengyu',
+        name: '圣域',
+        desc: '自身周围 50 范围持续圣域，敌人每 0.5 秒受到 1 点伤害',
+        apply: function () {
+          heroExclusiveBuff = 'shengyu';
+          holyDomainTick = 500;
+        }
+      },
+      {
+        id: 'chongsheng',
+        name: '重生',
+        desc: '死亡时清空周围敌人（Boss 除外）并以 50% 生命复活（每场一次）',
+        apply: function () { heroExclusiveBuff = 'chongsheng'; }
+      }
+    ];
   }
 
   function applyUpgradeMultipliers() {
@@ -988,8 +1237,13 @@
   function openLevelUpScreen() {
     if (levelUpChoices.length > 0) return;
     pendingLevelForChoices = levelUpQueue.shift();
-    levelUpPickKind = 'upgrade';
-    levelUpChoices = generateLevelUpChoices(pendingLevelForChoices);
+    if (needsExclusiveLevelUp(pendingLevelForChoices)) {
+      levelUpPickKind = 'exclusive';
+      levelUpChoices = generateExclusiveBuffChoices();
+    } else {
+      levelUpPickKind = 'upgrade';
+      levelUpChoices = generateLevelUpChoices(pendingLevelForChoices);
+    }
     hoveredUpgradeChoice = -1;
     gameState = 'levelup';
   }
@@ -998,8 +1252,18 @@
     var choice = levelUpChoices[index];
     if (!choice) return;
     choice.apply();
-    syncItemSlotsFromUpgrades();
+    if (levelUpPickKind !== 'exclusive') syncItemSlotsFromUpgrades();
     levelUpChoices = [];
+    if (levelUpPickKind === 'exclusive') {
+      levelUpPickKind = 'upgrade';
+      if (levelUpQueue.length > 0) {
+        openLevelUpScreen();
+      } else {
+        gameState = 'playing';
+        tryOpenPendingWeaponPick();
+      }
+      return;
+    }
     if (levelUpPickKind === 'weapon') {
       levelUpPickKind = 'upgrade';
       gameState = 'playing';
@@ -1123,6 +1387,7 @@
       knockbackRemain: 0,
       knockbackDx: 0,
       knockbackDy: 0,
+      auraKnockback: false,
       facingLeft: false,
       summoning: false,
       summonTimer: opts.summonTimer != null ? opts.summonTimer : 0,
@@ -1850,8 +2115,7 @@
   }
 
   function applyMonsterHitKnockback(m) {
-    if (LAB_MODE && m.labDummy) return;
-    if (isMonsterBoss(m)) return;
+    if (isMonsterBoss(m) && !LAB_MODE) return;
     var dir = pickMonsterKnockbackDir(m);
     m.knockbackDx = dir.dx;
     m.knockbackDy = dir.dy;
@@ -1867,6 +2131,36 @@
     if (m.knockbackRemain < 0.001) m.knockbackRemain = 0;
     clampMonsterPos(m);
     return m.knockbackRemain > 0;
+  }
+
+  /** 战吼：沿远离英雄方向推进，直到接触体完全离开 EXCLUSIVE_AURA_RADIUS */
+  function updateBattleCryAuraKnockback(m, mType, dt) {
+    if (!m.auraKnockback) return false;
+    var c = getHeroCenterWorld();
+    if (!circleHitsMonster(c.x, c.y, EXCLUSIVE_AURA_RADIUS, m, mType)) {
+      m.auraKnockback = false;
+      return false;
+    }
+    var mx = m.x + TILE / 2;
+    var my = m.y + TILE / 2;
+    var rdx = mx - c.x;
+    var rdy = my - c.y;
+    var rd = Math.sqrt(rdx * rdx + rdy * rdy);
+    if (rd < 0.01) {
+      rdx = 1;
+      rdy = 0;
+    } else {
+      rdx /= rd;
+      rdy /= rd;
+    }
+    var step = (BATTLE_CRY_KNOCKBACK_SCREEN_SPEED / SCALE) * (dt / 1000);
+    m.x += rdx * step;
+    m.y += rdy * step;
+    clampMonsterPos(m);
+    if (!circleHitsMonster(c.x, c.y, EXCLUSIVE_AURA_RADIUS, m, mType)) {
+      m.auraKnockback = false;
+    }
+    return !!m.auraKnockback;
   }
 
   var MAX_SEEKERS = 12;
@@ -2390,8 +2684,9 @@
         }
       }
 
-      var inKnockback = updateMonsterKnockback(m);
-      if (!inKnockback && spd > 0 && dist > 0.5) {
+      var inAuraKnockback = updateBattleCryAuraKnockback(m, mType, dt);
+      var inKnockback = !inAuraKnockback && updateMonsterKnockback(m);
+      if (!inAuraKnockback && !inKnockback && spd > 0 && dist > 0.5) {
         moveMonsterVsChase(m, spd);
       }
 
@@ -2455,11 +2750,16 @@
 
       // Damage hero on contact-circle overlap
       if (!LAB_MODE && hero.invincibleTimer <= 0 && m.hitCooldown <= 0 && heroTouchesMonster(m, mType)) {
-        var hurt = Math.max(1, Math.floor(m.damage * (1 - (hero.armor || 0))));
-        hero.hp = Math.max(0, hero.hp - hurt);
-        if (hero.hp <= 0) triggerHeroDeath();
-        hero.invincibleTimer = 500;
-        m.hitCooldown = MONSTER_HIT_COOLDOWN;
+        if (tryBlockHolyShield()) {
+          hero.invincibleTimer = 500;
+          m.hitCooldown = MONSTER_HIT_COOLDOWN;
+        } else {
+          var hurt = Math.max(1, Math.floor(m.damage * (1 - (hero.armor || 0))));
+          hero.hp = Math.max(0, hero.hp - hurt);
+          if (hero.hp <= 0) triggerHeroDeath();
+          hero.invincibleTimer = 500;
+          m.hitCooldown = MONSTER_HIT_COOLDOWN;
+        }
       }
     }
 
@@ -3232,10 +3532,41 @@
     syncItemSlotsFromUpgrades();
   }
 
+  function applyExclusiveBuffById(id) {
+    resetExclusiveBuffState();
+    if (!id) return;
+    var choices = generateExclusiveBuffChoices();
+    for (var ci = 0; ci < choices.length; ci++) {
+      if (choices[ci].id === id) {
+        choices[ci].apply();
+        if (id === 'yujian') swordBlades = [];
+        triggerLabExclusiveOnSelect(id);
+        return;
+      }
+    }
+  }
+
+  function getExclusiveBuffCatalog() {
+    return generateExclusiveBuffChoices().map(function (c) {
+      return { id: c.id, name: c.name, desc: c.desc };
+    });
+  }
+
+  function getExclusiveBuffLabel(id) {
+    if (!id) return '无';
+    var names = {
+      yujian: '御剑', shengdun: '圣盾', zhanhou: '战吼',
+      shengguan: '圣歌', shengyu: '圣域', chongsheng: '重生'
+    };
+    return names[id] || id;
+  }
+
   function labSwitchHero(index) {
     if (index < 0 || index >= HERO_ROSTER.length) return;
     selectedHeroIndex = index;
     hero.rosterIndex = index;
+    resetExclusiveBuffState();
+    swordBlades = [];
     applyHeroStats();
     labSyncWeaponsForHero();
     hero.dead = false;
@@ -3276,7 +3607,9 @@
       swordCastMult: getSwordCastSpeedMult(),
       knifeCastMult: getKnifeCastSpeedMult(),
       bibleCastMult: getBibleCastSpeedMult(),
-      holyWaterCastMult: getHolyWaterCastSpeedMult()
+      holyWaterCastMult: getHolyWaterCastSpeedMult(),
+      exclusiveBuff: heroExclusiveBuff,
+      exclusiveBuffName: getExclusiveBuffLabel(heroExclusiveBuff)
     };
   }
 
@@ -3648,7 +3981,7 @@
   var SWORD_DISP    = 32;        // display size on screen (px)
   var SWORD_ORBIT_R = 48;        // orbit radius in screen pixels
   var SWORD_RPM     = 32;        // rotations per minute
-  var SWORD_LUNGE_INTERVAL_MS = 3000;
+  var SWORD_LUNGE_INTERVAL_MS = 6000;
   var SWORD_LUNGE_SPEED = 3;     // world units per frame @ 60fps
   var SWORD_LUNGE_ARRIVE = 10;   // world units — reach target / home
   var swordAngle = 0;
@@ -3776,20 +4109,27 @@
       var blade = swordBlades[si];
       var home = getSwordHomeWorldPos(si, swordN, center, orbitR);
 
+      if (!hasYujianLunge() && blade.phase !== 'orbit') {
+        blade.phase = 'orbit';
+        clearSwordBladeInRange(blade);
+      }
+
       if (blade.phase === 'orbit') {
         blade.x = home.x;
         blade.y = home.y;
-        blade.timer -= dt;
-        if (blade.timer <= 0) {
-          var tgtIdx = findNearestMonsterTo(home.x, home.y);
-          if (tgtIdx >= 0) {
-            var tgtM = monsters[tgtIdx];
-            blade.phase = 'strike';
-            blade.strikeX = tgtM.x + TILE / 2;
-            blade.strikeY = tgtM.y + TILE / 2;
-            clearSwordBladeInRange(blade);
-          } else {
-            blade.timer = SWORD_LUNGE_INTERVAL_MS;
+        if (hasYujianLunge()) {
+          blade.timer -= dt;
+          if (blade.timer <= 0) {
+            var tgtIdx = findNearestMonsterTo(home.x, home.y);
+            if (tgtIdx >= 0) {
+              var tgtM = monsters[tgtIdx];
+              blade.phase = 'strike';
+              blade.strikeX = tgtM.x + TILE / 2;
+              blade.strikeY = tgtM.y + TILE / 2;
+              clearSwordBladeInRange(blade);
+            } else {
+              blade.timer = SWORD_LUNGE_INTERVAL_MS;
+            }
           }
         }
 
@@ -3801,13 +4141,13 @@
             om.swordTouch = true;
           }
         }
-      } else if (blade.phase === 'strike') {
+      } else if (hasYujianLunge() && blade.phase === 'strike') {
         if (moveSwordToward(blade, blade.strikeX, blade.strikeY, lungeStep)) {
           blade.phase = 'return';
           clearSwordBladeInRange(blade);
         }
         swordLungeHitMonsters(blade);
-      } else if (blade.phase === 'return') {
+      } else if (hasYujianLunge() && blade.phase === 'return') {
         if (moveSwordToward(blade, home.x, home.y, lungeStep)) {
           blade.phase = 'orbit';
           blade.timer = SWORD_LUNGE_INTERVAL_MS;
@@ -3881,8 +4221,7 @@
   var bibleShockwaves = [];                  // [{ x, y, life, maxLife }]
 
   function applyBibleShockwaveKnockback(m) {
-    if (LAB_MODE && m.labDummy) return;
-    if (isMonsterBoss(m)) return;
+    if (isMonsterBoss(m) && !LAB_MODE) return;
     var dir = pickMonsterKnockbackDir(m);
     m.knockbackDx = dir.dx;
     m.knockbackDy = dir.dy;
@@ -4011,9 +4350,11 @@
     }
 
     if (biblePhaseMs >= getBibleDuration()) {
-      for (var swi = 0; swi < bibleN; swi++) {
-        var swPos = getBibleBookWorldPos(swi, bibleN, center, orbitR);
-        triggerBibleShockwaveAt(swPos.x, swPos.y);
+      if (hasShengguanShockwave()) {
+        for (var swi = 0; swi < bibleN; swi++) {
+          var swPos = getBibleBookWorldPos(swi, bibleN, center, orbitR);
+          triggerBibleShockwaveAt(swPos.x, swPos.y);
+        }
       }
       biblePhase = 'cooldown';
       biblePhaseMs = 0;
@@ -4415,6 +4756,7 @@
       if (heroHasHolyWater()) updateHolyWater(dt);
       if (heroHasKnife()) updateKnives(dt);
       updateWeaponUnlockToasts(dt);
+      updateExclusiveBuffs(dt);
       updateMonsters(dt);
       updateGems(dt);
     } else {
@@ -4522,6 +4864,7 @@
     drawContactDebug();
     drawHolyWater();
     drawBibleShockwaves();
+    drawExclusiveBuffFx();
     if (heroHasGreatsword()) drawSword();
     if (heroHasKnife()) drawKnives();
     drawHero();
@@ -4633,7 +4976,12 @@
     ctx.textAlign = 'center';
     ctx.font = 'bold 24px Courier New';
     ctx.fillStyle = '#e8c86a';
-    if (levelUpPickKind === 'weapon') {
+    if (levelUpPickKind === 'exclusive') {
+      ctx.fillText('选择专属天赋', VIEW_W / 2, 118);
+      ctx.font = '12px Courier New';
+      ctx.fillStyle = '#a89888';
+      ctx.fillText('LV.' + HERO_EXCLUSIVE_LV + '  ·  三选一（不受常规增益影响）', VIEW_W / 2, 140);
+    } else if (levelUpPickKind === 'weapon') {
       ctx.fillText('选择武器', VIEW_W / 2, 118);
       ctx.font = '12px Courier New';
       ctx.fillStyle = '#a89888';
@@ -4732,6 +5080,13 @@
       switchHero: labSwitchHero,
       getSnapshot: getLabSnapshot,
       reset: startLabGame,
+      getExclusiveCatalog: getExclusiveBuffCatalog,
+      getExclusiveBuff: function () { return heroExclusiveBuff; },
+      applyExclusiveBuff: applyExclusiveBuffById,
+      clearExclusiveBuff: function () {
+        resetExclusiveBuffState();
+        swordBlades = [];
+      },
       roster: HERO_ROSTER.map(function (h, i) {
         return { index: i, name: h.name, key: h.key };
       }),

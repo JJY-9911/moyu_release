@@ -58,6 +58,7 @@
       btn.addEventListener('click', function () {
         lab.switchHero(h.index);
         updateHeroActive();
+        buildExclusiveBuffs();
         refreshStats();
       });
       wrap.appendChild(btn);
@@ -87,6 +88,40 @@
     return btn;
   }
 
+  function buildExclusiveBuffs() {
+    var wrap = el('exclusiveBuffs');
+    if (!wrap || !lab.getExclusiveCatalog) return;
+    wrap.innerHTML = '';
+    var current = lab.getExclusiveBuff();
+
+    var noneBtn = document.createElement('button');
+    noneBtn.type = 'button';
+    noneBtn.className = 'exclusive-btn exclusive-btn-none' + (current ? '' : ' active');
+    noneBtn.innerHTML = '<span class="up-name">无</span><span class="up-desc">不装备专属天赋</span>';
+    noneBtn.addEventListener('click', function () {
+      lab.clearExclusiveBuff();
+      buildExclusiveBuffs();
+      refreshStats();
+    });
+    wrap.appendChild(noneBtn);
+
+    lab.getExclusiveCatalog().forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'exclusive-btn' + (current === b.id ? ' active' : '');
+      btn.innerHTML =
+        '<span class="up-name">' + b.name + '</span>' +
+        '<span class="up-desc">' + b.desc + '</span>';
+      btn.addEventListener('click', function () {
+        if (current === b.id) return;
+        lab.applyExclusiveBuff(b.id);
+        buildExclusiveBuffs();
+        refreshStats();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
   function buildUpgrades() {
     var statWrap = el('statUpgrades');
     var wepWrap = el('weaponUpgrades');
@@ -113,6 +148,7 @@
     var s = lab.getSnapshot();
     var html = '';
     html += row('角色', s.heroName);
+    html += row('专属天赋', s.exclusiveBuffName || '无');
     html += row('生命', s.hp + ' / ' + s.maxHp);
     html += row('移速', s.speed.toFixed(2));
     html += row('移速加成', '+' + s.speedBonus + '%（×' + s.speedMult.toFixed(2) + '）');
@@ -156,9 +192,11 @@
 
   function init() {
     buildHeroSwitch();
+    buildExclusiveBuffs();
     buildUpgrades();
     el('btnReset').addEventListener('click', function () {
       lab.reset();
+      buildExclusiveBuffs();
       refreshStats();
     });
     refreshStats();
