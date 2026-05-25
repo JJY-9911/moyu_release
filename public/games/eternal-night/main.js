@@ -378,6 +378,14 @@
   var waveCycle = 0;
   var cycleStartTime = 0;
   var bossSpawnFired = false;
+  /** Boss 击杀后延迟到帧末清场，避免遍历 monsters 时同步清空数组 */
+  var pendingWaveMonsterClear = false;
+
+  function flushPendingWaveMonsterClear() {
+    if (!pendingWaveMonsterClear) return;
+    monsters = [];
+    pendingWaveMonsterClear = false;
+  }
 
   function getSegmentTime() {
     return Math.max(0, gameTime - cycleStartTime);
@@ -1244,6 +1252,14 @@
       levelUpPickKind = 'upgrade';
       levelUpChoices = generateLevelUpChoices(pendingLevelForChoices);
     }
+    if (levelUpChoices.length === 0) {
+      if (levelUpQueue.length > 0) {
+        openLevelUpScreen();
+      } else if (gameState === 'playing') {
+        tryOpenPendingWeaponPick();
+      }
+      return;
+    }
     hoveredUpgradeChoice = -1;
     gameState = 'levelup';
   }
@@ -1435,6 +1451,7 @@
       return;
     }
     onMonsterKill(mon);
+    if (pendingWaveMonsterClear) return;
     monsters.splice(index, 1);
   }
 
@@ -1446,7 +1463,7 @@
     skelWaveFired = false;
     batWaveSpawnQueue = 0;
     skelWaveSpawnQueue = 0;
-    monsters = [];
+    pendingWaveMonsterClear = true;
     var hpMult = getMonsterHpCycleMult();
     queueWeaponUnlockToast('第 ' + (waveCycle + 1) + ' 波 · 怪物生命 ×' + hpMult);
   }
@@ -3433,6 +3450,7 @@
     waveCycle = 0;
     cycleStartTime = 0;
     bossSpawnFired = false;
+    pendingWaveMonsterClear = false;
     batWaveFired = false;
     skelWaveFired = false;
     batWaveSpawnQueue = 0;
@@ -4643,7 +4661,10 @@
       var startX = hero.x + TILE / 2;
       var startY = hero.y + TILE / 2 - entry.displayH * SCALE / 2 / SCALE;
       var knifeN = getKnifeCount();
-      var baseAng = Math.atan2(lastMoveDir.y, lastMoveDir.x);
+      var dirX = lastMoveDir.x;
+      var dirY = lastMoveDir.y;
+      if (isWarrior()) { dirX = -dirX; dirY = -dirY; }
+      var baseAng = Math.atan2(dirY, dirX);
       for (var ki = 0; ki < knifeN; ki++) {
         var spread = knifeN <= 1 ? 0 : (ki / (knifeN - 1) - 0.5) * 0.45;
         var ang = baseAng + spread;
@@ -4771,6 +4792,7 @@
         gameState = 'gameover';
       }
     }
+    flushPendingWaveMonsterClear();
     centerCam();
   }
 
