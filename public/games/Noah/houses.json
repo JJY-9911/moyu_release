@@ -1,0 +1,1020 @@
+{
+  "version": 1,
+  "generatedFrom": "house.txt",
+  "splitMethod": "wall-row-bands",
+  "meta": {
+    "canvasW": 1024,
+    "canvasH": 576,
+    "boatScale": 8.3,
+    "cameraWorldTop": 0,
+    "boat": {
+      "x": 24,
+      "y": 409,
+      "w": 614.2,
+      "h": 149.4
+    },
+    "buildZone": {
+      "x": 32,
+      "y": 291,
+      "w": 479,
+      "h": 88
+    }
+  },
+  "floorCount": 9,
+  "templates": [
+    {
+      "id": "floor-01",
+      "index": 1,
+      "gameLevel": 1,
+      "wallRowY": 348,
+      "deckY": 291,
+      "deckYSource": "buildZone",
+      "needsPlatform": false,
+      "complete": true,
+      "spriteCount": 9,
+      "spanToNextDeck": -113,
+      "bounds": {
+        "minX": 130,
+        "maxX": 417,
+        "minY": 21,
+        "maxY": 177
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-02.webp",
+          "x": 226,
+          "y": 57,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 5,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-02.webp",
+          "x": 132,
+          "y": 57,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 7,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-03.webp",
+          "x": 160,
+          "y": 115,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 8,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-04.webp",
+          "x": 343,
+          "y": 73,
+          "w": 29,
+          "h": 60,
+          "flipH": false,
+          "z": 9,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-02.webp",
+          "x": 227,
+          "y": 23,
+          "w": 180,
+          "h": 40,
+          "flipH": false,
+          "z": 15,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 131,
+          "y": 21,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 43,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-01.webp",
+          "x": 221,
+          "y": 61,
+          "w": 196,
+          "h": 30,
+          "flipH": false,
+          "z": 52,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-02.webp",
+          "x": 227,
+          "y": 136,
+          "w": 180,
+          "h": 40,
+          "flipH": false,
+          "z": 70,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 130,
+          "y": 134,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 71,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-02",
+      "index": 2,
+      "gameLevel": 2,
+      "wallRowY": 235,
+      "deckY": 178,
+      "deckYSource": "wall-offset",
+      "needsPlatform": false,
+      "complete": true,
+      "spriteCount": 9,
+      "spanToNextDeck": -111,
+      "bounds": {
+        "minX": 109,
+        "maxX": 425,
+        "minY": 20,
+        "maxY": 177
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 131,
+          "y": 57,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 7,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 225,
+          "y": 57,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 7,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-04.webp",
+          "x": 109,
+          "y": 59,
+          "w": 120,
+          "h": 40,
+          "flipH": true,
+          "z": 8,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-04.webp",
+          "x": 267,
+          "y": 64,
+          "w": 29,
+          "h": 60,
+          "flipH": false,
+          "z": 8,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-01.webp",
+          "x": 341,
+          "y": 101,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 8,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 130,
+          "y": 20,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 21,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-02.webp",
+          "x": 228,
+          "y": 24,
+          "w": 180,
+          "h": 40,
+          "flipH": false,
+          "z": 31,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-04.webp",
+          "x": 395,
+          "y": 60,
+          "w": 30,
+          "h": 100,
+          "flipH": false,
+          "z": 33,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-01.webp",
+          "x": 221,
+          "y": 59,
+          "w": 196,
+          "h": 30,
+          "flipH": false,
+          "z": 51,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-03",
+      "index": 3,
+      "gameLevel": 3,
+      "wallRowY": 124,
+      "deckY": 67,
+      "deckYSource": "wall-offset",
+      "needsPlatform": false,
+      "complete": true,
+      "spriteCount": 10,
+      "spanToNextDeck": -76,
+      "bounds": {
+        "minX": 114,
+        "maxX": 462,
+        "minY": 0,
+        "maxY": 177
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 131,
+          "y": 57,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 11,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 225,
+          "y": 57,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 11,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-02.webp",
+          "x": 353,
+          "y": 100,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 25,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Building - Canopy 03.webp",
+          "x": 406,
+          "y": 60,
+          "w": 56,
+          "h": 56,
+          "flipH": false,
+          "z": 30,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-02.webp",
+          "x": 250,
+          "y": 65,
+          "w": 48,
+          "h": 60,
+          "flipH": false,
+          "z": 32,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-01.webp",
+          "x": 224,
+          "y": 55,
+          "w": 196,
+          "h": 30,
+          "flipH": false,
+          "z": 33,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-02.webp",
+          "x": 227,
+          "y": 22,
+          "w": 180,
+          "h": 40,
+          "flipH": false,
+          "z": 35,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 132,
+          "y": 19,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 36,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-04.webp",
+          "x": 114,
+          "y": 57,
+          "w": 120,
+          "h": 40,
+          "flipH": true,
+          "z": 36,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-10.webp",
+          "x": 174,
+          "y": 0,
+          "w": 33,
+          "h": 22,
+          "flipH": true,
+          "z": 39,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-04",
+      "index": 4,
+      "gameLevel": 4,
+      "wallRowY": 6,
+      "deckY": -9,
+      "deckYSource": "platform",
+      "needsPlatform": true,
+      "complete": true,
+      "spriteCount": 9,
+      "spanToNextDeck": -156,
+      "bounds": {
+        "minX": 111,
+        "maxX": 482,
+        "minY": -42,
+        "maxY": 135
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 226,
+          "y": 15,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 33,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 134,
+          "y": 14,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 34,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-03.webp",
+          "x": 341,
+          "y": 39,
+          "w": 58,
+          "h": 60,
+          "flipH": false,
+          "z": 35,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-01.webp",
+          "x": 262,
+          "y": 61,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 35,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-03.webp",
+          "x": 243,
+          "y": 18,
+          "w": 180,
+          "h": 30,
+          "flipH": false,
+          "z": 36,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-04.webp",
+          "x": 111,
+          "y": 17,
+          "w": 120,
+          "h": 30,
+          "flipH": true,
+          "z": 37,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-01.webp",
+          "x": 346,
+          "y": -42,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 38,
+          "note": ""
+        },
+        {
+          "category": "platform",
+          "file": "platformer.webp",
+          "x": 232,
+          "y": 0,
+          "w": 250,
+          "h": 20,
+          "flipH": false,
+          "z": 39,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 130,
+          "y": -21,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 42,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-05",
+      "index": 5,
+      "gameLevel": 5,
+      "wallRowY": -108,
+      "deckY": -165,
+      "deckYSource": "wall-offset",
+      "needsPlatform": false,
+      "complete": false,
+      "spriteCount": 9,
+      "spanToNextDeck": -75,
+      "bounds": {
+        "minX": 134,
+        "maxX": 471,
+        "minY": 22,
+        "maxY": 177
+      },
+      "sprites": [
+        {
+          "category": "other",
+          "file": "gemini/other/other-07.webp",
+          "x": 430,
+          "y": 113,
+          "w": 41,
+          "h": 56,
+          "flipH": false,
+          "z": 17,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Building - Roof A 04.webp",
+          "x": 408,
+          "y": 62,
+          "w": 50,
+          "h": 30,
+          "flipH": false,
+          "z": 35,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-02.webp",
+          "x": 134,
+          "y": 57,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 37,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-02.webp",
+          "x": 228,
+          "y": 57,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 38,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-03.webp",
+          "x": 247,
+          "y": 59,
+          "w": 180,
+          "h": 30,
+          "flipH": false,
+          "z": 39,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-01.webp",
+          "x": 256,
+          "y": 81,
+          "w": 88,
+          "h": 60,
+          "flipH": false,
+          "z": 39,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-04.webp",
+          "x": 150,
+          "y": 64,
+          "w": 30,
+          "h": 100,
+          "flipH": true,
+          "z": 41,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-02.webp",
+          "x": 230,
+          "y": 25,
+          "w": 180,
+          "h": 40,
+          "flipH": false,
+          "z": 55,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 134,
+          "y": 22,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 73,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-06",
+      "index": 6,
+      "gameLevel": 6,
+      "wallRowY": -226,
+      "deckY": -240,
+      "deckYSource": "platform",
+      "needsPlatform": true,
+      "complete": true,
+      "spriteCount": 11,
+      "spanToNextDeck": -118,
+      "bounds": {
+        "minX": 115,
+        "maxX": 483,
+        "minY": -41,
+        "maxY": 135
+      },
+      "sprites": [
+        {
+          "category": "other",
+          "file": "gemini/other/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Environment - Quest Board.webp",
+          "x": 417,
+          "y": -41,
+          "w": 56,
+          "h": 56,
+          "flipH": false,
+          "z": 44,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 136,
+          "y": 14,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 45,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 228,
+          "y": 15,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 46,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-04.webp",
+          "x": 256,
+          "y": 24,
+          "w": 29,
+          "h": 60,
+          "flipH": false,
+          "z": 48,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-03.webp",
+          "x": 328,
+          "y": 67,
+          "w": 44,
+          "h": 60,
+          "flipH": false,
+          "z": 49,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Environment - Grass_01-24.webp",
+          "x": 223,
+          "y": 68,
+          "w": 112,
+          "h": 56,
+          "flipH": false,
+          "z": 49,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-04.webp",
+          "x": 115,
+          "y": 16,
+          "w": 120,
+          "h": 30,
+          "flipH": true,
+          "z": 54,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-03.webp",
+          "x": 246,
+          "y": 20,
+          "w": 180,
+          "h": 30,
+          "flipH": false,
+          "z": 59,
+          "note": ""
+        },
+        {
+          "category": "platform",
+          "file": "platformer.webp",
+          "x": 233,
+          "y": 0,
+          "w": 250,
+          "h": 20,
+          "flipH": false,
+          "z": 60,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Environment - Grass_03     .webp",
+          "x": 315,
+          "y": -29,
+          "w": 40,
+          "h": 40,
+          "flipH": false,
+          "z": 61,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 133,
+          "y": -20,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 72,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-07",
+      "index": 7,
+      "gameLevel": 7,
+      "wallRowY": -338,
+      "deckY": -358,
+      "deckYSource": "platform",
+      "needsPlatform": true,
+      "complete": true,
+      "spriteCount": 7,
+      "spanToNextDeck": -102,
+      "bounds": {
+        "minX": 115,
+        "maxX": 478,
+        "minY": 0,
+        "maxY": 140
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 135,
+          "y": 20,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 56,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 228,
+          "y": 20,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 57,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-02.webp",
+          "x": 353,
+          "y": 69,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 58,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-04.webp",
+          "x": 115,
+          "y": 20,
+          "w": 120,
+          "h": 30,
+          "flipH": true,
+          "z": 59,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-01.webp",
+          "x": 250,
+          "y": 33,
+          "w": 88,
+          "h": 60,
+          "flipH": false,
+          "z": 59,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-03.webp",
+          "x": 250,
+          "y": 19,
+          "w": 180,
+          "h": 30,
+          "flipH": false,
+          "z": 60,
+          "note": ""
+        },
+        {
+          "category": "platform",
+          "file": "platformer.webp",
+          "x": 228,
+          "y": 0,
+          "w": 250,
+          "h": 20,
+          "flipH": false,
+          "z": 67,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-08",
+      "index": 8,
+      "gameLevel": 8,
+      "wallRowY": -403,
+      "deckY": -460,
+      "deckYSource": "wall-offset",
+      "needsPlatform": false,
+      "complete": false,
+      "spriteCount": 6,
+      "spanToNextDeck": -52,
+      "bounds": {
+        "minX": 133,
+        "maxX": 462,
+        "minY": 55,
+        "maxY": 125
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-03.webp",
+          "x": 405,
+          "y": 57,
+          "w": 50,
+          "h": 60,
+          "flipH": false,
+          "z": 64,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/Cartoon_Medieval_Glassmaker_Workshop_Level_Set_Environment - Grass_01-23.webp",
+          "x": 316,
+          "y": 74,
+          "w": 112,
+          "h": 40,
+          "flipH": false,
+          "z": 65,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-03.webp",
+          "x": 407,
+          "y": 55,
+          "w": 55,
+          "h": 30,
+          "flipH": false,
+          "z": 67,
+          "note": ""
+        },
+        {
+          "category": "window",
+          "file": "gemini/window/window-04.webp",
+          "x": 441,
+          "y": 82,
+          "w": 12,
+          "h": 29,
+          "flipH": false,
+          "z": 68,
+          "note": ""
+        },
+        {
+          "category": "door",
+          "file": "gemini/door/door-02.webp",
+          "x": 291,
+          "y": 55,
+          "w": 40,
+          "h": 60,
+          "flipH": false,
+          "z": 69,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-03.webp",
+          "x": 133,
+          "y": 85,
+          "w": 100,
+          "h": 40,
+          "flipH": false,
+          "z": 71,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "floor-09",
+      "index": 9,
+      "gameLevel": 9,
+      "wallRowY": -455,
+      "deckY": -512,
+      "deckYSource": "wall-offset",
+      "needsPlatform": false,
+      "complete": false,
+      "spriteCount": 4,
+      "spanToNextDeck": null,
+      "bounds": {
+        "minX": 134,
+        "maxX": 482,
+        "minY": 53,
+        "maxY": 177
+      },
+      "sprites": [
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 134,
+          "y": 57,
+          "w": 100,
+          "h": 120,
+          "flipH": false,
+          "z": 62,
+          "note": ""
+        },
+        {
+          "category": "wall",
+          "file": "gemini/wall/wall-04.webp",
+          "x": 227,
+          "y": 57,
+          "w": 180,
+          "h": 120,
+          "flipH": false,
+          "z": 63,
+          "note": ""
+        },
+        {
+          "category": "other",
+          "file": "gemini/other/other-04.webp",
+          "x": 452,
+          "y": 53,
+          "w": 30,
+          "h": 100,
+          "flipH": false,
+          "z": 68,
+          "note": ""
+        },
+        {
+          "category": "eave",
+          "file": "gemini/eave/eave-01.webp",
+          "x": 221,
+          "y": 59,
+          "w": 196,
+          "h": 30,
+          "flipH": false,
+          "z": 70,
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

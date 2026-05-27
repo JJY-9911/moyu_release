@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>诺亚方舟 · 建造位置测试工具</title>
+  <link rel="stylesheet" href="build-test.css">
+</head>
+<body>
+  <header class="header">
+    <h1>建造位置测试工具</h1>
+    <p>用于验证各建筑材料在船上的插槽位置，非游戏内容。打开：<code>build-test.html</code></p>
+    <a href="index.html">← 返回游戏</a>
+    <a href="layout-editor.html">素材布局编辑器 →</a>
+  </header>
+
+  <div class="layout">
+    <div class="preview-wrap">
+      <canvas id="preview" width="1024" height="576"></canvas>
+    </div>
+
+    <aside class="panel">
+      <section>
+        <h2>材料入库</h2>
+        <div class="btn-grid" id="matButtons"></div>
+        <button type="button" class="btn primary" id="btnRandomMat">随机材料 +1</button>
+        <button type="button" class="btn primary" id="btnRandomBuild">随机材料并自动建造</button>
+      </section>
+
+      <section>
+        <h2>自动建造</h2>
+        <button type="button" class="btn" id="btnAutoStep">消耗材料 · 建造一步</button>
+        <button type="button" class="btn" id="btnAutoAll">消耗材料 · 连续建造</button>
+      </section>
+
+      <section>
+        <h2>平台 / 墙面</h2>
+        <div class="row">
+          <span>平台段数</span>
+          <button type="button" class="btn sm" data-tiles="2">2 段</button>
+          <button type="button" class="btn sm" data-tiles="3">3 段</button>
+        </div>
+        <div class="row">
+          <span>墙面侧</span>
+          <button type="button" class="btn sm" data-wall="left">左侧</button>
+          <button type="button" class="btn sm" data-wall="right">右侧</button>
+          <button type="button" class="btn sm" data-wall="random">随机</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>显示</h2>
+        <label><input type="checkbox" id="chkDebug" checked> 插槽边框 / 室内·阳台区域</label>
+        <button type="button" class="btn danger" id="btnReset">重置场景</button>
+      </section>
+
+      <section>
+        <h2>状态</h2>
+        <pre id="statusBox">加载中…</pre>
+      </section>
+
+      <section>
+        <h2>构件坐标日志</h2>
+        <pre id="logBox" class="log"></pre>
+      </section>
+    </aside>
+  </div>
+
+  <script src="building.js"></script>
+  <script src="build-test.js"></script>
+</body>
+</html>

@@ -132,7 +132,7 @@
       bibleOrbit: 72,
       bibleRpm: 40,
       bibleDuration: 3000,
-      bibleCooldown: 3000,
+      bibleCooldown: 2000,
       bibleHitDelay: 1700,
       holyWaterMult: 0.9,
       holyWaterDisp: 24,
@@ -4229,7 +4229,7 @@
   // Active skill effect removed — sword handles all damage
 
   // ===================== BIBLE ORBIT (wizard — VS King Bible) =====================
-  // VS: clockwise orbit, upright sprites, 3s active + 3s cooldown, 1.7s hit delay per book
+  // VS: clockwise orbit, upright sprites, 3s active + 2s cooldown, 1.7s hit delay per book
   var bibleAngle = 0;
   var biblePhase = 'active';
   var biblePhaseMs = 0;

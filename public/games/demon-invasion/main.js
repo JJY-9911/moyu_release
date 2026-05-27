@@ -28,10 +28,10 @@ const UNIT_DEFS = [
       summonCount:5, summonHp:1, summonSpeed:1, summonDmg:1, summonInterval:1,
       summonIcon:'assets/monster/swarm/Icon42.webp' },
   { id:'swarm3', name:'圣鹿',     type:'swarm',  icon:'assets/monster/swarm/Icon32.webp',  hp:5,  speed:0.2,   dmg:0,  atkInterval:10,   range:0,   cost:8,  sizeScale:1.5,
-        summonCount:3, summonHp:5, summonSpeed:1, summonDmg:2, summonInterval:1,
+        summonCount:3, summonHp:4, summonSpeed:1, summonDmg:2, summonInterval:1,
         summonIcon:'assets/monster/swarm/Icon18.webp' },
   { id:'swarm4', name:'地狱犬',     type:'swarm',  icon:'assets/monster/swarm/Icon35.webp',  hp:4,  speed:0.2,   dmg:0,  atkInterval:10,   range:0,   cost:7,  sizeScale:1.5,
-          summonCount:3, summonHp:5, summonSpeed:2, summonDmg:4, summonInterval:1,
+          summonCount:3, summonHp:5, summonSpeed:2, summonDmg:1, summonInterval:1,
           summonIcon:'assets/monster/swarm/Icon36.webp' },
   // Turret - 穿透远程攻击（素材大小 2）
   { id:'turret1',name:'攻城器',     type:'turret', icon:'assets/monster/siege/Icon3.webp',   hp:10, speed:0.2, dmg:10, atkInterval:8,   range:12,  cost:7,  sizeScale:2 },
@@ -813,19 +813,19 @@ const ENEMY_DEFS = {
   boss2: {
     id: 'boss2', name: 'Boss2', type: 'guard',
     icon: 'assets/monster/Icon12.webp',
-    hp: 200, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
+    hp: 200, speed: 0.1, dmg: 20, atkInterval: 2, range: 1, cost: 20,
     sizeScale: 2,
   },
     boss3: {
     id: 'boss3', name: 'Boss3', type: 'guard',
     icon: 'assets/monster/Icon7.webp',
-    hp: 500, speed: 0.1, dmg: 5, atkInterval: 1, range: 1, cost: 20,
+    hp: 500, speed: 0.1, dmg: 30, atkInterval: 1, range: 1, cost: 20,
     sizeScale: 3,
   },
     boss4: {
     id: 'boss4', name: 'Boss4', type: 'guard',
     icon: 'assets/monster/Icon45.webp',
-    hp: 1000, speed: 0.1, dmg: 5, atkInterval: 2, range: 1, cost: 20,
+    hp: 1000, speed: 0.1, dmg: 50, atkInterval: 2, range: 1, cost: 20,
     sizeScale:8,
   }
 };

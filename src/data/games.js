@@ -50,6 +50,16 @@ export const games = [
     desc: '抛竿钓鱼，收集稀有鱼种，升级装备成为钓鱼大师',
   },
   {
+    id: 'Noah',
+    name: '诺亚方舟',
+    icon: '🛶',
+    category: 'idle',
+    categoryLabel: '挂机',
+    hot: true,
+    cover: '/games/Noah/boat.png',
+    desc: '摆动指针出杆钓鱼打捞材料，在方舟上建造诺亚方舟',
+  },
+  {
     id: 'murphyt\u0435',
     name: '史莱姆突围',
     icon: '🟢',

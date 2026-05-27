@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>诺亚方舟 · 精灵图手动拆分</title>
+  <link rel="stylesheet" href="sprite-splitter.css">
+</head>
+<body>
+  <header class="header">
+    <h1>精灵图手动拆分工具</h1>
+    <p>在雪碧图上拖拽框选每个素材，设置分类与文件名后导出 webp + manifest。</p>
+    <nav class="nav">
+      <a href="layout-editor.html">布局编辑器</a>
+      <a href="index.html">游戏</a>
+      <a href="build-test.html">自动建造测试</a>
+    </nav>
+  </header>
+
+  <div class="toolbar">
+    <label class="file-btn">
+      选择图片
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </label>
+    <button type="button" class="btn" id="btnDefaultSheet">加载默认 Gemini 图</button>
+    <span class="sep"></span>
+    <button type="button" class="btn active" data-tool="draw" id="toolDraw">框选 (D)</button>
+    <button type="button" class="btn" data-tool="select" id="toolSelect">选择 (V)</button>
+    <label class="inline">边距 <input type="number" id="inpPad" value="2" min="0" max="20" step="1"></label>
+    <label class="inline chk"><input type="checkbox" id="chkSnap" checked> 吸附 8px</label>
+    <span class="sep"></span>
+    <button type="button" class="btn" id="btnFit">适应窗口</button>
+    <button type="button" class="btn sm" id="btnZoomOut">−</button>
+    <span id="zoomLabel">100%</span>
+    <button type="button" class="btn sm" id="btnZoomIn">+</button>
+    <span class="sep"></span>
+    <button type="button" class="btn primary" id="btnExportWebp">下载 ZIP（全部 webp）</button>
+    <span id="exportStatus" class="export-status"></span>
+    <button type="button" class="btn" id="btnCopyManifest">复制 manifest</button>
+    <button type="button" class="btn" id="btnCopyCatalog">复制编辑器清单</button>
+    <button type="button" class="btn" id="btnSaveProject">保存工程</button>
+    <button type="button" class="btn" id="btnLoadProject">导入工程</button>
+  </div>
+
+  <div class="workspace">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="stage"></canvas>
+      <p class="canvas-hint" id="canvasHint">拖拽框选 · 滚轮缩放 · 中键/空格+拖平移 · 选中后方向键微调</p>
+    </div>
+
+    <aside class="panel">
+      <h2>当前选区</h2>
+      <div id="noSelection" class="muted">未选中。用「框选」在图上拖出矩形。</div>
+      <div id="selectionPanel" hidden>
+        <label>分类
+          <select id="inpCategory">
+            <option value="eave">屋檐</option>
+            <option value="door">门</option>
+            <option value="window">窗</option>
+            <option value="wall">墙面</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <label>文件名 <input type="text" id="inpName" placeholder="如 door-01"></label>
+        <div class="grid4">
+          <label>X <input type="number" id="inpX" step="1"></label>
+          <label>Y <input type="number" id="inpY" step="1"></label>
+          <label>宽 <input type="number" id="inpW" step="1" min="1"></label>
+          <label>高 <input type="number" id="inpH" step="1" min="1"></label>
+        </div>
+        <div class="preview-box">
+          <canvas id="preview" width="120" height="120"></canvas>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn danger sm" id="btnDel">删除 (Del)</button>
+          <button type="button" class="btn sm" id="btnDup">复制</button>
+        </div>
+      </div>
+
+      <h2>全部选区 (<span id="sliceCount">0</span>)</h2>
+      <ul id="sliceList" class="slice-list"></ul>
+
+      <h2>输出预览</h2>
+      <textarea id="jsonOut" class="json-out" readonly placeholder="manifest.json 内容…"></textarea>
+      <p class="hint">下载 ZIP 后解压到 <code>assets/Building/</code>（内含 <code>gemini/</code> 目录与 manifest）。Safari 等浏览器会打包为单次下载，避免被拦截。</p>
+    </aside>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+  <script src="sprite-splitter.js"></script>
+</body>
+</html>
