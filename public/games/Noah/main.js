@@ -238,10 +238,17 @@
   }
 
   function pickMaterial() {
-    if (window.NoahBuilding && window.NoahBuilding.pickFishMaterial) {
-      return window.NoahBuilding.pickFishMaterial();
+    if (window.NoahBuilding && window.NoahBuilding.rollCastItems) {
+      return window.NoahBuilding.rollCastItems();
     }
-    return { name: '建筑材料', type: 'other', file: null, qty: 1 };
+    return [{ kind: 'material', name: '材料' }];
+  }
+
+  function formatCatchLabel(items) {
+    if (window.NoahBuilding && window.NoahBuilding.formatCastSummary) {
+      return window.NoahBuilding.formatCastSummary(items);
+    }
+    return '物品';
   }
 
   function getMinCameraWorldTop() {
@@ -299,19 +306,17 @@
 
   function resultBannerText(result) {
     var anim = getResultAnim(result);
-    var catchName = result.catch ? result.catch.name : '';
+    var catchName = result.items ? formatCatchLabel(result.items) : '';
     var depthPart = anim.depthStarted
       ? ' · 深度 ' + anim.depthM + 'm'
       : '';
     return '距离 ' + anim.rangeM + 'm' + depthPart + ' · 获得 ' + catchName;
   }
 
-  function applyCatch(catchObj) {
-    if (!window.NoahBuilding || !catchObj) return;
-    if (catchObj.file && window.NoahBuilding.grantMaterialFile) {
-      window.NoahBuilding.grantMaterialFile(catchObj.file, catchObj.qty || 1);
-    } else if (catchObj.type) {
-      window.NoahBuilding.grantMaterial(catchObj.type, catchObj.qty || 1);
+  function applyCatch(items) {
+    if (!window.NoahBuilding || !items || !items.length) return;
+    if (window.NoahBuilding.applyCastItems) {
+      window.NoahBuilding.applyCastItems(items);
     }
     preloadBuildingAssets();
     clampCameraWorldTop();
@@ -322,18 +327,18 @@
     if (state.phase !== 'aim') return;
     var angle = state.pointerAngle;
     var sim = simulateCast(angle);
-    var catchObj = pickMaterial();
+    var items = pickMaterial();
 
     state.phase = 'result';
     state.lastResult = {
       angle: angle,
       sim: sim,
-      catch: catchObj,
+      items: items,
       elapsed: 0
     };
     state.resultTimer = RANGE_ANIM_MS + DEPTH_ANIM_MS + 1200;
 
-    applyCatch(catchObj);
+    applyCatch(items);
     showBanner(resultBannerText(state.lastResult), state.resultTimer);
   }
 
@@ -373,6 +378,42 @@
 
   function drawBuilding() {
     if (window.NoahBuilding) window.NoahBuilding.draw(ctx);
+  }
+
+  function drawHud() {
+    if (!window.NoahBuilding || !window.NoahBuilding.getEconomySnapshot) return;
+    var eco = window.NoahBuilding.getEconomySnapshot();
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      '繁荣 ' + eco.prosperity + ' · 饱食 ' + eco.satiety +
+        ' · 人口 ' + eco.people + '/' + eco.capacity,
+      CANVAS_W - 12,
+      CANVAS_H - 14
+    );
+    if (eco.prosperity >= 80) {
+      ctx.fillStyle = '#ffe080';
+      ctx.fillText('自动打捞中', CANVAS_W - 12, CANVAS_H - 30);
+    }
+    ctx.restore();
+  }
+
+  function drawCatchFlashes() {
+    if (state.phase !== 'result' || !state.lastResult || !state.lastResult.items) return;
+    var boat = getBoatBounds();
+    var fishN = 0;
+    state.lastResult.items.forEach(function (it) {
+      if (it.kind === 'fish') fishN++;
+    });
+    if (!fishN || !window.NoahBuilding || !window.NoahBuilding.drawFishFlash) return;
+    var i;
+    for (i = 0; i < fishN; i++) {
+      window.NoahBuilding.drawFishFlash(ctx, boat.x + 60 + i * 20, boat.y - 40);
+    }
   }
 
   function drawBoat() {
@@ -512,11 +553,13 @@
     ctx.translate(0, -cameraWorldTop);
     drawBoat();
     drawBuilding();
+    drawCatchFlashes();
     drawRod();
     drawPointer();
     if (state.phase === 'result') drawResultMarkers();
     drawCastButton();
     ctx.restore();
+    drawHud();
     drawBanner();
   }
 
@@ -584,11 +627,16 @@
     updatePointer(dt);
     updateResult(dt);
     updateBanner(dt);
+    var needSave = false;
+    if (window.NoahBuilding && window.NoahBuilding.tickEconomy(dt)) {
+      needSave = true;
+    }
     if (window.NoahBuilding && window.NoahBuilding.tickAutoBuild(dt)) {
       preloadBuildingAssets();
       clampCameraWorldTop();
-      saveGame();
+      needSave = true;
     }
+    if (needSave) saveGame();
     render();
     requestAnimationFrame(loop);
   }

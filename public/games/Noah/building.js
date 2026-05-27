@@ -46,6 +46,20 @@
 
   var build = null;
   var autoBuildTimer = 0;
+  var economyTimer = 0;
+  var autoLootTimer = 0;
+  var SATIETY_TICK_MS = 5000;
+  var AUTO_LOOT_INTERVAL_MS = 1000;
+  var PEOPLE_PER_HOUSE = 2;
+  var PROSPERITY_PER_HOUSE = 1;
+  var PROSPERITY_PER_PERSON = 5;
+  var FISH_SATIETY = 10;
+  /** 单次掉落种类权重：建筑材料需凑齐特定组合，故大幅提高材料占比 */
+  var CAST_KIND_WEIGHTS = [
+    { kind: 'material', weight: 70 },
+    { kind: 'fish', weight: 15 },
+    { kind: 'person', weight: 15 }
+  ];
 
   function assetKey(file) {
     return 'b:' + file;
@@ -57,14 +71,225 @@
 
   function defaultState() {
     return {
-      v: 2,
+      v: 3,
       materialStock: {},
       basePieces: [],
       completedFloors: [],
       currentFloor: null,
       nextBuildIndex: 1,
-      pieces: []
+      pieces: [],
+      prosperity: 0,
+      satiety: 50,
+      satietyTimer: 0,
+      waitingPeople: [],
+      nextPersonId: 1
     };
+  }
+
+  function randInt(min, max) {
+    return min + Math.floor(Math.random() * (max - min + 1));
+  }
+
+  function totalPeopleCount() {
+    var n = (build.waitingPeople || []).length;
+    (build.completedFloors || []).forEach(function (fl) {
+      n += fl.occupants || 0;
+    });
+    return n;
+  }
+
+  function housingCapacity() {
+    return (build.completedFloors || []).length * PEOPLE_PER_HOUSE;
+  }
+
+  function housedPeopleCount() {
+    var n = 0;
+    (build.completedFloors || []).forEach(function (fl) {
+      n += fl.occupants || 0;
+    });
+    return n;
+  }
+
+  function findFloorWithSpace() {
+    for (var i = 0; i < (build.completedFloors || []).length; i++) {
+      var fl = build.completedFloors[i];
+      if ((fl.occupants || 0) < PEOPLE_PER_HOUSE) return fl;
+    }
+    return null;
+  }
+
+  function getFloorPeopleAnchor(fl, slotIndex) {
+    var minX = Infinity;
+    var minY = Infinity;
+    var maxX = -Infinity;
+    var maxY = -Infinity;
+    (fl.sprites || []).forEach(function (sp) {
+      minX = Math.min(minX, sp.x);
+      minY = Math.min(minY, sp.y);
+      maxX = Math.max(maxX, sp.x + sp.w);
+      maxY = Math.max(maxY, sp.y + sp.h);
+    });
+    if (!fl.sprites || !fl.sprites.length) {
+      return { x: 200, y: 300 };
+    }
+    var cx = (minX + maxX) / 2;
+    var cy = maxY - 18;
+    var off = slotIndex === 0 ? -12 : 12;
+    return { x: cx + off - 6, y: cy - 14 };
+  }
+
+  function getBoatPeopleAnchor(index) {
+    if (!cfg.getBoatBounds) {
+      return { x: 120 + index * 16, y: 380 };
+    }
+    var boat = cfg.getBoatBounds();
+    return {
+      x: boat.x + 48 + index * 18,
+      y: boat.y - 28 - (index % 3) * 6
+    };
+  }
+
+  function addWaitingPerson() {
+    var id = build.nextPersonId++;
+    var idx = build.waitingPeople.length;
+    build.waitingPeople.push({ id: id, boatIndex: idx });
+    tryHouseWaitingPeople();
+    return { kind: 'person', name: '幸存者' };
+  }
+
+  function tryHouseWaitingPeople() {
+    var changed = false;
+    while (build.waitingPeople.length) {
+      var fl = findFloorWithSpace();
+      if (!fl) break;
+      build.waitingPeople.shift();
+      fl.occupants = (fl.occupants || 0) + 1;
+      build.prosperity += PROSPERITY_PER_PERSON;
+      changed = true;
+    }
+    if (changed && build.waitingPeople.length) {
+      build.waitingPeople.forEach(function (p, i) { p.boatIndex = i; });
+    }
+    return changed;
+  }
+
+  function addFishCatch() {
+    build.satiety = (build.satiety || 0) + FISH_SATIETY;
+    return { kind: 'fish', name: '鱼', satiety: FISH_SATIETY };
+  }
+
+  function pickCastKind() {
+    var total = 0;
+    var i;
+    for (i = 0; i < CAST_KIND_WEIGHTS.length; i++) {
+      total += CAST_KIND_WEIGHTS[i].weight;
+    }
+    var roll = Math.random() * total;
+    var acc = 0;
+    for (i = 0; i < CAST_KIND_WEIGHTS.length; i++) {
+      acc += CAST_KIND_WEIGHTS[i].weight;
+      if (roll <= acc) return CAST_KIND_WEIGHTS[i].kind;
+    }
+    return 'material';
+  }
+
+  /** 优先掉落本层仍缺的具体建材，减少重复无用材料 */
+  function pickNeededMaterialFile() {
+    if (build.currentFloor && build.currentFloor.slots) {
+      var needed = [];
+      build.currentFloor.slots.forEach(function (s) {
+        if (!s.placed && s.file) needed.push(s.file);
+      });
+      if (needed.length) return pickRandom(needed);
+    }
+    return pickFishMaterial().file;
+  }
+
+  function pickCastItem() {
+    var kind = pickCastKind();
+    if (kind === 'material') {
+      var file = pickNeededMaterialFile();
+      return { kind: 'material', file: file, name: '材料' };
+    }
+    if (kind === 'person') return addWaitingPerson();
+    return addFishCatch();
+  }
+
+  function castItemCountForProsperity() {
+    var p = build.prosperity || 0;
+    if (p >= 80) return 0;
+    if (p < 10) return 1;
+    if (p < 20) return 2;
+    if (p < 40) return randInt(3, 5);
+    return randInt(5, 10);
+  }
+
+  function grantFullFloorMaterialSet() {
+    var files = [];
+    if (build.currentFloor) {
+      build.currentFloor.slots.forEach(function (s) { files.push(s.file); });
+    } else if (completeTemplates.length) {
+      var tpl = pickRandom(completeTemplates);
+      (tpl.sprites || []).forEach(function (s) { files.push(s.file); });
+    }
+    files.forEach(function (f) { addStock(f, 1); });
+    return files.length;
+  }
+
+  function rollCastItems() {
+    var items = [];
+    var n = castItemCountForProsperity();
+    var i;
+    for (i = 0; i < n; i++) items.push(pickCastItem());
+    var p = build.prosperity || 0;
+    if (p >= 40 && p < 80 && Math.random() < 0.2) {
+      var count = grantFullFloorMaterialSet();
+      items.push({ kind: 'materialSet', name: '整层材料', count: count });
+    }
+    return items;
+  }
+
+  function applyCastItem(item) {
+    if (!item) return;
+    if (item.kind === 'material' && item.file) {
+      grantMaterialFile(item.file, 1);
+    }
+  }
+
+  function applyCastItems(items) {
+    (items || []).forEach(function (item) {
+      if (item.kind === 'material') applyCastItem(item);
+    });
+  }
+
+  function rollAutoLootItem() {
+    return pickCastItem();
+  }
+
+  function tickEconomy(dt) {
+    var changed = false;
+    build.satietyTimer = (build.satietyTimer || 0) + dt;
+    while (build.satietyTimer >= SATIETY_TICK_MS) {
+      build.satietyTimer -= SATIETY_TICK_MS;
+      var eaters = totalPeopleCount();
+      if (eaters > 0) {
+        build.satiety = Math.max(0, (build.satiety || 0) - eaters);
+        changed = true;
+      }
+    }
+
+    if ((build.prosperity || 0) >= 80) {
+      autoLootTimer += dt;
+      while (autoLootTimer >= AUTO_LOOT_INTERVAL_MS) {
+        autoLootTimer -= AUTO_LOOT_INTERVAL_MS;
+        var loot = rollAutoLootItem();
+        if (loot.kind === 'material' && loot.file) grantMaterialFile(loot.file, 1);
+        changed = true;
+      }
+    } else {
+      autoLootTimer = 0;
+    }
+    return changed;
   }
 
   function cloneSprite(sp, deckWorldY) {
@@ -126,25 +351,15 @@
     });
   }
 
-  function loadInitialLayoutPieces() {
+  /** 仅读取船体/建造区配置；开局船上不预置任何建筑素材 */
+  function loadInitialLayoutConfig() {
     return fetch('initial-layout.json')
       .then(function (res) {
         if (!res.ok) throw new Error('layout fetch failed');
         return res.json();
       })
       .then(function (layout) {
-        build.basePieces = (layout.sprites || []).map(function (sp) {
-          return {
-            file: sp.file,
-            x: sp.x,
-            y: sp.y,
-            w: sp.w,
-            h: sp.h,
-            flipH: !!sp.flipH,
-            z: sp.z != null ? sp.z : 0,
-            role: 'base'
-          };
-        });
+        build.basePieces = [];
         if (layout.boatScale != null && cfg.setBoatScale) cfg.setBoatScale(layout.boatScale);
         if (layout.boat && cfg.setBoatPosition) {
           cfg.setBoatPosition(layout.boat.x, layout.boat.y);
@@ -238,6 +453,32 @@
     return floor.slots.length > 0;
   }
 
+  /** 当前层房屋整体占位（单张 doing.webp 覆盖范围） */
+  function getFloorBounds(floor) {
+    var minX = Infinity;
+    var minY = Infinity;
+    var maxX = -Infinity;
+    var maxY = -Infinity;
+    var maxZ = 0;
+    floor.slots.forEach(function (s) {
+      minX = Math.min(minX, s.x);
+      minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.w);
+      maxY = Math.max(maxY, s.y + s.h);
+      if (s.z > maxZ) maxZ = s.z;
+    });
+    if (!floor.slots.length) {
+      return { x: 0, y: 0, w: 1, h: 1, z: 0 };
+    }
+    return {
+      x: minX,
+      y: minY,
+      w: Math.max(1, maxX - minX),
+      h: Math.max(1, maxY - minY),
+      z: maxZ
+    };
+  }
+
   function finalizeCurrentFloor() {
     var floor = build.currentFloor;
     if (!floor || !allSlotsPlaced(floor)) return false;
@@ -260,11 +501,14 @@
       buildIndex: floor.buildIndex,
       deckWorldY: floor.deckWorldY,
       spanToNextDeck: floor.spanToNextDeck,
-      sprites: sprites
+      sprites: sprites,
+      occupants: 0
     });
 
+    build.prosperity = (build.prosperity || 0) + PROSPERITY_PER_HOUSE;
     build.currentFloor = null;
     build.nextBuildIndex++;
+    tryHouseWaitingPeople();
     if (cfg.showBanner) {
       cfg.showBanner('第' + (build.nextBuildIndex - 1) + ' 层完工', 2000);
     }
@@ -272,7 +516,7 @@
     return true;
   }
 
-  /** 每 3 秒：无序遍历本层缺料位，有库存则消耗并显示 doing 占位 */
+  /** 每 3 秒：无序遍历本层缺料位，有库存则消耗材料（视觉仅用一张 doing 覆盖整层） */
   function runAutoBuildTraversal() {
     if (!housesReady) return false;
     var changed = false;
@@ -303,7 +547,6 @@
       spendStock(slot.file);
       slot.placed = true;
       changed = true;
-      ensureAsset(DOING_FILE);
       break;
     }
 
@@ -358,20 +601,18 @@
     });
 
     if (build.currentFloor) {
-      build.currentFloor.slots.forEach(function (slot) {
-        if (!slot.placed) return;
-        pieces.push({
-          file: DOING_FILE,
-          x: slot.x,
-          y: slot.y,
-          w: slot.w,
-          h: slot.h,
-          flipH: slot.flipH,
-          z: slot.z != null ? slot.z : z++,
-          role: 'doing'
-        });
-        ensureAsset(DOING_FILE);
+      var bounds = getFloorBounds(build.currentFloor);
+      pieces.push({
+        file: DOING_FILE,
+        x: bounds.x,
+        y: bounds.y,
+        w: bounds.w,
+        h: bounds.h,
+        flipH: false,
+        z: bounds.z + 1,
+        role: 'doing'
       });
+      ensureAsset(DOING_FILE);
     }
 
     build.pieces = pieces;
@@ -464,6 +705,34 @@
       }
       ctx.restore();
     });
+    drawPeople(ctx);
+  }
+
+  function drawPeople(ctx) {
+    if (!build) return;
+    var pw = 12;
+    var ph = 18;
+
+    (build.completedFloors || []).forEach(function (fl) {
+      var occ = fl.occupants || 0;
+      var i;
+      for (i = 0; i < occ; i++) {
+        var pos = getFloorPeopleAnchor(fl, i);
+        ctx.fillStyle = '#e03030';
+        ctx.fillRect(pos.x, pos.y, pw, ph);
+      }
+    });
+
+    (build.waitingPeople || []).forEach(function (person, i) {
+      var pos = getBoatPeopleAnchor(person.boatIndex != null ? person.boatIndex : i);
+      ctx.fillStyle = '#e03030';
+      ctx.fillRect(pos.x, pos.y, pw, ph);
+    });
+  }
+
+  function drawFishFlash(ctx, x, y) {
+    ctx.fillStyle = '#3080e0';
+    ctx.fillRect(x, y, 14, 10);
   }
 
   function drawDebug(ctx, showZones) {
@@ -503,13 +772,54 @@
     var cur = build.currentFloor;
     return {
       platformTiles: 2,
-      materials: '库存种类 ' + Object.keys(build.materialStock || {}).length +
-        ' · 件数 ' + stockCount,
+      materials: '库存 ' + stockCount + ' · 繁荣 ' + (build.prosperity || 0) +
+        ' · 饱食 ' + Math.round(build.satiety || 0) +
+        ' · 人口 ' + totalPeopleCount() + '/' + housingCapacity(),
       floor: cur
         ? ('建造中 ' + cur.templateId + ' · 进度 ' +
           cur.slots.filter(function (s) { return s.placed; }).length + '/' + cur.slots.length)
         : ('下一层序号 ' + build.nextBuildIndex + ' · 已完成 ' + build.completedFloors.length)
     };
+  }
+
+  function getEconomySnapshot() {
+    return {
+      prosperity: build.prosperity || 0,
+      satiety: Math.round(build.satiety || 0),
+      people: totalPeopleCount(),
+      capacity: housingCapacity(),
+      waiting: (build.waitingPeople || []).length
+    };
+  }
+
+  function formatCastSummary(items) {
+    var mat = 0;
+    var person = 0;
+    var fish = 0;
+    var setBonus = 0;
+    (items || []).forEach(function (it) {
+      if (it.kind === 'material') mat++;
+      else if (it.kind === 'person') person++;
+      else if (it.kind === 'fish') fish++;
+      else if (it.kind === 'materialSet') setBonus = it.count || 1;
+    });
+    var parts = [];
+    if (mat) parts.push('材料×' + mat);
+    if (person) parts.push('人×' + person);
+    if (fish) parts.push('鱼×' + fish);
+    if (setBonus) parts.push('整层材料×' + setBonus);
+    return parts.length ? parts.join(' ') : '物品×0';
+  }
+
+  function migrateBuildState() {
+    if (build.prosperity == null) build.prosperity = 0;
+    if (build.satiety == null) build.satiety = 50;
+    if (!build.waitingPeople) build.waitingPeople = [];
+    if (!build.nextPersonId) build.nextPersonId = 1;
+    if (build.satietyTimer == null) build.satietyTimer = 0;
+    (build.completedFloors || []).forEach(function (fl) {
+      if (fl.occupants == null) fl.occupants = 0;
+    });
   }
 
   function getPieceLog() {
@@ -519,49 +829,70 @@
   }
 
   function init(saved) {
-    build = saved && saved.v === 2 ? saved : defaultState();
+    build = saved && (saved.v === 3 || saved.v === 2) ? saved : defaultState();
+    migrateBuildState();
     if (!build.materialStock) build.materialStock = {};
     if (!build.basePieces) build.basePieces = [];
     if (!build.completedFloors) build.completedFloors = [];
     if (!build.nextBuildIndex) build.nextBuildIndex = 1;
+    build.v = 3;
     return loadHousesData().then(function () {
-      if (!build.basePieces.length) return loadInitialLayoutPieces();
-      rebuildLayout();
+      return loadInitialLayoutConfig();
     });
   }
 
   function initGameFresh() {
     build = defaultState();
+    build.materialStock = {};
+    build.basePieces = [];
+    build.completedFloors = [];
+    build.currentFloor = null;
     build.nextBuildIndex = 1;
-    return loadHousesData().then(loadInitialLayoutPieces).then(function () {
+    build.prosperity = 0;
+    build.satiety = 50;
+    build.waitingPeople = [];
+    build.nextPersonId = 1;
+    build.satietyTimer = 0;
+    return loadHousesData().then(loadInitialLayoutConfig).then(function () {
       if (cfg.showBanner) cfg.showBanner('开始建造方舟', 1600);
     });
   }
 
   function serialize() {
     return {
-      v: 2,
+      v: 3,
       materialStock: build.materialStock,
       basePieces: build.basePieces,
       completedFloors: build.completedFloors,
       currentFloor: build.currentFloor,
-      nextBuildIndex: build.nextBuildIndex
+      nextBuildIndex: build.nextBuildIndex,
+      prosperity: build.prosperity,
+      satiety: build.satiety,
+      satietyTimer: build.satietyTimer,
+      waitingPeople: build.waitingPeople,
+      nextPersonId: build.nextPersonId
     };
   }
 
   function deserialize(data) {
-    if (!data || data.v !== 2) {
+    if (!data || (data.v !== 3 && data.v !== 2)) {
       return initGameFresh();
     }
     build = defaultState();
     build.materialStock = data.materialStock || {};
-    build.basePieces = data.basePieces || [];
+    build.basePieces = [];
     build.completedFloors = data.completedFloors || [];
     build.currentFloor = data.currentFloor || null;
     build.nextBuildIndex = data.nextBuildIndex || 1;
+    build.prosperity = data.prosperity || 0;
+    build.satiety = data.satiety != null ? data.satiety : 50;
+    build.satietyTimer = data.satietyTimer || 0;
+    build.waitingPeople = data.waitingPeople || [];
+    build.nextPersonId = data.nextPersonId || 1;
+    build.v = 3;
+    migrateBuildState();
     return loadHousesData().then(function () {
-      if (!build.basePieces.length) return loadInitialLayoutPieces();
-      rebuildLayout();
+      return loadInitialLayoutConfig();
     });
   }
 
@@ -615,6 +946,12 @@
     grantMaterial: grantMaterial,
     grantMaterialFile: grantMaterialFile,
     pickFishMaterial: pickFishMaterial,
+    rollCastItems: rollCastItems,
+    applyCastItems: applyCastItems,
+    formatCastSummary: formatCastSummary,
+    getEconomySnapshot: getEconomySnapshot,
+    tickEconomy: tickEconomy,
+    drawFishFlash: drawFishFlash,
     getRequiredAssetFiles: getRequiredAssetFiles,
     applyBoatConfig: applyBoatConfig,
     initGameFresh: initGameFresh,
