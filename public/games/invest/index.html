@@ -4,11 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>异世界炒股 - GameHub</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=lot-btn-align2">
 </head>
 <body>
   <a href="../../index.html" class="top-btn back-btn">← 返回</a>
-  <script>if(window!==window.top)document.querySelector('.back-btn').style.display='none';</script>
+  <script>
+    if (window !== window.top) {
+      document.documentElement.classList.add('embedded');
+      document.querySelector('.back-btn').style.display = 'none';
+    }
+  </script>
 
   <div id="openOverlay" class="overlay">
     <div class="overlay-card">
@@ -19,22 +24,36 @@
     </div>
   </div>
 
+  <div class="game-viewport" id="gameViewport">
   <div class="game-shell" id="gameShell" hidden>
     <section class="panel chart-panel">
-      <div class="chart-main">
-        <div class="chart-header">
-          <span id="chartTitle">请选择股票</span>
-          <span id="chartPrice" class="chart-price"></span>
+      <div class="chart-board">
+        <div class="chart-frame">
+          <div class="chart-frame-bg" aria-hidden="true"></div>
+          <div class="chart-main">
+            <canvas id="priceChart"></canvas>
+          </div>
         </div>
-        <canvas id="priceChart"></canvas>
+        <div class="chart-header-bar">
+          <div class="chart-header-left">
+            <span id="chartTitle" class="chart-header-title">行情走势</span>
+          </div>
+          <div class="chart-header-right">
+            <span id="chartPrice" class="chart-price chart-header-price"></span>
+          </div>
+        </div>
+        <button type="button" id="nextDayBtn" class="btn-next-day">下一交易日</button>
       </div>
       <div class="event-feed">
-        <div class="panel-title">事件</div>
-        <div class="event-log" id="eventLog"></div>
-        <button type="button" class="guru-bribe" id="guruBribe" aria-label="把股神灌醉">
-          <img src="assets/champagne.webp" alt="" width="48" height="48" />
-          <span class="guru-bribe-tip" id="guruBribeTip">把股神灌醉，¥100,000</span>
-        </button>
+        <div class="event-feed-frame" aria-hidden="true"></div>
+        <div class="event-feed-inner">
+          <div class="panel-title">新闻</div>
+          <div class="event-log" id="eventLog"></div>
+          <button type="button" class="guru-bribe" id="guruBribe" aria-label="把股神灌醉">
+            <img src="assets/champagne.webp" alt="" />
+            <span class="guru-bribe-tip" id="guruBribeTip">把股神灌醉，¥100,000</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -58,45 +77,76 @@
       </div>
 
       <div class="trade-panel">
-        <div class="panel-title">账户</div>
-        <div class="day-status">
-          <span id="tradingDayDisplay">第 0 日 · 上市观望</span>
-          <span id="worldEventDisplay">暂无世界事件</span>
-        </div>
+        <div class="trade-panel-frame" aria-hidden="true"></div>
+        <div class="trade-panel-body">
+          <div class="panel-title">账户</div>
+          <div class="account-info-row">
+            <div class="account-info-blocks">
+              <div class="day-status">
+                <span id="tradingDayDisplay">第 0 日 · 上市观望</span>
+                <span id="worldEventDisplay">暂无世界事件</span>
+              </div>
 
-        <div class="account-stats">
-          <div class="stat-row">
-            <span>现金</span>
-            <span id="cashDisplay">¥100,000.00</span>
+              <div class="account-stats">
+                <div class="stat-row">
+                  <span>现金</span>
+                  <span id="cashDisplay">¥100,000.00</span>
+                </div>
+                <div class="stat-row">
+                  <span>持仓市值</span>
+                  <span id="holdingsValue">¥0.00</span>
+                </div>
+                <div class="stat-row total">
+                  <span>总资产</span>
+                  <span id="totalAssets">¥100,000.00</span>
+                </div>
+              </div>
+            </div>
+            <div class="account-book-deco-wrap">
+              <button type="button" class="account-book-btn" id="accountBookBtn" aria-label="股神的暗示">
+                <span class="account-book-deco" aria-hidden="true"></span>
+                <span class="account-book-tip" id="accountBookTip" role="tooltip">股神的暗示</span>
+              </button>
+            </div>
           </div>
-          <div class="stat-row">
-            <span>持仓市值</span>
-            <span id="holdingsValue">¥0.00</span>
+
+          <div class="selected-stock" id="selectedStockInfo">未选择股票</div>
+
+          <div class="lot-size">
+            <span class="lot-label">单次数量</span>
+            <div class="lot-btns" id="lotBtns"></div>
           </div>
-          <div class="stat-row total">
-            <span>总资产</span>
-            <span id="totalAssets">¥100,000.00</span>
+
+          <div class="trade-btns">
+            <button type="button" id="buyBtn" class="btn-buy" disabled>买入</button>
+            <button type="button" id="sellBtn" class="btn-sell" disabled>卖出</button>
           </div>
         </div>
-
-        <div class="selected-stock" id="selectedStockInfo">未选择股票</div>
-
-        <div class="lot-size">
-          <span class="lot-label">单次数量</span>
-          <div class="lot-btns" id="lotBtns"></div>
-        </div>
-
-        <div class="trade-btns">
-          <button type="button" id="buyBtn" class="btn-buy" disabled>买入</button>
-          <button type="button" id="sellBtn" class="btn-sell" disabled>卖出</button>
-        </div>
-
-        <button type="button" id="nextDayBtn" class="btn-next-day">下一交易日 →</button>
       </div>
     </section>
   </div>
+  </div>
+
+  <div id="bookModal" class="book-modal hidden" aria-hidden="true">
+    <div class="book-modal-backdrop" id="bookModalBackdrop" aria-hidden="true"></div>
+    <div class="book-modal-stage" role="dialog" aria-label="股神的暗示" aria-modal="true">
+      <div class="book-modal-sprite-viewport" aria-hidden="true">
+        <div class="book-modal-sprite-sheet" id="bookModalSprite"></div>
+      </div>
+      <div class="book-modal-content hidden" id="bookModalContent">
+        <div class="book-modal-pages" id="bookModalPages">
+          <div class="book-modal-page book-modal-page--left">
+            <ol class="book-modal-hint-list" id="bookModalHintLeft"></ol>
+          </div>
+          <div class="book-modal-page book-modal-page--right">
+            <ol class="book-modal-hint-list" id="bookModalHintRight"></ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="events-data.js"></script>
-  <script src="main.js"></script>
+  <script src="main.js?v=book-hints-only"></script>
 </body>
 </html>

@@ -20,10 +20,23 @@
   const LISTED_COUNT = 10;
   const CHART_STEPS = 120;
   const PREVIEW_STEPS = 10;
+  const CHALK = {
+    axis: 'rgba(232, 228, 218, 0.9)',
+    grid: 'rgba(232, 228, 218, 0.38)',
+    line: '#f5f2eb',
+    text: '#ebe6dc',
+  };
   const INITIAL_CASH = 10000;
   const WORLD_EVENT_DAYS_MIN = 1;
   const WORLD_EVENT_DAYS_MAX = 5;
   const GURU_BRIBE_BASE = 50000;
+
+  const BOOK_FRAME_W = 190;
+  const BOOK_FRAME_H = 160;
+  const BOOK_SPRITE_SCALE = 3.2;
+  const BOOK_OPEN_FRAMES = [0, 1, 2, 3];
+  const BOOK_REST_FRAME = 3;
+  const BOOK_FRAME_MS = 200;
 
   const GURU_HINTS = [
     '任何时候，都要关注股价为奇数的股票...',
@@ -67,6 +80,14 @@
   const eventLog = $('#eventLog');
   const guruBribe = $('#guruBribe');
   const guruBribeTip = $('#guruBribeTip');
+  const accountBookBtn = $('#accountBookBtn');
+  const bookModal = $('#bookModal');
+  const bookModalBackdrop = $('#bookModalBackdrop');
+  const bookModalSprite = $('#bookModalSprite');
+  const bookModalContent = $('#bookModalContent');
+  const bookModalPages = $('#bookModalPages');
+  const bookModalHintLeft = $('#bookModalHintLeft');
+  const bookModalHintRight = $('#bookModalHintRight');
 
   const ctx = priceChart.getContext('2d');
 
@@ -98,6 +119,8 @@
   /** @type {number[]} */
   let guruHintPool = [];
   let lastGuruHintIdx = -1;
+  /** @type {string[]} */
+  let bookHints = [];
 
   function priceSeqNext(n) {
     if (isEven(n)) return roundPrice(n / 2);
@@ -202,7 +225,7 @@
   }
 
   function addEvent(type, text) {
-    if (type !== 'world' && type !== 'sector' && type !== 'hint') return;
+    if (type !== 'world' && type !== 'sector') return;
     const div = document.createElement('div');
     div.className = 'event-item event-' + type;
     div.textContent = dayLabel() + ' ' + text;
@@ -214,6 +237,195 @@
 
   function showTradeHint(text) {
     selectedStockInfo.textContent = text;
+  }
+
+  function formatGuruHintText(hint) {
+    const body = hint.endsWith('。') ? hint : hint + '。';
+    return '【股神的暗示】：' + body;
+  }
+
+  function guruHintBody(hint) {
+    return hint.endsWith('。') ? hint : hint + '。';
+  }
+
+  let bookModalAnimTimer = null;
+
+  function getBookModalStage() {
+    return bookModal?.querySelector('.book-modal-stage');
+  }
+
+  function getBookModalScale() {
+    const stage = getBookModalStage();
+    if (!stage) return BOOK_SPRITE_SCALE;
+    return parseFloat(getComputedStyle(stage).getPropertyValue('--book-modal-scale')) || BOOK_SPRITE_SCALE;
+  }
+
+  function applyBookModalScale(scale) {
+    const stage = getBookModalStage();
+    if (stage) stage.style.setProperty('--book-modal-scale', String(scale));
+  }
+
+  function setBookModalScale(scale) {
+    applyBookModalScale(scale);
+    setBookModalFrame(BOOK_REST_FRAME);
+  }
+
+  function setBookModalFrame(frameIndex) {
+    if (!bookModalSprite) return;
+    const x = frameIndex * BOOK_FRAME_W * getBookModalScale();
+    bookModalSprite.style.transform = `translate3d(-${x}px, 0, 0)`;
+  }
+
+  function bookModalPagesOverflow() {
+    if (!bookModalPages) return true;
+    return (
+      bookModalPages.scrollHeight > bookModalPages.clientHeight + 1 ||
+      bookModalPages.scrollWidth > bookModalPages.clientWidth + 1
+    );
+  }
+
+  function bookModalLeftPageOverflow() {
+    const page = bookModalHintLeft?.closest('.book-modal-page--left');
+    if (!page) return false;
+    return page.scrollHeight > page.clientHeight + 1;
+  }
+
+  function layoutHintsOnBookPages(hints) {
+    if (!bookModalHintLeft || !bookModalHintRight || !bookModalPages) return;
+
+    const list = hints.length ? hints : [];
+    const renderList = (items) =>
+      items.map((hint) => '<li>' + guruHintBody(hint) + '</li>').join('');
+
+    if (list.length === 0) {
+      bookModalHintLeft.innerHTML = '<li class="book-modal-empty">书本还是空的，请先请股神喝杯酒…</li>';
+      bookModalHintRight.innerHTML = '';
+      bookModalHintRight.removeAttribute('start');
+      bookModalPages.classList.add('book-modal-pages--right-empty');
+      return;
+    }
+
+    let splitAt = list.length;
+    bookModalHintRight.innerHTML = '';
+
+    for (let i = 1; i <= list.length; i++) {
+      bookModalHintLeft.innerHTML = renderList(list.slice(0, i));
+      if (bookModalLeftPageOverflow()) {
+        splitAt = i - 1;
+        break;
+      }
+      splitAt = i;
+    }
+
+    const leftHints = list.slice(0, splitAt);
+    const rightHints = list.slice(splitAt);
+
+    bookModalHintLeft.innerHTML = renderList(leftHints);
+
+    if (rightHints.length > 0) {
+      bookModalHintRight.setAttribute('start', String(splitAt + 1));
+      bookModalHintRight.innerHTML = renderList(rightHints);
+      bookModalPages.classList.remove('book-modal-pages--right-empty');
+    } else {
+      bookModalHintRight.innerHTML = '';
+      bookModalHintRight.removeAttribute('start');
+      bookModalPages.classList.add('book-modal-pages--right-empty');
+    }
+  }
+
+  function computeBookModalScale() {
+    if (!bookModalPages || !getBookModalStage()) return BOOK_SPRITE_SCALE;
+
+    const maxW = window.innerWidth * 0.92;
+    const maxH = window.innerHeight * 0.88;
+    const maxScale = Math.min(8, maxW / BOOK_FRAME_W, maxH / BOOK_FRAME_H);
+    let lo = 2;
+    let hi = maxScale;
+    let best = lo;
+
+    while (hi - lo > 0.08) {
+      const mid = (lo + hi) / 2;
+      applyBookModalScale(mid);
+      layoutHintsOnBookPages(bookHints);
+      if (bookModalPagesOverflow()) {
+        hi = mid;
+      } else {
+        best = mid;
+        lo = mid;
+      }
+    }
+    return best;
+  }
+
+  function prepareBookModalScale() {
+    if (!bookModalContent) return BOOK_SPRITE_SCALE;
+
+    bookModalContent.classList.remove('hidden');
+    applyBookModalScale(BOOK_SPRITE_SCALE);
+    layoutHintsOnBookPages(bookHints);
+    if (bookHints.length === 0) {
+      bookModalContent.classList.add('hidden');
+      return BOOK_SPRITE_SCALE;
+    }
+    const scale = computeBookModalScale();
+    applyBookModalScale(scale);
+    layoutHintsOnBookPages(bookHints);
+    bookModalContent.classList.add('hidden');
+    return scale;
+  }
+
+  function stopBookModalAnim() {
+    if (bookModalAnimTimer !== null) {
+      clearInterval(bookModalAnimTimer);
+      bookModalAnimTimer = null;
+    }
+  }
+
+  function closeBookModal() {
+    stopBookModalAnim();
+    if (!bookModal) return;
+    bookModal.classList.add('hidden');
+    bookModal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('book-modal-open');
+    if (bookModalContent) bookModalContent.classList.add('hidden');
+    applyBookModalScale(BOOK_SPRITE_SCALE);
+  }
+
+  function renderBookModalHint() {
+    layoutHintsOnBookPages(bookHints);
+  }
+
+  function openBookModal() {
+    if (!bookModal || !bookModalSprite || !bookModalHintLeft || !bookModalHintRight || !bookModalContent) {
+      return;
+    }
+
+    renderBookModalHint();
+    bookModal.classList.remove('hidden');
+    bookModal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('book-modal-open');
+
+    const openScale = bookHints.length > 0 ? prepareBookModalScale() : BOOK_SPRITE_SCALE;
+    applyBookModalScale(openScale);
+    bookModalContent.classList.add('hidden');
+
+    const showContent = () => {
+      setBookModalFrame(BOOK_REST_FRAME);
+      bookModalContent.classList.remove('hidden');
+    };
+
+    stopBookModalAnim();
+    let step = 0;
+    setBookModalFrame(BOOK_OPEN_FRAMES[0]);
+    bookModalAnimTimer = setInterval(() => {
+      step += 1;
+      if (step < BOOK_OPEN_FRAMES.length) {
+        setBookModalFrame(BOOK_OPEN_FRAMES[step]);
+        return;
+      }
+      stopBookModalAnim();
+      showContent();
+    }, BOOK_FRAME_MS);
   }
 
   function updateGuruBribeTip() {
@@ -246,11 +458,11 @@
     }
     cash -= guruBribeCost;
     const hint = pickGuruHint();
-    const body = hint.endsWith('。') ? hint : hint + '。';
-    addEvent('hint', '【股神的暗示】：' + body);
+    bookHints.push(hint);
     guruBribeCost *= 2;
     updateGuruBribeTip();
     renderAccount();
+    showTradeHint('股神的暗示已记入书本，点击账户区的书查看');
   }
 
   function createEmptyTickCtx() {
@@ -807,7 +1019,7 @@
     if (selectedId == null) {
       chartTitle.textContent = '请选择股票';
       chartPrice.textContent = '';
-      chartPrice.className = 'chart-price';
+      chartPrice.className = 'chart-price chart-header-price';
       drawChart([]);
       return;
     }
@@ -821,13 +1033,13 @@
       stock.prevPrice && !stock.previewMode
         ? ((stock.price - stock.prevPrice) / stock.prevPrice) * 100
         : 0;
-    const previewTag = stock.previewMode ? ' · ' + PREVIEW_STEPS + '步预览' : '';
-    chartTitle.textContent = meta.name + (sector ? ' · ' + sector.name : '') + previewTag;
+    chartTitle.textContent = meta.name + (sector ? ' · ' + sector.name : '');
     chartPrice.textContent = stock.previewMode
       ? '¥' + stock.price + ' · 观望'
       : '¥' + stock.price + '  ' + formatPct(change);
     chartPrice.className =
-      'chart-price ' + (stock.previewMode ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat');
+      'chart-price chart-header-price ' +
+      (stock.previewMode ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat');
 
     drawChart(stock.history, stock.previewMode);
   }
@@ -841,21 +1053,22 @@
 
     priceChart.width = w * dpr;
     priceChart.height = h * dpr;
+    priceChart.style.width = '';
+    priceChart.style.height = '';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, w, h);
 
     if (prices.length === 0) {
-      ctx.fillStyle = '#4a5568';
+      ctx.fillStyle = CHALK.text;
       ctx.font = '13px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('暂无走势数据', w / 2, h / 2);
       return;
     }
 
-    const pad = { top: 16, right: 16, bottom: 28, left: 48 };
-    const plotW = w - pad.left - pad.right;
-    const plotH = h - pad.top - pad.bottom;
-    const xSpan = CHART_STEPS - 1;
+    const px = (v) => Math.round(v);
+    const snapLine = (v) => Math.round(v) + 0.5;
 
     let minP = Math.min(...prices);
     let maxP = Math.max(...prices);
@@ -863,106 +1076,202 @@
       minP = Math.max(1, minP - 1);
       maxP = maxP + 1;
     }
+    const priceSpan = maxP - minP;
+    const yHeadroom = priceSpan * 0.08;
+    minP = Math.max(0, minP - yHeadroom);
+    maxP += yHeadroom;
 
-    const xAt = (step) => pad.left + (step / xSpan) * plotW;
-    const yAt = (p) => pad.top + plotH - ((p - minP) / (maxP - minP)) * plotH;
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 1;
+    ctx.font = '10px sans-serif';
+    let maxYLabelW = 0;
     for (let i = 0; i <= 4; i++) {
-      const y = pad.top + (plotH * i) / 4;
+      const val = maxP - ((maxP - minP) * i) / 4;
+      maxYLabelW = Math.max(maxYLabelW, ctx.measureText(String(Math.round(val))).width);
+    }
+    const pad = {
+      top: 28,
+      right: 14,
+      bottom: 22,
+      left: Math.ceil(maxYLabelW) + 12,
+    };
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+    const plotInset = 2;
+
+    const xAt = (step) => pad.left + (step / CHART_STEPS) * plotW;
+    const yAt = (p) => {
+      const t = (p - minP) / (maxP - minP);
+      const innerH = Math.max(1, plotH - plotInset * 2);
+      return pad.top + plotInset + innerH - t * innerH;
+    };
+    const axisBottom = snapLine(pad.top + plotH);
+    const axisLeft = snapLine(pad.left);
+    const axisRight = snapLine(pad.left + plotW);
+    const axisTop = snapLine(pad.top);
+
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+
+    ctx.strokeStyle = CHALK.axis;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(axisLeft, axisTop);
+    ctx.lineTo(axisLeft, axisBottom);
+    ctx.lineTo(axisRight, axisBottom);
+    ctx.stroke();
+
+    ctx.strokeStyle = CHALK.grid;
+    ctx.setLineDash([3, 3]);
+    for (let i = 1; i <= 3; i++) {
+      const y = snapLine(pad.top + (plotH * i) / 4);
       ctx.beginPath();
-      ctx.moveTo(pad.left, y);
-      ctx.lineTo(pad.left + plotW, y);
+      ctx.moveTo(axisLeft, y);
+      ctx.lineTo(axisRight, y);
       ctx.stroke();
     }
-
-    [0, 30, 60, 90, 120].forEach((step) => {
-      const x = xAt(step);
+    [30, 60, 90].forEach((step) => {
+      const x = snapLine(xAt(step));
       ctx.beginPath();
-      ctx.moveTo(x, pad.top);
-      ctx.lineTo(x, pad.top + plotH);
+      ctx.moveTo(x, axisTop);
+      ctx.lineTo(x, axisBottom);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    const tick = 4;
+    ctx.strokeStyle = CHALK.axis;
+    for (let i = 0; i <= 4; i++) {
+      const y = snapLine(pad.top + (plotH * i) / 4);
+      ctx.beginPath();
+      ctx.moveTo(axisLeft - tick, y);
+      ctx.lineTo(axisLeft, y);
+      ctx.stroke();
+    }
+    [0, 30, 60, 90, 120].forEach((step) => {
+      const x = snapLine(xAt(step));
+      ctx.beginPath();
+      ctx.moveTo(x, axisBottom);
+      ctx.lineTo(x, axisBottom + tick);
       ctx.stroke();
     });
 
-    ctx.fillStyle = '#718096';
+    ctx.fillStyle = CHALK.text;
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
     for (let i = 0; i <= 4; i++) {
       const val = maxP - ((maxP - minP) * i) / 4;
       const y = pad.top + (plotH * i) / 4;
-      ctx.fillText(Math.round(val).toString(), pad.left - 6, y + 3);
+      ctx.fillText(String(Math.round(val)), pad.left - 8, y);
     }
 
-    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xLabelY = pad.top + plotH + 8;
     [0, 30, 60, 90, 120].forEach((step) => {
-      ctx.fillText(String(step), xAt(step), pad.top + plotH + 16);
+      const x = px(xAt(step));
+      if (step === 0) ctx.textAlign = 'left';
+      else if (step === 120) ctx.textAlign = 'right';
+      else ctx.textAlign = 'center';
+      ctx.fillText(String(step), x, xLabelY);
     });
 
     const last = prices[prices.length - 1];
-    const prev = prices.length > 1 ? prices[prices.length - 2] : last;
-    const lineColor = isPreview ? '#63b3ed' : last >= prev ? '#fc8181' : '#68d391';
     const lastStep = prices.length - 1;
+    const lineColor = CHALK.line;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(pad.left, pad.top, plotW, plotH);
+    ctx.clip();
 
     if (prices.length >= 2) {
       ctx.beginPath();
       prices.forEach((p, i) => {
-        const x = xAt(i);
-        const y = yAt(p);
+        const x = px(xAt(i));
+        const y = px(yAt(p));
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = lineColor;
       ctx.lineWidth = 2;
-      ctx.setLineDash(isPreview ? [6, 4] : []);
+      ctx.setLineDash(isPreview ? [5, 4] : []);
       ctx.stroke();
       ctx.setLineDash([]);
-
-      if (!isPreview) {
-        ctx.lineTo(xAt(lastStep), pad.top + plotH);
-        ctx.lineTo(xAt(0), pad.top + plotH);
-        ctx.closePath();
-        const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
-        grad.addColorStop(0, last >= prev ? 'rgba(252,129,129,0.25)' : 'rgba(104,211,145,0.25)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.fill();
-      }
     }
 
-    ctx.beginPath();
-    ctx.arc(xAt(lastStep), yAt(last), 4, 0, Math.PI * 2);
     ctx.fillStyle = lineColor;
-    ctx.fill();
+    ctx.fillRect(px(xAt(lastStep)) - 1, px(yAt(last)) - 1, 3, 3);
+    ctx.restore();
+  }
 
-    if (isPreview) {
-      ctx.fillStyle = '#63b3ed';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('考拉兹' + PREVIEW_STEPS + '步预览 · 点击「下一交易日」开始交易', xAt(0) + 6, pad.top + 14);
+  function syncAccountBookLayout() {
+    const blocks = document.querySelector('.trade-panel-body .account-info-blocks');
+    const row = document.querySelector('.trade-panel-body .account-info-row');
+    const bookBtn = document.querySelector('.trade-panel-body .account-book-btn');
+    const book = bookBtn?.querySelector('.account-book-deco');
+    if (!blocks || !row || !bookBtn || !book) return;
+
+    const body = row.closest('.trade-panel-body');
+    const bookGap = body
+      ? parseFloat(getComputedStyle(body).getPropertyValue('--account-book-gap')) || 8
+      : 8;
+    const blockH = blocks.offsetHeight;
+    if (blockH < 1) return;
+
+    const aspect = 77 / 125;
+    const scale = 1.18;
+    const h = Math.round(blockH * scale);
+    let w = Math.round(h * aspect);
+
+    const rowW = row.clientWidth;
+    const minBlockW = 17 * 16;
+    let blockW = rowW - w - bookGap;
+    if (blockW < minBlockW) {
+      blockW = minBlockW;
+      w = Math.max(0, Math.min(w, rowW - blockW - bookGap));
     }
+
+    if (body) {
+      body.style.setProperty('--account-info-block-width', `${Math.round(blockW)}px`);
+    }
+
+    bookBtn.style.width = `${w}px`;
+    bookBtn.style.height = `${h}px`;
+    book.style.width = '100%';
+    book.style.height = '100%';
+    row.style.minHeight = '';
   }
 
   function renderAll() {
     renderStockTable();
     renderAccount();
     renderChart();
+    syncAccountBookLayout();
+  }
+
+  function syncLotButtonActive() {
+    if (!lotBtns) return;
+    lotBtns.querySelectorAll('.lot-btn[data-lot-size]').forEach((btn) => {
+      const size = Number(btn.dataset.lotSize);
+      btn.classList.toggle('active', size === lotSize);
+    });
   }
 
   function initLotButtons() {
     LOT_SIZES.forEach((size) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'lot-btn' + (size === lotSize ? ' active' : '');
+      btn.className = 'lot-btn';
+      btn.dataset.lotSize = String(size);
       btn.textContent = size >= 10000 ? size / 10000 + '万' : String(size);
       btn.addEventListener('click', () => {
         lotSize = size;
-        lotBtns.querySelectorAll('.lot-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
+        syncLotButtonActive();
         renderAccount();
       });
       lotBtns.appendChild(btn);
     });
+    syncLotButtonActive();
 
     sellAllBtn = document.createElement('button');
     sellAllBtn.type = 'button';
@@ -982,6 +1291,7 @@
     tradingDay = 0;
     guruBribeCost = GURU_BRIBE_BASE;
     lastGuruHintIdx = -1;
+    bookHints = [];
     refillGuruHintPool();
     updateGuruBribeTip();
     initListedStocks();
@@ -996,6 +1306,7 @@
 
   function onResize() {
     renderChart();
+    syncAccountBookLayout();
   }
 
   openAccountBtn.addEventListener('click', startGame);
@@ -1004,7 +1315,34 @@
   nextDayBtn.addEventListener('click', advanceTradingDay);
   guruBribe.addEventListener('click', buyGuruHint);
 
+  if (accountBookBtn) {
+    accountBookBtn.addEventListener('mouseenter', () => accountBookBtn.classList.add('is-tip-open'));
+    accountBookBtn.addEventListener('mouseleave', () => accountBookBtn.classList.remove('is-tip-open'));
+    accountBookBtn.addEventListener('focus', () => accountBookBtn.classList.add('is-tip-open'));
+    accountBookBtn.addEventListener('blur', () => accountBookBtn.classList.remove('is-tip-open'));
+    accountBookBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openBookModal();
+    });
+  }
+
+  if (bookModalBackdrop) {
+    bookModalBackdrop.addEventListener('click', closeBookModal);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && bookModal && !bookModal.classList.contains('hidden')) {
+      closeBookModal();
+    }
+  });
+
   updateGuruBribeTip();
   initLotButtons();
   window.addEventListener('resize', onResize);
+
+  const accountInfoBlocks = document.querySelector('.trade-panel-body .account-info-blocks');
+  if (accountInfoBlocks && typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncAccountBookLayout).observe(accountInfoBlocks);
+  }
 })();
