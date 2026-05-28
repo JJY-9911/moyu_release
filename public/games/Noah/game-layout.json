@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "boat": {
+    "x": -12,
+    "y": 213
+  },
+  "boatTargetWidth": 614.2,
+  "rod": {
+    "handleFromRight": 149,
+    "handleFromTop": 116,
+    "tipFromRight": 74,
+    "tipFromTop": 91
+  },
+  "fishman": {
+    "scale": 0.4,
+    "anchorXRatio": -0.44,
+    "anchorYOffset": 18
+  },
+  "people": {
+    "onBoat": {
+      "offsetX": 200,
+      "offsetY": 180,
+      "stepX": 10,
+      "staggerY": 6,
+      "staggerEvery": 3
+    },
+    "onHouse": {
+      "slotOffset0": -12,
+      "slotOffset1": 12,
+      "footInset": 0,
+      "aboveFoot": 0
+    }
+  }
+}

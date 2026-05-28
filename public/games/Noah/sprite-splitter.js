@@ -1,6 +1,7 @@
 (function () {
   'use strict';
 
+  /** 本地雪碧图源图（体积大，默认不进 git；需自行放入 assets/Building/ 或用「选择图片」） */
   var DEFAULT_SHEET = 'assets/Building/Gemini_Generated_Image_jixn0njixn0njixn_doublebg.webp';
   var OUT_PREFIX = 'gemini';
   var SAVE_KEY = 'noah_sprite_splitter_v1';
@@ -123,7 +124,9 @@
     var size = getSourceSize();
     if (!sourceImg && !sourceBitmap) return '请先加载精灵图';
     if (sourceImg && !sourceImg.complete) return '图片仍在加载，请稍后再试';
-    if (!size.w || !size.h) return '图片尺寸无效，请点「加载默认 Gemini 图」或「选择图片」重新加载';
+    if (!size.w || !size.h) {
+      return '图片尺寸无效：请用「选择图片」加载雪碧图，或将源图放到 assets/Building/ 后点「加载默认 Gemini 图」';
+    }
     return null;
   }
 
@@ -426,24 +429,50 @@
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);
-        alert('无法解码图片');
+        var hint = blob.type && blob.type.indexOf('image/') !== 0
+          ? '（返回内容不是图片，可能是 404 页面）'
+          : '';
+        alert('无法解码图片' + hint + '\n请用「选择图片」选择本地雪碧图。');
       };
       img.src = url;
     });
+  }
+
+  function isImageBlob(blob) {
+    if (!blob || !blob.size) return false;
+    if (blob.type && blob.type.indexOf('image/') === 0) return true;
+    return blob.size > 256;
   }
 
   function loadImage(src, cb) {
     fetch(src)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.blob();
+        return res.blob().then(function (blob) {
+          if (!isImageBlob(blob)) {
+            throw new Error('响应不是有效图片（' + (blob.type || 'unknown') + '，' + blob.size + ' 字节）');
+          }
+          return blob;
+        });
       })
       .then(function (blob) {
         loadSourceFromBlob(blob, cb);
       })
-      .catch(function () {
-        alert('无法加载图片：' + src + '\n请确认通过 http://localhost 打开本页。');
+      .catch(function (err) {
+        var msg = '无法加载：' + src;
+        if (src === DEFAULT_SHEET) {
+          msg += '\n\n仓库未包含默认雪碧图源文件。请：\n1. 点击「选择图片」从本机选图；或\n2. 将 Gemini 雪碧图放到\n   public/games/Noah/' + DEFAULT_SHEET;
+        }
+        msg += '\n\n请通过 http://localhost 打开本页（不要用 file://）。';
+        if (err && err.message) msg += '\n' + err.message;
+        alert(msg);
+        setCanvasHint(msg.split('\n')[0]);
       });
+  }
+
+  function setCanvasHint(text) {
+    var el = $('canvasHint');
+    if (el) el.textContent = text;
   }
 
   function importProject(data) {
@@ -836,7 +865,13 @@
     $('fileInput').addEventListener('change', function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
-      loadSourceFromBlob(file);
+      if (!file.type || file.type.indexOf('image/') !== 0) {
+        alert('请选择图片文件（png / jpg / webp 等）');
+        return;
+      }
+      loadSourceFromBlob(file, function () {
+        setCanvasHint('已加载：' + file.name + ' · 拖拽框选 · 滚轮缩放');
+      });
     });
 
     $('btnDefaultSheet').addEventListener('click', function () {
@@ -879,7 +914,7 @@
       copyText($('jsonOut').value, 'manifest 已复制');
     });
     $('btnCopyCatalog').addEventListener('click', function () {
-      copyText(buildCatalogJs(), 'GEMINI_CATALOG 已复制，可粘贴到 layout-editor.js');
+      copyText(buildCatalogJs(), 'GEMINI_CATALOG 已复制，可粘贴到 scripts/houses-asset-catalog.json');
     });
 
     $('btnSaveProject').addEventListener('click', function () {
@@ -925,7 +960,11 @@
 
     resizeCanvas();
     setTool('draw');
-    loadImage(DEFAULT_SHEET, loadLocal);
+    setCanvasHint('请点击「选择图片」加载雪碧图（默认 Gemini 源图未随仓库发布）');
+    try {
+      var saved = localStorage.getItem('noah_sprite_splitter_v1');
+      if (saved) loadLocal();
+    } catch (e) { /* ignore */ }
   }
 
   if (document.readyState === 'loading') {

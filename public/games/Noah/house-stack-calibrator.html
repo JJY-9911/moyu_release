@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>诺亚方舟 · 布局校准</title>
+  <link rel="stylesheet" href="house-stack-calibrator.css">
+</head>
+<body>
+  <header class="header">
+    <h1>诺亚方舟 · 布局校准</h1>
+    <p>调整房屋叠放、船/鱼竿/钓鱼人、人与房屋相对位置。导出后覆盖 <code>house-stack.json</code>、<code>game-layout.json</code>、<code>initial-layout.json</code> 中对应字段。</p>
+    <nav class="nav">
+      <a href="index.html">游戏</a>
+      <a href="sprite-splitter.html">精灵图拆分</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="panel">
+      <fieldset class="mode-box">
+        <legend>模式</legend>
+        <label class="inline"><input type="radio" name="viewMode" value="scene" checked> 场景布局</label>
+        <label class="inline"><input type="radio" name="viewMode" value="pair"> 房屋叠放 · 单层</label>
+        <label class="inline"><input type="radio" name="viewMode" value="stack"> 房屋叠放 · 全部</label>
+      </fieldset>
+
+      <div id="scenePanel">
+        <p class="muted">点击选中后拖动：船、握柄、竿尖、钓鱼人、deck 线、示例房屋。右侧数字可微调。</p>
+        <details open>
+          <summary>船</summary>
+          <div class="grid2">
+            <label>X <input type="number" id="inpBoatX" step="1"></label>
+            <label>Y <input type="number" id="inpBoatY" step="1"></label>
+          </div>
+        </details>
+        <details open>
+          <summary>鱼竿（相对船右上角）</summary>
+          <div class="grid2">
+            <label>握柄距右 <input type="number" id="inpRodHR" step="1"></label>
+            <label>握柄距顶 <input type="number" id="inpRodHT" step="1"></label>
+            <label>竿尖距右 <input type="number" id="inpRodTR" step="1"></label>
+            <label>竿尖距顶 <input type="number" id="inpRodTT" step="1"></label>
+          </div>
+        </details>
+        <details open>
+          <summary>钓鱼人（相对握柄）</summary>
+          <div class="grid2">
+            <label>缩放 <input type="number" id="inpFmScale" step="0.01"></label>
+            <label>锚点 X 比例 <input type="number" id="inpFmAX" step="0.01"></label>
+            <label>锚点 Y 偏移 <input type="number" id="inpFmAY" step="1"></label>
+          </div>
+        </details>
+        <details open>
+          <summary>房屋与船</summary>
+          <div class="grid2">
+            <label>建造区 X <input type="number" id="inpBzX" step="1"></label>
+            <label>建造区 Y <input type="number" id="inpBzY" step="1"></label>
+            <label>建造区 W <input type="number" id="inpBzW" step="1"></label>
+            <label>建造区 H <input type="number" id="inpBzH" step="1"></label>
+            <label>首层 deck Y <input type="number" id="inpBaseDeck" step="1"></label>
+          </div>
+          <label>示例房屋
+            <select id="selSampleHouse">
+              <option value="1.webp">1.webp</option>
+              <option value="8.webp">8.webp</option>
+            </select>
+          </label>
+        </details>
+        <details>
+          <summary>人与船 / 人与房屋</summary>
+          <p class="muted">船上等待者</p>
+          <div class="grid2">
+            <label>offsetX <input type="number" id="inpPbX" step="1"></label>
+            <label>offsetY <input type="number" id="inpPbY" step="1"></label>
+            <label>stepX <input type="number" id="inpPbStep" step="1"></label>
+          </div>
+          <p class="muted">房内（相对房屋脚底中心）</p>
+          <div class="grid2">
+            <label>位0 X <input type="number" id="inpPh0" step="1"></label>
+            <label>位1 X <input type="number" id="inpPh1" step="1"></label>
+            <label>脚底上抬 <input type="number" id="inpPhFoot" step="1"></label>
+          </div>
+        </details>
+        <p id="sceneHint" class="muted"></p>
+      </div>
+
+      <div id="stackPanel" hidden>
+        <div id="pairControls">
+          <label>校准下层户型 <select id="selLower"></select></label>
+          <label>上层预览户型 <select id="selUpper"></select></label>
+          <p class="muted">拖动半透明上层或改 stackSpan。</p>
+        </div>
+        <button type="button" class="btn" id="btnResetSpans">重置 stackSpan 为图片高度</button>
+        <p id="spanHint" class="muted"></p>
+        <ul id="houseList" class="house-list"></ul>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="btnCopy">复制 JSON</button>
+        <button type="button" class="btn" id="btnDlLayout">下载 game-layout.json</button>
+        <button type="button" class="btn" id="btnDlStack">下载 house-stack.json</button>
+        <button type="button" class="btn" id="btnDlInitial">下载 initial-layout.json</button>
+      </div>
+      <textarea id="jsonOut" class="json-out" readonly placeholder="导出预览…"></textarea>
+    </aside>
+
+    <div class="canvas-wrap">
+      <canvas id="stage" width="1024" height="576"></canvas>
+      <p class="hint" id="canvasHint">场景：拖锚点调整 · 房屋模式：拖层调整 stackSpan</p>
+    </div>
+  </div>
+
+  <script src="scene-layout-calibrator.js"></script>
+  <script src="house-stack-calibrator.js"></script>
+</body>
+</html>

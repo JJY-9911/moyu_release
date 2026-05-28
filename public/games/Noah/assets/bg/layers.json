@@ -1,0 +1,14 @@
+{
+  "scrollPxPerSec": 10,
+  "_comment": "tiles 按从底到顶顺序列出；各 Ocean_* 为一组，组与组横向首尾相接后整体滚动",
+  "layers": [
+    { "id": "Ocean_1", "tiles": ["1.png", "2.png", "3.png"] },
+    { "id": "Ocean_2", "tiles": ["2.png", "3.png", "4.png"] },
+    { "id": "Ocean_3", "tiles": ["1 16.37.29.png", "2.png", "3.png", "4.png"] },
+    { "id": "Ocean_4", "tiles": ["1 16.37.34.png", "2.png", "3.png", "4.png"] },
+    { "id": "Ocean_5", "tiles": ["1 16.37.39.png", "2.png", "3.png", "4.png"] },
+    { "id": "Ocean_6", "tiles": ["1 16.37.44.png", "2.png", "3.png", "4.png"] },
+    { "id": "Ocean_7", "tiles": ["1 16.37.48.png", "2.png", "3.png", "4.png", "5.png"] },
+    { "id": "Ocean_8", "tiles": ["1 16.37.53.png", "2.png", "3.png", "4.png", "5.png"] }
+  ]
+}

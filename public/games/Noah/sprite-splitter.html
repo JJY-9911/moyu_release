@@ -11,9 +11,8 @@
     <h1>精灵图手动拆分工具</h1>
     <p>在雪碧图上拖拽框选每个素材，设置分类与文件名后导出 webp + manifest。</p>
     <nav class="nav">
-      <a href="layout-editor.html">布局编辑器</a>
       <a href="index.html">游戏</a>
-      <a href="build-test.html">自动建造测试</a>
+      <a href="house-stack-calibrator.html">房屋叠放校准</a>
     </nav>
   </header>
 
@@ -45,7 +44,7 @@
   <div class="workspace">
     <div class="canvas-wrap" id="canvasWrap">
       <canvas id="stage"></canvas>
-      <p class="canvas-hint" id="canvasHint">拖拽框选 · 滚轮缩放 · 中键/空格+拖平移 · 选中后方向键微调</p>
+      <p class="canvas-hint" id="canvasHint">请先「选择图片」加载雪碧图（默认 Gemini 大图需自行放入 assets/Building/）</p>
     </div>
 
     <aside class="panel">
@@ -82,7 +81,7 @@
 
       <h2>输出预览</h2>
       <textarea id="jsonOut" class="json-out" readonly placeholder="manifest.json 内容…"></textarea>
-      <p class="hint">下载 ZIP 后解压到 <code>assets/Building/</code>（内含 <code>gemini/</code> 目录与 manifest）。Safari 等浏览器会打包为单次下载，避免被拦截。</p>
+      <p class="hint">下载 ZIP 后解压到 <code>assets/Building/</code>（内含 <code>gemini/</code> 目录与 manifest）。默认雪碧图 <code>Gemini_Generated_Image_*_doublebg.webp</code> 未进 git，请用「选择图片」从本机打开。Safari 等浏览器会打包为单次下载，避免被拦截。</p>
     </aside>
   </div>
 

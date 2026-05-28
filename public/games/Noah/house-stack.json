@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "baseDeckY": 392,
+  "buildZone": {
+    "x": 32,
+    "y": 291,
+    "w": 479,
+    "h": 88
+  },
+  "houses": {
+    "1.webp": {
+      "w": 160,
+      "h": 96,
+      "stackSpan": -50
+    },
+    "2.webp": {
+      "w": 160,
+      "h": 96,
+      "stackSpan": -64
+    },
+    "3.webp": {
+      "w": 128,
+      "h": 64,
+      "stackSpan": -49
+    },
+    "4.webp": {
+      "w": 128,
+      "h": 64,
+      "stackSpan": -48
+    },
+    "5.webp": {
+      "w": 128,
+      "h": 96,
+      "stackSpan": -59
+    },
+    "6.webp": {
+      "w": 96,
+      "h": 64,
+      "stackSpan": -49
+    },
+    "7.webp": {
+      "w": 128,
+      "h": 96,
+      "stackSpan": -54
+    },
+    "8.webp": {
+      "w": 224,
+      "h": 96,
+      "stackSpan": -60
+    }
+  }
+}

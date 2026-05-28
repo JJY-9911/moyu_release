@@ -1,0 +1,118 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #1a1a22;
+  color: #e8e8f0;
+}
+.header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+}
+.header h1 { margin: 0 0 6px; font-size: 1.25rem; }
+.header p { margin: 0; opacity: 0.85; font-size: 0.9rem; }
+.nav { margin-top: 8px; }
+.nav a { color: #8cf; margin-right: 12px; }
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+}
+.panel {
+  flex: 0 0 320px;
+  max-width: 100%;
+}
+.canvas-wrap {
+  flex: 1 1 640px;
+  min-width: 320px;
+  overflow: auto;
+  background: #0d0d12;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+#stage {
+  display: block;
+  width: 100%;
+  max-width: 1024px;
+  aspect-ratio: 1024 / 576;
+  cursor: grab;
+  background: #1a3048;
+}
+#stage.dragging { cursor: grabbing; }
+.hint, .muted { font-size: 0.8rem; opacity: 0.75; margin: 8px 0; }
+.mode-box {
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.mode-box legend { padding: 0 4px; font-size: 0.85rem; }
+.mode-box label.inline { display: block; margin: 4px 0; font-size: 0.9rem; }
+#pairControls label { display: block; margin: 6px 0; font-size: 0.9rem; }
+#pairControls select { width: 100%; margin-top: 4px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.row input { width: 72px; }
+.house-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.house-list li {
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #252530;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.house-list li.selected { border-color: #fa0; }
+.house-list li label { display: block; font-size: 0.85rem; margin-top: 4px; }
+.house-list input[type="number"] { width: 64px; }
+.thumb {
+  width: 48px;
+  height: 32px;
+  object-fit: contain;
+  vertical-align: middle;
+  background: #111;
+  margin-right: 6px;
+}
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.btn {
+  padding: 6px 12px;
+  border: 1px solid #555;
+  background: #333;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn.primary { background: #3858a8; border-color: #4a6ec0; }
+details {
+  margin: 8px 0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+details summary { cursor: pointer; font-size: 0.9rem; }
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+.grid2 label { font-size: 0.8rem; }
+.grid2 input { width: 100%; margin-top: 2px; }
+#scenePanel details { max-height: none; }
+.json-out {
+  width: 100%;
+  height: 160px;
+  font-family: monospace;
+  font-size: 11px;
+  background: #111;
+  color: #afa;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px;
+}

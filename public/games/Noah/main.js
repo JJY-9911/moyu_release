@@ -15,12 +15,22 @@
   var SKY_H = Math.floor(CANVAS_H * 0.76);
   var WATER_H = CANVAS_H - SKY_H;
   var BUILD_BASE = 'assets/Building/';
+  var BG_BASE = 'assets/bg/';
+  var BG_SCROLL_PX_PER_SEC = 10;
+  var FISHMAN_SCALE = 0.4;
+  var PERSON_SPRITE_SCALE = 0.32;
+  var gameLayout = null;
   var BOAT_X = 24;
   var BOAT_Y = SKY_H - 28;
-  var BOAT_SCALE = 5.2;
+  /** 布局目标船宽；大图素材（>256px 宽）按此自动算缩放，不再用旧版 8.3 精灵倍率 */
+  var BOAT_LAYOUT_TARGET_W = 614.2;
+  var BOAT_LARGE_ART_MIN_W = 256;
+  var BOAT_SCALE = 0.44;
   var DECK_TOP = SKY_H - 118;
   var SCROLL_FALLBACK_MIN_TOP = -32000;
   var cameraWorldTop = 0;
+  var bgScrollX = 0;
+  var bgScrollLayers = [];
   var assets = {};
   var loadTotal = 0;
   var loadDone = 0;
@@ -64,14 +74,36 @@
     return 'b:' + file;
   }
 
+  function isLargeBoatArt(img) {
+    return imageReady(img) && assetWidth(img) > BOAT_LARGE_ART_MIN_W;
+  }
+
+  function getBoatScale() {
+    var boat = assets.boat;
+    if (!imageReady(boat)) return BOAT_SCALE;
+    if (isLargeBoatArt(boat)) {
+      return BOAT_LAYOUT_TARGET_W / assetWidth(boat);
+    }
+    return BOAT_SCALE;
+  }
+
+  function syncBoatScaleFromAsset() {
+    var boat = assets.boat;
+    if (!isLargeBoatArt(boat)) return;
+    BOAT_SCALE = BOAT_LAYOUT_TARGET_W / assetWidth(boat);
+  }
+
   function applyBoatLayout(data) {
     if (!data) return;
-    if (data.boatScale != null) BOAT_SCALE = data.boatScale;
+    if (data.boatScale != null && !isLargeBoatArt(assets.boat)) {
+      BOAT_SCALE = data.boatScale;
+    }
     if (data.boat) {
       if (data.boat.x != null) BOAT_X = data.boat.x;
       if (data.boat.y != null) BOAT_Y = data.boat.y;
     }
     if (data.cameraWorldTop != null) cameraWorldTop = data.cameraWorldTop;
+    syncBoatScaleFromAsset();
     DECK_TOP = (data.buildZone && data.buildZone.y != null)
       ? data.buildZone.y - 10
       : BOAT_Y - 118;
@@ -86,18 +118,30 @@
 
   function getBoatBounds() {
     var boat = assets.boat;
-    var bw = imageReady(boat) ? assetWidth(boat) * BOAT_SCALE : 74 * BOAT_SCALE;
-    var bh = imageReady(boat) ? assetHeight(boat) * BOAT_SCALE : 18 * BOAT_SCALE;
+    var scale = getBoatScale();
+    var bw = imageReady(boat) ? assetWidth(boat) * scale : 74 * scale;
+    var bh = imageReady(boat) ? assetHeight(boat) * scale : 18 * scale;
     return { x: BOAT_X, y: BOAT_Y, w: bw, h: bh };
+  }
+
+  function getRodLayout() {
+    if (gameLayout && gameLayout.rod) return gameLayout.rod;
+    return { handleFromRight: 42, handleFromTop: -12, tipFromRight: 24, tipFromTop: -38 };
+  }
+
+  function getFishmanLayout() {
+    if (gameLayout && gameLayout.fishman) return gameLayout.fishman;
+    return { scale: 0.4, anchorXRatio: -0.72, anchorYOffset: 6 };
   }
 
   function getRodBase() {
     var boat = getBoatBounds();
+    var r = getRodLayout();
     return {
-      handleX: boat.x + boat.w - 42,
-      handleY: boat.y - 12,
-      tipX: boat.x + boat.w - 24,
-      tipY: boat.y - 38
+      handleX: boat.x + boat.w - r.handleFromRight,
+      handleY: boat.y + r.handleFromTop,
+      tipX: boat.x + boat.w - r.tipFromRight,
+      tipY: boat.y + r.tipFromTop
     };
   }
 
@@ -109,6 +153,34 @@
   function getCastButtonRect() {
     var r = getRodBase();
     return { x: r.handleX - 54, y: r.handleY - 8, w: 72, h: 30 };
+  }
+
+  function getResetButtonRect() {
+    return { x: 12, y: CANVAS_H - 48, w: 72, h: 30 };
+  }
+
+  /** 出杆按钮：世界坐标（随船） */
+  function getCastButtonWorldRect() {
+    return getCastButtonRect();
+  }
+
+  /** 出杆按钮：屏幕坐标（不随镜头滚动） */
+  function getCastButtonScreenRect() {
+    var b = getCastButtonWorldRect();
+    return {
+      x: b.x,
+      y: b.y - cameraWorldTop,
+      w: b.w,
+      h: b.h
+    };
+  }
+
+  function canvasScreenPoint(clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: ((clientX - rect.left) / rect.width) * CANVAS_W,
+      y: ((clientY - rect.top) / rect.height) * CANVAS_H
+    };
   }
 
   function loadWebpAsset(key, src, onDone) {
@@ -163,6 +235,7 @@
     loadWebpAsset(key, src, function () {
       pendingLoads[key] = false;
       loadDone++;
+      if (key === 'boat') syncBoatScaleFromAsset();
       var bar = document.getElementById('loadingBar');
       if (bar && loadTotal > 0) {
         bar.style.width = Math.round((loadDone / loadTotal) * 100) + '%';
@@ -183,11 +256,59 @@
     });
   }
 
+  function bgTileKey(layerId, tileFile) {
+    return 'bg:' + layerId + '/' + tileFile;
+  }
+
+  function defaultBgLayersManifest() {
+    return {
+      scrollPxPerSec: 10,
+      layers: [
+        { id: 'Ocean_1', tiles: ['1.png', '2.png', '3.png'] },
+        { id: 'Ocean_2', tiles: ['2.png', '3.png', '4.png'] },
+        { id: 'Ocean_3', tiles: ['1 16.37.29.png', '2.png', '3.png', '4.png'] },
+        { id: 'Ocean_4', tiles: ['1 16.37.34.png', '2.png', '3.png', '4.png'] },
+        { id: 'Ocean_5', tiles: ['1 16.37.39.png', '2.png', '3.png', '4.png'] },
+        { id: 'Ocean_6', tiles: ['1 16.37.44.png', '2.png', '3.png', '4.png'] },
+        { id: 'Ocean_7', tiles: ['1 16.37.48.png', '2.png', '3.png', '4.png', '5.png'] },
+        { id: 'Ocean_8', tiles: ['1 16.37.53.png', '2.png', '3.png', '4.png', '5.png'] }
+      ]
+    };
+  }
+
+  function loadBgLayersManifest() {
+    return fetch(BG_BASE + 'layers.json')
+      .then(function (res) {
+        if (!res.ok) return defaultBgLayersManifest();
+        return res.json();
+      })
+      .catch(function () {
+        return defaultBgLayersManifest();
+      })
+      .then(function (data) {
+        bgScrollLayers = data.layers || [];
+        if (data.scrollPxPerSec != null) BG_SCROLL_PX_PER_SEC = data.scrollPxPerSec;
+      });
+  }
+
+  function loadBgScrollAssets() {
+    bgScrollLayers.forEach(function (layer) {
+      (layer.tiles || []).forEach(function (tile) {
+        loadWebp(bgTileKey(layer.id, tile), BG_BASE + layer.id + '/' + encodeURI(tile));
+      });
+    });
+  }
+
   function loadAllAssets() {
     loadTotal = 0;
     loadDone = 0;
     pendingLoads = {};
     loadWebp('boat', 'assets/Boat.webp');
+    loadWebp('bg1', BG_BASE + '1.webp');
+    loadBgScrollAssets();
+    loadWebp('fishman', 'assets/fishman.webp');
+    loadWebp('people1', 'assets/people1.webp');
+    loadWebp('people2', 'assets/people2.webp');
     preloadBuildingAssets();
     checkLoadComplete();
   }
@@ -211,8 +332,33 @@
         if (x != null) BOAT_X = x;
         if (y != null) BOAT_Y = y;
         DECK_TOP = BOAT_Y - 118;
-      }
+      },
+      drawSpriteStrip: function (c, img, x, y, dw, dh, timeMs) {
+        if (window.NoahSprites) {
+          window.NoahSprites.drawStrip(c, img, x, y, dw, dh, timeMs, assetWidth, assetHeight);
+        }
+      },
+      personSpriteScale: PERSON_SPRITE_SCALE,
+      gameLayout: gameLayout
     });
+  }
+
+  function loadGameLayout() {
+    return fetch('game-layout.json')
+      .then(function (res) {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        gameLayout = data;
+        var fm = getFishmanLayout();
+        if (fm.scale != null) FISHMAN_SCALE = fm.scale;
+        if (window.NoahBuilding) {
+          window.NoahBuilding.configure({ gameLayout: gameLayout });
+        }
+      })
+      .catch(function () { /* optional */ });
   }
 
   function simulateCast(angleDeg) {
@@ -390,8 +536,11 @@
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 4;
     ctx.fillText(
-      '繁荣 ' + eco.prosperity + ' · 饱食 ' + eco.satiety +
-        ' · 人口 ' + eco.people + '/' + eco.capacity,
+      '饱腹 ' + eco.satiety +
+        ' · 总人数 ' + eco.people +
+        ' · 入住 ' + eco.housed +
+        ' · 层数 ' + eco.floors +
+        ' · 繁荣 ' + eco.prosperity,
       CANVAS_W - 12,
       CANVAS_H - 14
     );
@@ -416,19 +565,117 @@
     }
   }
 
+  function updateBackground(dt) {
+    bgScrollX += BG_SCROLL_PX_PER_SEC * (dt / 1000);
+  }
+
+  function drawBgStatic() {
+    var img = assets.bg1;
+    if (!imageReady(img)) {
+      ctx.fillStyle = '#e8c878';
+      ctx.fillRect(0, 0, CANVAS_W, SKY_H);
+      ctx.fillStyle = '#3a7ab8';
+      ctx.fillRect(0, SKY_H, CANVAS_W, WATER_H);
+      return;
+    }
+    var nw = assetWidth(img);
+    var nh = assetHeight(img);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, nw, nh, 0, 0, CANVAS_W, CANVAS_H);
+  }
+
+  function getBgLayerImages(layer) {
+    var tiles = layer.tiles || [];
+    var imgs = [];
+    var t;
+    for (t = 0; t < tiles.length; t++) {
+      var img = assets[bgTileKey(layer.id, tiles[t])];
+      if (!imageReady(img)) return null;
+      imgs.push(img);
+    }
+    return imgs.length ? imgs : null;
+  }
+
+  /** 各 Ocean_* 为一组：tiles[0] 底层，后续叠在上；各组横向首尾相接，整条带一起左移 */
+  function buildBgScrollStrip() {
+    var segments = [];
+    var totalW = 0;
+    var li;
+    for (li = 0; li < bgScrollLayers.length; li++) {
+      var imgs = getBgLayerImages(bgScrollLayers[li]);
+      if (!imgs) return null;
+      var ref = imgs[0];
+      var nw = assetWidth(ref);
+      var nh = assetHeight(ref);
+      if (!nw || !nh) return null;
+      var dw = nw * (CANVAS_H / nh);
+      segments.push({ imgs: imgs, w: dw, nw: nw, nh: nh });
+      totalW += dw;
+    }
+    return totalW > 0 ? { segments: segments, totalW: totalW } : null;
+  }
+
+  function drawBgScrollingWorld(scrollX) {
+    var strip = buildBgScrollStrip();
+    if (!strip) return;
+    var offset = ((scrollX % strip.totalW) + strip.totalW) % strip.totalW;
+    var originX = -offset;
+    ctx.imageSmoothingEnabled = false;
+    while (originX < CANVAS_W) {
+      var segX = 0;
+      var si;
+      for (si = 0; si < strip.segments.length; si++) {
+        var seg = strip.segments[si];
+        var x = originX + segX;
+        if (x + seg.w > 0 && x < CANVAS_W) {
+          var ti;
+          for (ti = 0; ti < seg.imgs.length; ti++) {
+            var img = seg.imgs[ti];
+            ctx.drawImage(img, 0, 0, seg.nw, seg.nh, x, 0, seg.w, CANVAS_H);
+          }
+        }
+        segX += seg.w;
+      }
+      originX += strip.totalW;
+    }
+  }
+
+  function drawBackground() {
+    drawBgStatic();
+    drawBgScrollingWorld(bgScrollX);
+  }
+
   function drawBoat() {
     var boat = assets.boat;
     if (!imageReady(boat)) {
       ctx.fillStyle = '#6ecf9a';
       ctx.beginPath();
-      ctx.ellipse(BOAT_X + 200, SKY_H + 6, 220, 28, 0, 0, Math.PI * 2);
+      var b = getBoatBounds();
+      ctx.ellipse(b.x + b.w * 0.5, b.y + b.h * 0.55, b.w * 0.45, b.h * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
       return;
     }
-    var w = assetWidth(boat) * BOAT_SCALE;
-    var h = assetHeight(boat) * BOAT_SCALE;
+    var scale = getBoatScale();
+    var w = assetWidth(boat) * scale;
+    var h = assetHeight(boat) * scale;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(boat, BOAT_X, BOAT_Y, w, h);
+  }
+
+  function drawFishman() {
+    var img = assets.fishman;
+    if (!imageReady(img) || !window.NoahSprites) return;
+    var r = getRodBase();
+    var fm = getFishmanLayout();
+    var sc = fm.scale != null ? fm.scale : FISHMAN_SCALE;
+    var fh = assetHeight(img);
+    var dw = fh * sc;
+    var dh = fh * sc;
+    var x = r.handleX + dw * (fm.anchorXRatio != null ? fm.anchorXRatio : -0.72);
+    var y = r.handleY - dh + (fm.anchorYOffset != null ? fm.anchorYOffset : 6);
+    window.NoahSprites.drawStrip(
+      ctx, img, x, y, dw, dh, performance.now(), assetWidth, assetHeight
+    );
   }
 
   function drawRod() {
@@ -510,8 +757,26 @@
     ctx.restore();
   }
 
+  function drawResetButton() {
+    var b = getResetButtonRect();
+    ctx.save();
+    ctx.fillStyle = 'rgba(60, 24, 24, 0.65)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = '#e8a0a0';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.font = 'bold 14px Courier New';
+    ctx.fillStyle = '#ffe8e8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3;
+    ctx.fillText('重制', b.x + b.w / 2, b.y + b.h / 2 + 1);
+    ctx.restore();
+  }
+
   function drawCastButton() {
-    var b = getCastButtonRect();
+    var b = getCastButtonScreenRect();
     var disabled = state.phase !== 'aim';
     var pulse = state.phase === 'aim' ? 0.85 + Math.sin(Date.now() * 0.006) * 0.15 : 1;
 
@@ -549,16 +814,19 @@
 
   function render() {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    drawBackground();
     ctx.save();
     ctx.translate(0, -cameraWorldTop);
     drawBoat();
     drawBuilding();
     drawCatchFlashes();
+    drawFishman();
     drawRod();
     drawPointer();
     if (state.phase === 'result') drawResultMarkers();
-    drawCastButton();
     ctx.restore();
+    drawCastButton();
+    drawResetButton();
     drawHud();
     drawBanner();
   }
@@ -572,15 +840,44 @@
   }
 
   function onCanvasClick(e) {
-    var p = canvasPoint(e.clientX, e.clientY);
-    if (hitCastButton(p.x, p.y)) {
+    var screen = canvasScreenPoint(e.clientX, e.clientY);
+    if (hitResetButton(screen.x, screen.y)) {
+      resetGameProgress();
+      return;
+    }
+    if (hitCastButton(screen.x, screen.y)) {
       castLine();
     }
   }
 
   function hitCastButton(x, y) {
-    var b = getCastButtonRect();
+    var b = getCastButtonScreenRect();
     return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  }
+
+  function hitResetButton(x, y) {
+    var b = getResetButtonRect();
+    return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  }
+
+  function resetGameProgress() {
+    if (!confirm('确定要重制吗？将清空所有建造、材料与进度。')) return;
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (err) { /* ignore */ }
+    cameraWorldTop = 0;
+    state.phase = 'aim';
+    state.lastResult = null;
+    state.resultTimer = 0;
+    state.bannerText = '';
+    state.bannerTimer = 0;
+    if (!window.NoahBuilding) return;
+    window.NoahBuilding.initGameFresh().then(function () {
+      preloadBuildingAssets();
+      clampCameraWorldTop();
+      showBanner('进度已重制', 2000);
+      saveGame();
+    });
   }
 
   function saveGame() {
@@ -627,6 +924,7 @@
     updatePointer(dt);
     updateResult(dt);
     updateBanner(dt);
+    updateBackground(dt);
     var needSave = false;
     if (window.NoahBuilding && window.NoahBuilding.tickEconomy(dt)) {
       needSave = true;
@@ -656,7 +954,9 @@
   }
 
   function bootstrapGame() {
-    return fetch('initial-layout.json')
+    return loadGameLayout().then(function () {
+      return fetch('initial-layout.json');
+    })
       .then(function (res) {
         if (!res.ok) throw new Error('layout fetch failed');
         return res.json();
@@ -666,7 +966,7 @@
         return afterSlotsReady();
       })
       .catch(function () {
-        applyBoatLayout({ boatScale: 8.3, boat: { x: 24, y: 409 } });
+        applyBoatLayout({ boatScale: 0.44, boat: { x: 24, y: 409 } });
         return afterSlotsReady();
       });
   }
@@ -712,10 +1012,15 @@
 
     bootstrapGame()
       .then(function () {
+        return loadBgLayersManifest();
+      })
+      .then(function () {
         loadAllAssets();
       })
       .catch(function () {
-        loadAllAssets();
+        loadBgLayersManifest().then(function () {
+          loadAllAssets();
+        });
       });
   }
 

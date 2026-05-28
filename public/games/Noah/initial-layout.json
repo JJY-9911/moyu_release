@@ -2,13 +2,11 @@
   "version": 1,
   "canvasW": 1024,
   "canvasH": 576,
-  "boatScale": 8.3,
+  "boatScale": 0.43622159090909096,
   "cameraWorldTop": 0,
   "boat": {
-    "x": 24,
-    "y": 409,
-    "w": 614.2,
-    "h": 149.4
+    "x": -12,
+    "y": 213
   },
   "buildZone": {
     "x": 32,
