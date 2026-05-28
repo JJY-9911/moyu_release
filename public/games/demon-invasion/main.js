@@ -97,20 +97,131 @@ function gridCellHeight() {
   return (ROAD_BOT_Y - ROAD_TOP_Y) / ROWS;
 }
 
+const UNIT_COL_MIN = ROAD_COL_START + 0.4;
+const UNIT_COL_MAX = ROAD_COL_END - 0.4;
+
+function unitFootprintRadius(u) {
+  return gridCellWidth(u.row) * 0.45 * (u.sizeScale || 1);
+}
+
+function clampUnitGrid(u) {
+  u.col = Math.max(UNIT_COL_MIN, Math.min(UNIT_COL_MAX, u.col));
+  if (u.side === 'ally') {
+    if (u.type === 'turret') return;
+    const minRow = u.isSummon ? ENEMY_SPAWN_ROW : MIDLINE_ROW;
+    if (u.row < minRow) u.row = minRow;
+  } else if (u.row > CAMP_ROW_START - 0.5) {
+    u.row = CAMP_ROW_START - 0.5;
+  }
+}
+
+function pickSpawnPosition(units, baseRow, sizeScale) {
+  const rowOffsets = [0, 0.4, 0.8, -0.35];
+  let best = { col: ROAD_COL_START + 1, row: baseRow, score: -1 };
+  const minWant = unitFootprintRadius({ row: baseRow, sizeScale }) * 1.6;
+
+  for (const dr of rowOffsets) {
+    const row = baseRow + dr;
+    for (let c = ROAD_COL_START + 1; c < ROAD_COL_END; c++) {
+      const { x, y } = gridToPixel(c, row);
+      let minD = Infinity;
+      for (const u of units) {
+        if (u.dead) continue;
+        if (Math.abs(u.row - row) > 2.2) continue;
+        minD = Math.min(minD, Math.hypot(x - u.px(), y - u.py()));
+      }
+      const score = minD === Infinity ? 9999 : minD;
+      if (score > best.score) best = { col: c, row, score };
+    }
+  }
+  if (best.score < minWant) {
+    best.row = baseRow + (Math.random() - 0.5) * 0.9;
+    best.col = UNIT_COL_MIN + Math.random() * (UNIT_COL_MAX - UNIT_COL_MIN);
+  }
+  return best;
+}
+
+function resolveUnitOverlap(a, b, dt) {
+  if (a.dead || b.dead || a.id === b.id) return;
+  if (a.type === 'turret' || b.type === 'turret') return;
+
+  let dx = a.px() - b.px();
+  let dy = a.py() - b.py();
+  let dist = Math.hypot(dx, dy);
+  if (dist < 1) {
+    const seed = (a.id * 13 + b.id * 7) % 360;
+    const rad = (seed * Math.PI) / 180;
+    dx = Math.cos(rad);
+    dy = Math.sin(rad);
+    dist = 1;
+  }
+
+  const minDist = (unitFootprintRadius(a) + unitFootprintRadius(b)) * 0.92;
+  if (dist >= minDist) return;
+
+  const overlap = (minDist - dist) / dist;
+  const cellW = gridCellWidth((a.row + b.row) / 2);
+  const cellH = gridCellHeight();
+  const push = Math.min(overlap * 2.8 * dt, overlap * 0.45);
+  const colPush = (dx * push) / cellW;
+  const rowPush = (dy * push) / cellH * 0.4;
+
+  a.col += colPush;
+  a.row += rowPush;
+  b.col -= colPush;
+  b.row -= rowPush;
+}
+
+function applyUnitSeparation(units, dt) {
+  const list = units.filter(u => !u.dead && u.type !== 'turret');
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      resolveUnitOverlap(list[i], list[j], dt);
+    }
+  }
+  for (const u of list) clampUnitGrid(u);
+}
+
 // ===== Canvas =====
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const canvasWrapper = document.getElementById('canvasWrapper');
+const LOGIC_W = MAP_W;
+const LOGIC_H = MAP_H;
+
+function disableSmoothing(context) {
+  context.imageSmoothingEnabled = false;
+  if ('webkitImageSmoothingEnabled' in context) context.webkitImageSmoothingEnabled = false;
+  if ('mozImageSmoothingEnabled' in context) context.mozImageSmoothingEnabled = false;
+}
+
+function crispDraw(context, img, dx, dy, dw, dh, sx, sy, sw, sh) {
+  const x = Math.round(dx);
+  const y = Math.round(dy);
+  const w = Math.max(1, Math.round(dw));
+  const h = Math.max(1, Math.round(dh));
+  if (sx !== undefined) {
+    context.drawImage(
+      img,
+      Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh),
+      x, y, w, h
+    );
+  } else {
+    context.drawImage(img, x, y, w, h);
+  }
+}
 
 function resizeCanvas() {
-  // 逻辑分辨率 755×1240，CSS 负责撑满窗口高度
-  canvas.width  = 755;
-  canvas.height = 1240;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(LOGIC_W * dpr);
+  canvas.height = Math.round(LOGIC_H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  disableSmoothing(ctx);
 }
-window.addEventListener('resize', () => { resizeCanvas(); });
+window.addEventListener('resize', () => { resizeCanvas(); resizePortalCanvas(); });
 resizeCanvas();
 
-function cw() { return canvas.width  / COLS; }
+function cw() { return LOGIC_W / COLS; }
 function ch() { return (ROAD_BOT_Y - ROAD_TOP_Y) / ROWS; }
 
 // ===== 图片缓存 =====
@@ -193,6 +304,15 @@ const portalCanvas = document.getElementById('portalCanvas');
 const portalCtx = portalCanvas.getContext('2d');
 let portalFrame = 0;
 const PORTAL_TOTAL_FRAMES = 4; // 384/96 = 4帧
+const PORTAL_CSS = 88;
+
+function resizePortalCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  portalCanvas.width = Math.round(PORTAL_CSS * dpr);
+  portalCanvas.height = Math.round(PORTAL_CSS * dpr);
+  portalCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  disableSmoothing(portalCtx);
+}
 
 function drawPortal() {
   const pImg = getImg('assets/Portal1_Idle.webp');
@@ -201,13 +321,12 @@ function drawPortal() {
     pImg.onload = drawPortal;
     return;
   }
-  const fw = pImg.naturalWidth / PORTAL_TOTAL_FRAMES; // 96px
-  const fh = pImg.naturalHeight;                       // 96px
-  const pw = portalCanvas.width;
-  const ph = portalCanvas.height;
-  portalCtx.clearRect(0, 0, pw, ph);
-  portalCtx.drawImage(pImg, portalFrame * fw, 0, fw, fh, 0, 0, pw, ph);
+  const fw = Math.floor(pImg.naturalWidth / PORTAL_TOTAL_FRAMES);
+  const fh = pImg.naturalHeight;
+  portalCtx.clearRect(0, 0, PORTAL_CSS, PORTAL_CSS);
+  crispDraw(portalCtx, pImg, 0, 0, PORTAL_CSS, PORTAL_CSS, portalFrame * fw, 0, fw, fh);
 }
+resizePortalCanvas();
 
 // ===== 特效系统 =====
 const effects = [];
@@ -258,8 +377,8 @@ function updateProjectiles(dt) {
     p.y += p.dirY * pixelSpeed;
 
     // 飞出画幅则销毁
-    if (p.y < -p.size || p.y > canvas.height + p.size ||
-        p.x < -p.size || p.x > canvas.width + p.size) {
+    if (p.y < -p.size || p.y > LOGIC_H + p.size ||
+        p.x < -p.size || p.x > LOGIC_W + p.size) {
       projectiles.splice(i, 1);
       continue;
     }
@@ -292,9 +411,11 @@ function drawProjectiles() {
     if (!fireImg.complete || !fireImg.naturalWidth) continue;
     const s = p.size;
     ctx.save();
-    ctx.translate(p.x, p.y);
+    disableSmoothing(ctx);
+    ctx.translate(Math.round(p.x), Math.round(p.y));
     ctx.rotate(Math.PI / 2);
-    ctx.drawImage(fireImg, -s/2, -s/2, s, s);
+    const rs = Math.round(s);
+    crispDraw(ctx, fireImg, -rs / 2, -rs / 2, rs, rs);
     ctx.restore();
   }
 }
@@ -346,14 +467,16 @@ function updateLaserBeams(dt) {
 function drawLaserBeams() {
   const img = getImg(TURRET_LASER_IMG);
   if (!img.complete || !img.naturalWidth) return;
-  const fw = img.naturalWidth / TURRET_LASER_FRAMES;
+  const fw = Math.floor(img.naturalWidth / TURRET_LASER_FRAMES);
   const fh = img.naturalHeight;
   for (const b of laserBeams) {
-    const drawW = gridCellWidth(b.row) * 0.55;
-    const top = b.yBottom - b.len;
+    const drawW = Math.round(gridCellWidth(b.row) * 0.55);
+    const top = Math.round(b.yBottom - b.len);
+    const beamH = Math.round(b.len);
     ctx.save();
     ctx.globalAlpha = 0.94;
-    ctx.drawImage(img, b.frame * fw, 0, fw, fh, b.x - drawW / 2, top, drawW, b.len);
+    disableSmoothing(ctx);
+    crispDraw(ctx, img, Math.round(b.x) - drawW / 2, top, drawW, beamH, b.frame * fw, 0, fw, fh);
     ctx.restore();
   }
 }
@@ -381,8 +504,8 @@ function drawEffects() {
     }
     const img = getImg(src);
     if (img.complete && img.naturalWidth) {
-      const size = e.size || 80;
-      ctx.drawImage(img, e.x - size/2, e.y - size/2, size, size);
+      const size = Math.round(e.size || 80);
+      crispDraw(ctx, img, e.x - size / 2, e.y - size / 2, size, size);
     }
   }
 }
@@ -593,8 +716,9 @@ class Unit {
         this.summonTimer = 0;
         const count = this.def.summonCount || 5;
         for (let i = 0; i < count; i++) {
-          const sc = ROAD_COL_START + 1 + Math.floor(Math.random() * (ROAD_COL_END - ROAD_COL_START - 1));
-          const sr = this.row - 1 - Math.random();
+          const sr = this.row - 0.6 - i * 0.22;
+          const slot = pickSpawnPosition(game.allies, sr, 1);
+          const sc = slot.col;
           const summonDef = {
             id: 'summon_' + this.id + '_' + i,
             name: '小兵', type: 'rush', isSummon: true,
@@ -606,7 +730,7 @@ class Unit {
             range: 0, cost: 0,
             sizeScale: 1,
           };
-          game.allies.push(new Unit(summonDef, sc, sr, 'ally'));
+          game.allies.push(new Unit(summonDef, sc, slot.row, 'ally'));
         }
       }
     }
@@ -676,23 +800,24 @@ class Unit {
     const { x, y } = gridToPixel(this.col, this.row);
     const cellW = gridCellWidth(this.row);
     const scale = this.sizeScale || 1;
-    const size = cellW * 0.85 * scale;
+    const size = Math.round(cellW * 0.85 * scale);
 
     const img = getImg(this.icon);
     if (img.complete && img.naturalWidth) {
       ctx.save();
-      ctx.drawImage(img, x - size/2, y - size/2, size, size);
+      disableSmoothing(ctx);
+      crispDraw(ctx, img, x - size / 2, y - size / 2, size, size);
       ctx.restore();
     } else {
       ctx.fillStyle = this.side === 'ally' ? '#3498db' : '#e74c3c';
-      ctx.fillRect(x - size/2, y - size/2, size, size);
+      ctx.fillRect(Math.round(x - size / 2), Math.round(y - size / 2), size, size);
     }
 
     if (this.hitEffectFrame >= 0) {
       const hitImg = getImg(HIT_EFFECT_FRAMES[this.hitEffectFrame]);
       if (hitImg.complete && hitImg.naturalWidth) {
-        const effectSize = size * 1.35;
-        ctx.drawImage(hitImg, x - effectSize/2, y - effectSize/2, effectSize, effectSize);
+        const effectSize = Math.round(size * 1.35);
+        crispDraw(ctx, hitImg, x - effectSize / 2, y - effectSize / 2, effectSize, effectSize);
       }
     }
 
@@ -700,8 +825,8 @@ class Unit {
     if (this.hp < this.maxHp) {
       const bw = size;
       const bh = 4;
-      const bx = x - size/2;
-      const by = y - size/2 - 6;
+      const bx = Math.round(x - size / 2);
+      const by = Math.round(y - size / 2 - 6);
       ctx.fillStyle = '#333';
       ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = this.side === 'ally' ? '#2ecc71' : '#e74c3c';
@@ -893,17 +1018,11 @@ class Game {
   }
 
   _spawnInitialAllies() {
-    // 炮塔放在阵营区，其他放在中线附近
     for (let i = 0; i < this.selectedDefs.length; i++) {
       const def = this.selectedDefs[i];
-      const col = ROAD_COL_START + 1 + (i % (ROAD_COL_END - ROAD_COL_START - 1));
-      let row;
-      if (def.type === 'turret') {
-        row = CAMP_ROW_START + 0.5;
-      } else {
-        row = MIDLINE_ROW + 1 + Math.floor(i / (ROAD_COL_END - ROAD_COL_START)) * 2;
-      }
-      this.allies.push(new Unit(def, col, row, 'ally'));
+      const row = def.type === 'turret' ? CAMP_ROW_START + 0.5 : MIDLINE_ROW + 1 + (i % 3) * 0.55;
+      const slot = pickSpawnPosition(this.allies, row, def.sizeScale || 1);
+      this.allies.push(new Unit(def, slot.col, def.type === 'turret' ? row : slot.row, 'ally'));
     }
   }
 
@@ -946,6 +1065,9 @@ class Game {
     this.allies  = this.allies.filter(u => !u.dead);
     this.enemies = this.enemies.filter(u => !u.dead);
 
+    applyUnitSeparation(this.allies, dt);
+    applyUnitSeparation(this.enemies, dt);
+
     // 更新特效
     updateEffects(dt);
     updateProjectiles(dt);
@@ -975,19 +1097,22 @@ class Game {
   }
 
   _spawnOneEnemy(def) {
-    // 敌人列范围与友军一致：1 ~ ROAD_COL_END-1，避免最边缘列
-    const col = ROAD_COL_START + 1 + Math.floor(Math.random() * (ROAD_COL_END - ROAD_COL_START - 1));
+    const sizeScale = def.sizeScale || 1;
+    const baseRow = ENEMY_SPAWN_ROW + Math.random() * 1.1;
+    const slot = pickSpawnPosition(this.enemies, baseRow, sizeScale);
     const enemyDef = { ...def };
-    const unit = new Unit(enemyDef, col, ENEMY_SPAWN_ROW, 'enemy');
-    unit.sizeScale = def.sizeScale || 1;
+    const unit = new Unit(enemyDef, slot.col, slot.row, 'enemy');
+    unit.sizeScale = sizeScale;
     this.enemies.push(unit);
   }
 
   _spawnAlly(def) {
-    const col = ROAD_COL_START + 1 + Math.floor(Math.random() * (ROAD_COL_END - ROAD_COL_START - 1));
-    // 派遣单位从画面内的阵营区域出现，避免长射程单位停在屏幕外攻击。
     const row = def.type === 'turret' ? TURRET_DEPLOY_ROW : ALLY_DEPLOY_ROW;
-    this.allies.push(new Unit(def, col, row, 'ally'));
+    const sizeScale = def.sizeScale || 1;
+    const slot = def.type === 'turret'
+      ? { col: pickSpawnPosition(this.allies, row, sizeScale).col, row }
+      : pickSpawnPosition(this.allies, row, sizeScale);
+    this.allies.push(new Unit(def, slot.col, slot.row, 'ally'));
   }
 
   addUnitDef(def) {
@@ -1031,7 +1156,7 @@ class Game {
   }
 
   _draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, LOGIC_W, LOGIC_H);
     this._drawMap();
     // 先画友军，再画敌军，再画特效
     for (const u of this.allies)  u.draw();
@@ -1043,11 +1168,13 @@ class Game {
   }
 
   _drawMap() {
-    const W = canvas.width;
-    const H = canvas.height;
+    disableSmoothing(ctx);
+    const W = LOGIC_W;
+    const H = LOGIC_H;
 
     const drawTiled = (img, tileSize, fallback) => {
       if (img.complete && img.naturalWidth) {
+        disableSmoothing(ctx);
         for (let ty = 0; ty < H; ty += tileSize) {
           for (let tx = 0; tx < W; tx += tileSize) {
             ctx.drawImage(img, tx, ty, tileSize, tileSize);
@@ -1150,7 +1277,8 @@ class Game {
             ? boundary - decor.offset - w
             : boundary + decor.offset;
 
-        ctx.drawImage(img, x, decor.y, w, h);
+        disableSmoothing(ctx);
+        crispDraw(ctx, img, x, decor.y, w, h);
       }
     };
 
@@ -1296,7 +1424,7 @@ function openChoiceScreen({ title, subtitle, excludeIds = [], onChoose, onEmpty 
   for (const def of choices) {
     pool.appendChild(createUnitChoiceCard(def, onChoose));
   }
-  screen.style.display = 'flex';
+  screen.style.display = 'grid';
 }
 
 function closeChoiceScreen() {
@@ -1352,7 +1480,7 @@ function initClickArea() {
     document.getElementById('gameOverScreen').style.display = 'none';
     if (game) game.stop();
     game = null;
-    document.getElementById('prepScreen').style.display = 'block';
+    document.getElementById('prepScreen').style.display = 'grid';
     initPrepScreen();
   });
 }
@@ -1370,6 +1498,7 @@ function startGame(selectedDefs) {
 // ===== 初始化 =====
 function init() {
   resizeCanvas();
+  resizePortalCanvas();
   drawPortal();
   initClickArea();
   initPrepScreen();
